@@ -1,5 +1,5 @@
 <template>
-  <div :class="['message-item', message.role, { 'slide-in': animate }]">
+  <div :class="['message-item', message.role]">
     <div class="message-avatar">
       <div class="avatar-icon">
         {{ message.role === 'user' ? '👤' : '🤖' }}
@@ -27,12 +27,12 @@
       </div>
       <div v-if="message.role === 'assistant'" class="message-actions">
         <button
-          class="action-btn"
-          title="复制"
-          @click="copyToClipboard"
           v-if="message.content"
+          class="action-btn"
+          :title="copied ? '已复制' : '复制'"
+          @click="copyToClipboard"
         >
-          📋
+          {{ copied ? '✓' : '📋' }}
         </button>
         <button class="action-btn" title="重新生成" @click="regenerate">
           🔄
@@ -43,9 +43,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import type { Message } from '@/types/chat'
-import { useChatStore } from '@/stores/chatStore'
 
 const props = defineProps<{
   message: Message
@@ -55,12 +54,7 @@ const emit = defineEmits<{
   regenerate: []
 }>()
 
-const animate = ref(false)
-const store = useChatStore()
-
-onMounted(() => {
-  animate.value = true
-})
+const copied = ref(false)
 
 const formatTime = (timestamp: number): string => {
   const date = new Date(timestamp)
@@ -73,7 +67,10 @@ const formatTime = (timestamp: number): string => {
 const copyToClipboard = async () => {
   try {
     await navigator.clipboard.writeText(props.message.content)
-    // 可以添加toast提示
+    copied.value = true
+    setTimeout(() => {
+      copied.value = false
+    }, 1500)
   } catch (err) {
     console.error('复制失败:', err)
   }

@@ -5,6 +5,7 @@
         v-model="inputText"
         :placeholder="placeholder"
         :disabled="isLoading"
+        maxlength="4000"
         class="input-field"
         @keydown.enter="handleSubmit"
       ></textarea>
@@ -18,13 +19,21 @@
           ✕
         </button>
         <button
-          class="send-btn"
-          :disabled="!inputText.trim() || isLoading"
-          @click="handleClick"
-          :title="isLoading ? '等待中...' : '发送'"
+          v-if="isLoading"
+          class="send-btn stop-btn"
+          @click="$emit('stop')"
+          title="停止生成"
         >
-          <span v-if="isLoading" class="loading-spinner"></span>
-          <span v-else>📤</span>
+          ■
+        </button>
+        <button
+          v-else
+          class="send-btn"
+          :disabled="!inputText.trim()"
+          @click="handleClick"
+          title="发送"
+        >
+          📤
         </button>
       </div>
     </div>
@@ -44,6 +53,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   send: [text: string]
+  stop: []
 }>()
 
 const inputText = ref('')
@@ -51,7 +61,6 @@ const inputText = ref('')
 const placeholder = '输入您的问题... (按 Enter 发送)'
 
 const handleSubmit = (event: KeyboardEvent) => {
-  const target = event.target as HTMLTextAreaElement
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
     if (inputText.value.trim() && !props.isLoading) {
@@ -160,20 +169,15 @@ const handleClick = () => {
   cursor: not-allowed;
 }
 
-.loading-spinner {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.stop-btn {
+  background: var(--color-surface);
+  border-color: #ff4444;
+  color: #ff4444;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.stop-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .input-footer {

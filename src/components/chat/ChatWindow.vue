@@ -4,7 +4,7 @@
     <header class="chat-header">
       <div class="header-left">
         <h1 class="title">DeepSeek AI Chat</h1>
-        <span class="model-badge">deepseek-r1:7b</span>
+        <span class="model-badge">{{ modelName }}</span>
       </div>
       <div class="header-right">
         <ThemeSwitcher />
@@ -60,16 +60,22 @@
           @send="handleSendMessage"
           @regenerate="handleRegenerate"
         />
-        <InputBox :is-loading="isLoading" @send="handleSendMessage" />
+        <InputBox
+          :is-loading="isLoading"
+          @send="handleSendMessage"
+          @stop="store.abortCurrentRequest()"
+        />
       </main>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
+import type { Message } from '@/types/chat'
 import { useChatStore } from '@/stores/chatStore'
 import { applyTheme } from '@/styles/themes'
+import apiService from '@/services/apiService'
 import MessageList from './MessageList.vue'
 import InputBox from './InputBox.vue'
 import ThemeSwitcher from './ThemeSwitcher.vue'
@@ -81,6 +87,7 @@ const currentSessionId = computed(() => store.currentSessionId)
 const currentSession = computed(() => store.currentSession)
 const messages = computed(() => store.messages)
 const isLoading = computed(() => store.isLoading)
+const modelName = computed(() => apiService.getConfig().model)
 
 onMounted(() => {
   // 加载本地数据
@@ -116,22 +123,22 @@ const handleSendMessage = async (content: string) => {
 }
 
 const handleRegenerate = async (message: Message) => {
-  // 找到最后一条用户消息
-  const messages = store.messages
-  const userMsgIndex = messages.lastIndexOf(
-    messages.find((m) => m.role === 'user' && m.timestamp < message.timestamp)!
-  )
-
-  if (userMsgIndex !== -1) {
-    // 删除该助手消息
+  // 找到该助手消息之前最近的用户消息
+  const msgs = store.messages
+  let userContent = ''
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].id === message.id) break
+    if (msgs[i].role === 'user') {
+      userContent = msgs[i].content
+      break
+    }
+  }
+  if (userContent) {
+    // 删除该助手消息并重新发送
     store.deleteMessage(message.id)
-    // 重新发送
-    await store.sendMessage(messages[userMsgIndex].content)
+    await store.sendMessage(userContent)
   }
 }
-
-import { computed } from 'vue'
-import type { Message } from '@/types/chat'
 </script>
 
 <style scoped>

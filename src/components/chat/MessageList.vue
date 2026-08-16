@@ -15,22 +15,19 @@
         </button>
       </div>
     </div>
-    <div v-else class="messages-container">
+    <div v-else ref="listRef" class="messages-container">
       <MessageItem
         v-for="message in messages"
         :key="message.id"
         :message="message"
         @regenerate="handleRegenerate(message)"
       />
-      <div v-if="isLoading" ref="loadingRef" class="loading-indicator">
-        <div class="spinner"></div>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, nextTick } from 'vue'
 import type { Message } from '@/types/chat'
 import MessageItem from './MessageItem.vue'
 
@@ -44,7 +41,7 @@ const emit = defineEmits<{
   regenerate: [message: Message]
 }>()
 
-const loadingRef = ref<HTMLElement>()
+const listRef = ref<HTMLElement>()
 
 const suggestions = computed(() => [
   '请解释一下量子计算',
@@ -57,13 +54,24 @@ const handleRegenerate = (message: Message) => {
   emit('regenerate', message)
 }
 
-// 自动滚动到底部
+// 自动滚动到底部（用户靠近底部时才跟随，避免打断阅读）
+const isNearBottom = (): boolean => {
+  const el = listRef.value
+  if (!el) return true
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 120
+}
+
 watch(
-  () => [props.messages, props.isLoading],
+  () => props.messages,
   () => {
-    setTimeout(() => {
-      loadingRef.value?.scrollIntoView({ behavior: 'smooth' })
-    }, 100)
+    if (isNearBottom()) {
+      nextTick(() => {
+        listRef.value?.scrollTo({
+          top: listRef.value.scrollHeight,
+          behavior: props.isLoading ? 'auto' : 'smooth'
+        })
+      })
+    }
   },
   { deep: true }
 )
@@ -138,28 +146,6 @@ watch(
   flex-direction: column;
   flex: 1;
   overflow-y: auto;
-}
-
-.loading-indicator {
-  display: flex;
-  justify-content: center;
-  padding: 20px;
-  animation: fadeIn 0.3s ease-out;
-}
-
-.spinner {
-  width: 24px;
-  height: 24px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 @media (max-width: 768px) {

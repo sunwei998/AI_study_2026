@@ -18,7 +18,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { ThemeType } from '@/types/chat'
 import { useChatStore } from '@/stores/chatStore'
 import { applyTheme } from '@/styles/themes'
@@ -44,8 +44,6 @@ const selectTheme = (theme: ThemeType) => {
   applyTheme(theme)
   isOpen.value = false
 }
-
-import { computed } from 'vue'
 </script>
 
 <style scoped>

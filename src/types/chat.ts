@@ -1,5 +1,6 @@
 export type MessageRole = 'user' | 'assistant' | 'system'
 export type ThemeType = 'dark' | 'light' | 'neon' | 'ocean'
+export type ApiProvider = 'ollama' | 'openai'
 
 export interface Message {
   id: string
@@ -30,8 +31,10 @@ export interface ThemeConfig {
 }
 
 export interface ApiConfig {
+  provider: ApiProvider
   baseUrl: string
   model: string
+  apiKey: string
   temperature: number
   maxTokens: number
 }
