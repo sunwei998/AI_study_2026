@@ -1,5 +1,13 @@
 export type MessageRole = 'user' | 'assistant' | 'system'
-export type ThemeType = 'dark' | 'light' | 'neon' | 'ocean'
+export type ThemeType =
+  | 'dark'
+  | 'light'
+  | 'neon'
+  | 'ocean'
+  | 'midnight'
+  | 'amber'
+  | 'rose'
+  | 'forest'
 export type ApiProvider = 'ollama' | 'openai'
 
 export interface Message {
@@ -8,6 +16,12 @@ export interface Message {
   role: MessageRole
   timestamp: number
   loading?: boolean
+  images?: string[]
+}
+
+export interface SendPayload {
+  content: string
+  images: string[]
 }
 
 export interface ChatSession {
@@ -28,6 +42,10 @@ export interface ThemeConfig {
   textSecondary: string
   accent: string
   border: string
+  glass: string
+  overlay: string
+  grid: string
+  glow: string
 }
 
 export interface ApiConfig {
@@ -37,4 +55,11 @@ export interface ApiConfig {
   apiKey: string
   temperature: number
   maxTokens: number
+}
+
+export interface ModelInfo {
+  id: string
+  name: string
+  free: boolean
+  vision?: boolean
 }

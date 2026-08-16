@@ -1,24 +1,41 @@
 :root {
-  --color-primary: #00d4ff;
-  --color-secondary: #1a1a2e;
-  --color-background: #0f0f23;
-  --color-surface: #16213e;
-  --color-text: #e0e0e0;
-  --color-text-secondary: #b0b0b0;
-  --color-accent: #00d4ff;
-  --color-border: #2a2a4e;
-  
+  --color-primary: #00e5ff;
+  --color-secondary: #0b0f2a;
+  --color-background: #070a1a;
+  --color-surface: #0e1430;
+  --color-text: #e6f1ff;
+  --color-text-secondary: #8fa3c8;
+  --color-accent: #7c5cff;
+  --color-border: #233055;
+  --color-glass: rgba(14, 20, 48, 0.62);
+  --color-overlay: rgba(7, 10, 26, 0.45);
+  --color-grid: rgba(0, 229, 255, 0.07);
+  --color-glow: rgba(0, 229, 255, 0.4);
+
+  --font-display: 'Orbitron', 'Rajdhani', 'Segoe UI', sans-serif;
+  --font-body: 'Rajdhani', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei',
+    sans-serif;
+  --font-mono: 'Share Tech Mono', 'JetBrains Mono', 'SFMono-Regular', Menlo,
+    monospace;
+
+  --control-h: 40px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --glass-blur: 18px;
+
   --transition-normal: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-fast: all 0.15s ease-out;
-  --shadow-sm: 0 2px 8px rgba(0, 212, 255, 0.1);
-  --shadow-md: 0 4px 16px rgba(0, 212, 255, 0.15);
-  --shadow-lg: 0 8px 32px rgba(0, 212, 255, 0.2);
+  --shadow-sm: 0 2px 8px var(--color-glow);
+  --shadow-md: 0 4px 16px var(--color-glow);
+  --shadow-lg: 0 8px 32px var(--color-glow);
 }
 
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -28,9 +45,7 @@ body {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--color-background);
@@ -45,6 +60,37 @@ body {
   flex-direction: column;
 }
 
+/* 全屏背景：网格 + 极光 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--color-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-grid) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 120% 90% at 50% 0%, #000 40%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 120% 90% at 50% 0%, #000 40%, transparent 78%);
+  animation: gridPan 26s linear infinite;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(620px 320px at 12% 0%, var(--color-glow), transparent 62%),
+    radial-gradient(520px 280px at 88% 12%, var(--color-glow), transparent 60%),
+    radial-gradient(720px 420px at 50% 112%, var(--color-glow), transparent 66%);
+  filter: blur(12px);
+  opacity: 0.55;
+  animation: aurora 20s ease-in-out infinite alternate;
+}
+
 /* 滚动条样式 */
 ::-webkit-scrollbar {
   width: 8px;
@@ -52,18 +98,17 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-surface);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-primary);
+  background: linear-gradient(180deg, var(--color-primary), var(--color-accent));
   border-radius: 4px;
-  transition: var(--transition-normal);
+  box-shadow: 0 0 8px var(--color-glow);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-accent);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 0 14px var(--color-glow);
 }
 
 /* 动画定义 */
@@ -109,33 +154,69 @@ body {
   }
 }
 
-@keyframes glow {
-  0%, 100% {
-    box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+@keyframes gridPan {
+  from {
+    background-position: 0 0, 0 0;
+  }
+  to {
+    background-position: 0 44px, 44px 0;
+  }
+}
+
+@keyframes aurora {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
   }
   50% {
-    box-shadow: 0 0 20px rgba(0, 212, 255, 0.6);
+    transform: translate3d(3%, 2%, 0) scale(1.06);
+  }
+  100% {
+    transform: translate3d(-2%, 4%, 0) scale(0.96);
+  }
+}
+
+@keyframes floatY {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes glow {
+  0%,
+  100% {
+    box-shadow: 0 0 8px var(--color-glow);
+  }
+  50% {
+    box-shadow: 0 0 22px var(--color-glow);
   }
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
     opacity: 0.5;
-  }
-}
-
-@keyframes typing {
-  0%, 60%, 100% {
-    content: '';
-  }
-  20% {
-    content: '.';
-  }
-  40% {
-    content: '..';
   }
 }
 
@@ -156,12 +237,20 @@ body {
   animation: slideInLeft 0.3s ease-out;
 }
 
+.float-y {
+  animation: floatY 3s ease-in-out infinite;
+}
+
 .glow {
   animation: glow 2s infinite;
 }
 
 .pulse {
   animation: pulse 2s infinite;
+}
+
+.text-glow {
+  text-shadow: 0 0 12px var(--color-glow);
 }
 
 /* 按钮通用样式 */
@@ -171,11 +260,18 @@ button {
   background: none;
   font-family: inherit;
   transition: var(--transition-normal);
+  -webkit-tap-highlight-color: transparent;
 }
 
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 防止移动端滚动穿透与橡皮筋 */
+html,
+body {
+  overscroll-behavior: none;
 }
 
 /* 输入框通用样式 */
@@ -185,7 +281,7 @@ textarea {
   color: inherit;
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 12px;
   transition: var(--transition-normal);
 }
@@ -194,14 +290,13 @@ input:focus,
 textarea:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+  box-shadow: 0 0 0 3px var(--color-glow), 0 0 18px var(--color-glow);
 }
 
 /* 响应式 */
 @media (max-width: 768px) {
   :root {
-    --shadow-sm: 0 2px 4px rgba(0, 212, 255, 0.1);
-    --shadow-md: 0 4px 8px rgba(0, 212, 255, 0.15);
-    --shadow-lg: 0 8px 16px rgba(0, 212, 255, 0.2);
+    --control-h: 32px;
+    --glass-blur: 12px;
   }
 }

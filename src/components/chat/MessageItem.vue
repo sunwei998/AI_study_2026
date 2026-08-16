@@ -8,33 +8,45 @@
     <div class="message-content-wrapper">
       <div class="message-header">
         <span class="message-role">
-          {{ message.role === 'user' ? '你' : 'AI助手' }}
+          {{ message.role === 'user' ? $t('chat.you') : $t('chat.assistant') }}
         </span>
         <span class="message-time">
           {{ formatTime(message.timestamp) }}
         </span>
       </div>
       <div class="message-bubble">
-        <p v-if="!message.loading" class="message-text">
+        <div v-if="message.images && message.images.length" class="message-images">
+          <img
+            v-for="(img, index) in message.images"
+            :key="index"
+            :src="img"
+            class="message-image"
+            alt=""
+            loading="lazy"
+            @click="openImage(img)"
+          />
+        </div>
+        <p v-if="message.content" class="message-text">
           {{ message.content }}
+          <span v-if="message.loading" class="streaming-cursor"></span>
         </p>
-        <div v-else class="loading-dots">
+        <div v-else-if="message.loading" class="loading-dots">
           <span></span>
           <span></span>
           <span></span>
         </div>
-        <div v-if="message.loading" class="loading-text">正在思考中...</div>
+        <div v-if="message.loading && !message.content" class="loading-text">{{ $t('chat.thinking') }}</div>
       </div>
       <div v-if="message.role === 'assistant'" class="message-actions">
         <button
           v-if="message.content"
           class="action-btn"
-          :title="copied ? '已复制' : '复制'"
+          :title="copied ? $t('common.copied') : $t('common.copy')"
           @click="copyToClipboard"
         >
           {{ copied ? '✓' : '📋' }}
         </button>
-        <button class="action-btn" title="重新生成" @click="regenerate">
+        <button class="action-btn" :title="$t('common.regenerate')" @click="regenerate">
           🔄
         </button>
       </div>
@@ -79,6 +91,10 @@ const copyToClipboard = async () => {
 const regenerate = () => {
   emit('regenerate')
 }
+
+const openImage = (url: string) => {
+  window.open(url, '_blank', 'noopener')
+}
 </script>
 
 <style scoped>
@@ -112,11 +128,14 @@ const regenerate = () => {
   justify-content: center;
   font-size: 18px;
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 0 14px var(--color-glow);
+  border: 1px solid var(--color-primary);
 }
 
 .message-item.user .avatar-icon {
   background: linear-gradient(135deg, #667eea, #764ba2);
+  border-color: rgba(124, 92, 255, 0.6);
+  box-shadow: 0 0 14px rgba(124, 92, 255, 0.4);
 }
 
 .message-content-wrapper {
@@ -143,29 +162,65 @@ const regenerate = () => {
 }
 
 .message-role {
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
   color: var(--color-primary);
+  text-shadow: 0 0 8px var(--color-glow);
+}
+
+.message-time {
+  font-family: var(--font-mono);
 }
 
 .message-bubble {
   padding: 12px 16px;
-  border-radius: 12px;
-  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  background: var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-sm);
   transition: var(--transition-normal);
   word-wrap: break-word;
   white-space: pre-wrap;
+  position: relative;
 }
 
 .message-item.user .message-bubble {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
-  border-color: rgba(102, 126, 234, 0.3);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.25), rgba(118, 75, 162, 0.25));
+  border-color: rgba(124, 92, 255, 0.4);
 }
 
 .message-bubble:hover {
   border-color: var(--color-primary);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), inset 0 0 14px var(--color-glow);
+}
+
+.message-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.message-image {
+  max-width: 200px;
+  max-height: 180px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  object-fit: cover;
+  cursor: zoom-in;
+  transition: var(--transition-normal);
+  display: block;
+}
+
+.message-image:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 14px var(--color-glow);
+  transform: scale(1.02);
 }
 
 .message-text {
@@ -173,6 +228,27 @@ const regenerate = () => {
   line-height: 1.6;
   color: var(--color-text);
   font-size: 14px;
+}
+
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--color-primary);
+  box-shadow: 0 0 8px var(--color-glow);
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 .loading-dots {
@@ -187,6 +263,7 @@ const regenerate = () => {
   height: 6px;
   border-radius: 50%;
   background: var(--color-primary);
+  box-shadow: 0 0 10px var(--color-glow);
   animation: pulse 1.4s infinite;
 }
 
@@ -219,18 +296,22 @@ const regenerate = () => {
 .action-btn {
   width: 24px;
   height: 24px;
-  border-radius: 4px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  background: var(--color-border);
+  background: var(--color-glass);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
   transition: var(--transition-fast);
 }
 
 .action-btn:hover {
-  background: var(--color-primary);
-  transform: scale(1.1);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 0 10px var(--color-glow);
+  transform: scale(1.12);
 }
 
 @media (max-width: 768px) {

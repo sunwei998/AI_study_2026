@@ -1,8 +1,10 @@
 import type { ApiConfig, MessageRole } from '@/types/chat'
+import { i18n } from '@/locales'
 
 export interface ChatHistoryItem {
   role: MessageRole
   content: string
+  images?: string[]
 }
 
 interface StreamChunk {
@@ -39,14 +41,33 @@ class APIService {
       provider === 'ollama'
         ? {
             model,
-            messages,
+            messages: messages.map((m) => ({
+              role: m.role,
+              content: m.content,
+              ...(m.images?.length
+                ? { images: m.images.map((url) => url.split(',')[1] ?? url) }
+                : {})
+            })),
             stream,
             temperature,
             options: { num_predict: maxTokens }
           }
         : {
             model,
-            messages,
+            messages: messages.map((m) =>
+              m.images?.length
+                ? {
+                    role: m.role,
+                    content: [
+                      { type: 'text', text: m.content },
+                      ...m.images.map((url) => ({
+                        type: 'image_url',
+                        image_url: { url }
+                      }))
+                    ]
+                  }
+                : { role: m.role, content: m.content }
+            ),
             stream,
             temperature,
             max_tokens: maxTokens
@@ -64,7 +85,7 @@ class APIService {
 
   private assertApiKey(): void {
     if (this.config.provider !== 'ollama' && !this.config.apiKey) {
-      throw new Error('未配置 API Key，请在 .env.local 中设置 VITE_LLM_API_KEY')
+      throw new Error(i18n.global.t('api.noKey'))
     }
   }
 
@@ -116,7 +137,7 @@ class APIService {
         signal: controller.signal
       })
       if (!response.ok) {
-        throw new Error(`请求失败 (${response.status})`)
+        throw new Error(i18n.global.t('api.requestFailed', { status: response.status }))
       }
       return this.parseResponse(await response.json())
     } catch (error) {
@@ -124,7 +145,7 @@ class APIService {
         throw error
       }
       console.error('API调用失败:', error)
-      throw new Error('无法获取AI回复，请检查API连接')
+      throw new Error(i18n.global.t('api.failed'))
     } finally {
       this.abortController = null
     }
@@ -150,10 +171,10 @@ class APIService {
         signal: controller.signal
       })
       if (!response.ok) {
-        throw new Error(`请求失败 (${response.status})`)
+        throw new Error(i18n.global.t('api.requestFailed', { status: response.status }))
       }
       if (!response.body) {
-        throw new Error('响应不支持流式读取')
+        throw new Error(i18n.global.t('api.noStream'))
       }
 
       const reader = response.body.getReader()
@@ -186,7 +207,7 @@ class APIService {
         throw error
       }
       console.error('流式API调用失败:', error)
-      throw new Error('流式获取回复失败')
+      throw new Error(i18n.global.t('api.streamFailed'))
     } finally {
       this.abortController = null
     }
@@ -216,10 +237,11 @@ class APIService {
 
 // 默认配置：SiliconFlow（OpenAI 兼容）。若改用本地 Ollama，把 provider 改为 'ollama'、
 // baseUrl 改为 ''（走 vite proxy）或 'http://localhost:11434'，apiKey 留空即可。
+// 默认模型为官方价格页标注「免费」的 GLM-Z1-9B。
 const defaultConfig: ApiConfig = {
   provider: 'openai',
   baseUrl: 'https://api.siliconflow.cn/v1',
-  model: 'deepseek-ai/DeepSeek-V3',
+  model: 'THUDM/GLM-Z1-9B-0414',
   apiKey: import.meta.env.VITE_LLM_API_KEY || '',
   temperature: 0.7,
   maxTokens: 2048

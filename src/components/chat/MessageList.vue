@@ -2,14 +2,14 @@
   <div class="message-list">
     <div v-if="messages.length === 0" class="empty-state">
       <div class="empty-icon">🚀</div>
-      <h2>开始对话</h2>
-      <p>与AI助手开始一场令人兴奋的交流吧</p>
+      <h2>{{ $t('chat.emptyTitle') }}</h2>
+      <p>{{ $t('chat.emptyDesc') }}</p>
       <div class="suggestions">
         <button
           v-for="suggestion in suggestions"
           :key="suggestion"
           class="suggestion-btn"
-          @click="$emit('send', suggestion)"
+          @click="$emit('send', { content: suggestion, images: [] })"
         >
           {{ suggestion }}
         </button>
@@ -28,8 +28,11 @@
 
 <script setup lang="ts">
 import { ref, watch, computed, nextTick } from 'vue'
-import type { Message } from '@/types/chat'
+import { useI18n } from 'vue-i18n'
+import type { Message, SendPayload } from '@/types/chat'
 import MessageItem from './MessageItem.vue'
+
+const { tm } = useI18n()
 
 const props = defineProps<{
   messages: Message[]
@@ -37,18 +40,13 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  send: [content: string]
+  send: [payload: SendPayload]
   regenerate: [message: Message]
 }>()
 
 const listRef = ref<HTMLElement>()
 
-const suggestions = computed(() => [
-  '请解释一下量子计算',
-  '如何学习编程？',
-  '写一个Python函数',
-  '讲一个有趣的笑话'
-])
+const suggestions = computed<string[]>(() => tm('chat.suggestions') as unknown as string[])
 
 const handleRegenerate = (message: Message) => {
   emit('regenerate', message)
@@ -99,18 +97,25 @@ watch(
 
 .empty-icon {
   font-size: 64px;
-  animation: slideInUp 0.5s ease-out;
+  position: relative;
+  animation: floatY 3s ease-in-out infinite;
+  filter: drop-shadow(0 0 18px var(--color-glow));
 }
 
 .empty-state h2 {
-  font-size: 24px;
-  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--color-primary);
+  text-shadow: 0 0 18px var(--color-glow);
   margin: 0;
 }
 
 .empty-state p {
   font-size: 14px;
   margin: 0;
+  letter-spacing: 1px;
 }
 
 .suggestions {
@@ -124,21 +129,45 @@ watch(
 
 .suggestion-btn {
   padding: 12px 16px;
-  border-radius: 8px;
-  border: 1px solid var(--color-primary);
-  background: transparent;
-  color: var(--color-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  color: var(--color-text);
   cursor: pointer;
   transition: var(--transition-normal);
   font-size: 13px;
   text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.suggestion-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    transparent 30%,
+    var(--color-glow) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  opacity: 0;
+  transition: opacity 0.2s;
 }
 
 .suggestion-btn:hover {
-  background: var(--color-primary);
-  color: var(--color-background);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 0 16px var(--color-glow);
+}
+
+.suggestion-btn:hover::before {
+  opacity: 1;
+  animation: shimmer 1.4s linear infinite;
 }
 
 .messages-container {

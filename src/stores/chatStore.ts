@@ -1,9 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Message, ChatSession, ThemeType } from '@/types/chat'
+import type { Message, ChatSession, ThemeType, ModelInfo } from '@/types/chat'
 import apiService, { type ChatHistoryItem } from '@/services/apiService'
+import { MODEL_LIST } from '@/config/models'
+import { i18n } from '@/locales'
+import { themes } from '@/styles/themes'
 
-const THEMES: ThemeType[] = ['dark', 'light', 'neon', 'ocean']
+const THEMES: ThemeType[] = Object.keys(themes) as ThemeType[]
 const MAX_HISTORY = 20
 
 export const useChatStore = defineStore('chat', () => {
@@ -11,6 +14,7 @@ export const useChatStore = defineStore('chat', () => {
   const sessions = ref<ChatSession[]>([])
   const currentSessionId = ref<string>('')
   const currentTheme = ref<ThemeType>('dark')
+  const currentModel = ref<string>(apiService.getConfig().model)
   const isLoading = ref(false)
 
   // 计算属性
@@ -23,6 +27,26 @@ export const useChatStore = defineStore('chat', () => {
   })
 
   const availableThemes = THEMES
+
+  const availableModels = MODEL_LIST
+
+  const currentModelInfo = computed(() => {
+    return availableModels.find((m) => m.id === currentModel.value) || null
+  })
+
+  const setModel = (model: ModelInfo) => {
+    currentModel.value = model.id
+    apiService.updateConfig({ model: model.id })
+    localStorage.setItem('chatModel', model.id)
+  }
+
+  const loadModel = () => {
+    const saved = localStorage.getItem('chatModel')
+    if (saved && availableModels.some((m) => m.id === saved)) {
+      currentModel.value = saved
+      apiService.updateConfig({ model: saved })
+    }
+  }
 
   const getSession = (sessionId: string): ChatSession | undefined => {
     return sessions.value.find((s) => s.id === sessionId)
@@ -63,7 +87,9 @@ export const useChatStore = defineStore('chat', () => {
     const id = `session_${Date.now()}`
     const newSession: ChatSession = {
       id,
-      title: `聊天 ${new Date().toLocaleString()}`,
+      title: i18n.global.t('chat.sessionTitle', {
+        time: new Date().toLocaleString()
+      }),
       messages: [],
       createdAt: Date.now(),
       updatedAt: Date.now()
@@ -88,7 +114,8 @@ export const useChatStore = defineStore('chat', () => {
   const addMessage = (
     content: string,
     role: Message['role'] = 'user',
-    sessionId?: string
+    sessionId?: string,
+    images?: string[]
   ): Message => {
     let session = sessionId ? getSession(sessionId) : currentSession.value
     if (!session) {
@@ -104,7 +131,8 @@ export const useChatStore = defineStore('chat', () => {
       id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       content,
       role,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      ...(images && images.length ? { images } : {})
     }
     session.messages.push(message)
     session.updatedAt = Date.now()
@@ -158,19 +186,19 @@ export const useChatStore = defineStore('chat', () => {
     return session.messages
       .filter((m) => m.id !== assistantMsgId)
       .slice(-MAX_HISTORY)
-      .map((m) => ({ role: m.role, content: m.content }))
+      .map((m) => ({ role: m.role, content: m.content, images: m.images }))
   }
 
   /**
    * 发送消息并获取AI回复
    */
-  const sendMessage = async (content: string) => {
-    if (!content.trim()) return
+  const sendMessage = async (content: string, images: string[] = []) => {
+    if (!content.trim() && images.length === 0) return
 
     // 捕获会话ID，避免请求期间切换会话导致更新错位
     const sessionId = currentSessionId.value || createNewSession()
 
-    addMessage(content, 'user', sessionId)
+    addMessage(content, 'user', sessionId, images)
     const assistantMsg = addMessage('', 'assistant', sessionId)
     setMessageLoading(assistantMsg.id, true, sessionId)
 
@@ -185,8 +213,8 @@ export const useChatStore = defineStore('chat', () => {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return
       }
-      const errorMsg = error instanceof Error ? error.message : '发生错误'
-      updateMessage(assistantMsg.id, `❌ 错误: ${errorMsg}`, sessionId)
+      const errorMsg = error instanceof Error ? error.message : i18n.global.t('common.errorOccurred')
+      updateMessage(assistantMsg.id, i18n.global.t('chat.error', { msg: errorMsg }), sessionId)
     } finally {
       setMessageLoading(assistantMsg.id, false, sessionId)
       isLoading.value = false
@@ -197,12 +225,12 @@ export const useChatStore = defineStore('chat', () => {
   /**
    * 流式发送消息（逐字输出）
    */
-  const sendMessageStream = async (content: string) => {
-    if (!content.trim()) return
+  const sendMessageStream = async (content: string, images: string[] = []) => {
+    if (!content.trim() && images.length === 0) return
 
     const sessionId = currentSessionId.value || createNewSession()
 
-    addMessage(content, 'user', sessionId)
+    addMessage(content, 'user', sessionId, images)
     const assistantMsg = addMessage('', 'assistant', sessionId)
     setMessageLoading(assistantMsg.id, true, sessionId)
 
@@ -221,8 +249,8 @@ export const useChatStore = defineStore('chat', () => {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return
       }
-      const errorMsg = error instanceof Error ? error.message : '发生错误'
-      updateMessage(assistantMsg.id, `❌ 错误: ${errorMsg}`, sessionId)
+      const errorMsg = error instanceof Error ? error.message : i18n.global.t('common.errorOccurred')
+      updateMessage(assistantMsg.id, i18n.global.t('chat.error', { msg: errorMsg }), sessionId)
     } finally {
       setMessageLoading(assistantMsg.id, false, sessionId)
       isLoading.value = false
@@ -267,6 +295,9 @@ export const useChatStore = defineStore('chat', () => {
     sessions,
     currentSessionId,
     currentTheme,
+    currentModel,
+    currentModelInfo,
+    availableModels,
     isLoading,
     // 计算属性
     currentSession,
@@ -283,6 +314,8 @@ export const useChatStore = defineStore('chat', () => {
     sendMessage,
     sendMessageStream,
     abortCurrentRequest,
+    setModel,
+    loadModel,
     setTheme,
     loadTheme,
     loadSessions,
