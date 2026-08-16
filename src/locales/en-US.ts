@@ -14,6 +14,9 @@ export default {
     clearSession: 'Clear current chat',
     switchTheme: 'Switch theme',
     switchModel: 'Switch model',
+    collapseSessions: 'Collapse session list',
+    expandSessions: 'Expand session list',
+    close: 'Close',
     errorOccurred: 'An error occurred'
   },
   input: {

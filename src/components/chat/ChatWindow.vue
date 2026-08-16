@@ -37,9 +37,25 @@
         class="sidebar-backdrop"
         @click="sidebarOpen = false"
       ></div>
-      <aside class="sidebar" :class="{ open: sidebarOpen }">
+      <aside class="sidebar" :class="{ open: sidebarOpen, collapsed: sidebarCollapsed }">
         <div class="sidebar-header">
-          <h2>{{ $t('chat.title') }}</h2>
+          <div class="sidebar-header-row">
+            <h2>{{ $t('chat.title') }}</h2>
+            <button
+              class="header-btn collapse-btn"
+              :title="$t('common.collapseSessions')"
+              @click="toggleCollapsed"
+            >
+              «
+            </button>
+            <button
+              class="header-btn sidebar-close"
+              :title="$t('common.close')"
+              @click="closeSidebar"
+            >
+              ✕
+            </button>
+          </div>
           <button class="header-btn sidebar-new" @click="createNew, closeSidebar()">
             ➕ <span>{{ $t('common.newSession') }}</span>
           </button>
@@ -70,6 +86,14 @@
 
       <!-- 主聊天区域 -->
       <main class="chat-main">
+        <button
+          v-if="sidebarCollapsed"
+          class="sidebar-reopen"
+          :title="$t('common.expandSessions')"
+          @click="toggleCollapsed"
+        >
+          ☰
+        </button>
         <MessageList
           :messages="messages"
           :is-loading="isLoading"
@@ -111,6 +135,12 @@ const isLoading = computed(() => store.isLoading)
 const sidebarOpen = ref(false)
 const closeSidebar = () => {
   sidebarOpen.value = false
+}
+
+const sidebarCollapsed = ref(localStorage.getItem('chatSidebarCollapsed') === '1')
+const toggleCollapsed = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem('chatSidebarCollapsed', sidebarCollapsed.value ? '1' : '0')
 }
 
 onMounted(() => {
@@ -270,7 +300,7 @@ const handleRegenerate = async (message: Message) => {
 }
 
 .sidebar-header {
-  padding: 16px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--color-border);
   background: linear-gradient(180deg, var(--color-glow), transparent);
   display: flex;
@@ -278,7 +308,16 @@ const handleRegenerate = async (message: Message) => {
   gap: 10px;
 }
 
-.sidebar-new {
+.sidebar-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-new,
+.collapse-btn,
+.sidebar-close {
   display: none;
 }
 
@@ -385,11 +424,16 @@ const handleRegenerate = async (message: Message) => {
 }
 
 .chat-main {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   animation: slideInRight 0.3s ease-out;
+}
+
+.sidebar-reopen {
+  display: none;
 }
 
 .menu-btn {
@@ -403,6 +447,70 @@ const handleRegenerate = async (message: Message) => {
 @media (max-width: 1024px) {
   .sidebar {
     width: 240px;
+  }
+}
+
+/* 桌面端：可折叠面板 */
+@media (min-width: 769px) {
+  .sidebar {
+    min-width: 0;
+    overflow: hidden;
+    transition: width 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .sidebar-header,
+  .sessions-list {
+    min-width: 280px;
+    transition: opacity 0.28s ease;
+  }
+
+  .collapse-btn {
+    display: flex;
+  }
+
+  .sidebar.collapsed {
+    width: 0;
+    border-right: none;
+  }
+
+  .sidebar.collapsed .sidebar-header,
+  .sidebar.collapsed .sessions-list {
+    opacity: 0;
+  }
+
+  .sidebar-reopen {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    z-index: 15;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    background: var(--color-glass);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    color: var(--color-text);
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: var(--shadow-md);
+    transition: var(--transition-normal);
+    animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .sidebar-reopen:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 14px var(--color-glow), inset 0 0 12px var(--color-glow);
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .sidebar-header,
+  .sessions-list {
+    min-width: 240px;
   }
 }
 
@@ -439,6 +547,15 @@ const handleRegenerate = async (message: Message) => {
     border-color: var(--color-primary);
   }
 
+  .sidebar-close {
+    display: flex;
+  }
+
+  .sidebar-header,
+  .sessions-list {
+    min-width: 0;
+  }
+
   .title {
     font-size: 14px;
     letter-spacing: 1px;
@@ -465,12 +582,53 @@ const handleRegenerate = async (message: Message) => {
     display: flex;
     animation: none;
     transform: translateX(-100%);
-    transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+    transition: transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
     box-shadow: var(--shadow-lg);
+    will-change: transform;
   }
 
   .sidebar.open {
     transform: translateX(0);
+  }
+
+  .sidebar.open .session-item {
+    animation: slideInUp 0.4s ease-out both;
+  }
+
+  .sidebar.open .session-item:nth-child(1) {
+    animation-delay: 0.04s;
+  }
+
+  .sidebar.open .session-item:nth-child(2) {
+    animation-delay: 0.08s;
+  }
+
+  .sidebar.open .session-item:nth-child(3) {
+    animation-delay: 0.12s;
+  }
+
+  .sidebar.open .session-item:nth-child(4) {
+    animation-delay: 0.16s;
+  }
+
+  .sidebar.open .session-item:nth-child(5) {
+    animation-delay: 0.2s;
+  }
+
+  .sidebar.open .session-item:nth-child(6) {
+    animation-delay: 0.24s;
+  }
+
+  .sidebar.open .session-item:nth-child(7) {
+    animation-delay: 0.28s;
+  }
+
+  .sidebar.open .session-item:nth-child(8) {
+    animation-delay: 0.32s;
+  }
+
+  .sidebar.open .session-item:nth-child(n + 9) {
+    animation-delay: 0.36s;
   }
 
   .sidebar-backdrop {

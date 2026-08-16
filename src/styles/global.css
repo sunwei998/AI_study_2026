@@ -220,6 +220,20 @@ body::after {
   }
 }
 
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  70% {
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* 通用类 */
 .fade-in {
   animation: fadeIn 0.3s ease-out;
