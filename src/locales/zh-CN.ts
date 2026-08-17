@@ -51,8 +51,8 @@ export default {
     ocean: '深海蓝',
     midnight: '午夜紫',
     amber: '琥珀橙',
-    rose: '绯红玫瑰',
-    forest: '极光森林'
+    mint: '薄荷护眼绿',
+    sand: '暖沙护眼黄'
   },
   api: {
     noKey: '未配置 API Key，请在 .env.local 中设置 VITE_LLM_API_KEY',

@@ -18,8 +18,8 @@ const palettes: Record<string, string[]> = {
   ocean: ['#22d3ee', '#3b82f6', '#d9f6ff'],
   midnight: ['#b388ff', '#ff79c6', '#efe9ff'],
   amber: ['#ffb74d', '#ff6d00', '#fff3e0'],
-  rose: ['#ff5c8a', '#ff2e63', '#ffe4ec'],
-  forest: ['#4ade80', '#22d3ee', '#d9ffe9']
+  mint: ['#43a047', '#00897b', '#e8f5e9'],
+  sand: ['#b07838', '#c2612f', '#f5ecdc']
 }
 
 const options = computed<ISourceOptions>(() => ({

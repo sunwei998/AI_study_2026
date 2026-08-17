@@ -33,7 +33,9 @@
           @click="$emit('stop')"
           :title="$t('common.stop')"
         >
-          ■
+          <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="5" y="5" width="14" height="14" rx="2" />
+          </svg>
         </button>
         <button
           v-else
@@ -42,7 +44,9 @@
           @click="submit"
           :title="$t('common.send')"
         >
-          📤
+          <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2v7z" />
+          </svg>
         </button>
       </div>
     </div>
@@ -144,7 +148,7 @@ const submit = () => {
 }
 
 const handleSubmit = (event: KeyboardEvent) => {
-  if (event.key === 'Enter' && !event.shiftKey) {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
     submit()
   }
@@ -215,19 +219,26 @@ const handleSubmit = (event: KeyboardEvent) => {
 .clear-btn,
 .send-btn,
 .attach-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-md);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
   background: var(--color-glass);
   border: 1px solid var(--color-border);
   color: var(--color-text);
   cursor: pointer;
-  font-size: 18px;
+  font-size: 16px;
   transition: var(--transition-normal);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+.btn-icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  display: block;
 }
 
 .attach-btn:hover:not(:disabled) {
@@ -293,7 +304,7 @@ const handleSubmit = (event: KeyboardEvent) => {
 .send-btn {
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
   border-color: var(--color-primary);
-  color: var(--color-background);
+  color: #fff;
   font-weight: 600;
   box-shadow: 0 0 14px var(--color-glow);
 }

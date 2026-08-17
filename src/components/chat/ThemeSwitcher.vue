@@ -41,8 +41,8 @@ const getThemeName = (theme: ThemeType): string => {
     ocean: t('theme.ocean'),
     midnight: t('theme.midnight'),
     amber: t('theme.amber'),
-    rose: t('theme.rose'),
-    forest: t('theme.forest')
+    mint: t('theme.mint'),
+    sand: t('theme.sand')
   }
   return names[theme]
 }
@@ -169,12 +169,12 @@ const selectTheme = (theme: ThemeType) => {
   background: linear-gradient(135deg, #ffb74d, #ff6d00);
 }
 
-.theme-preview.rose {
-  background: linear-gradient(135deg, #ff5c8a, #ff2e63);
+.theme-preview.mint {
+  background: linear-gradient(135deg, #43a047, #00897b);
 }
 
-.theme-preview.forest {
-  background: linear-gradient(135deg, #4ade80, #22d3ee);
+.theme-preview.sand {
+  background: linear-gradient(135deg, #b07838, #c2612f);
 }
 
 @media (max-width: 768px) {

@@ -6,8 +6,8 @@ export type ThemeType =
   | 'ocean'
   | 'midnight'
   | 'amber'
-  | 'rose'
-  | 'forest'
+  | 'mint'
+  | 'sand'
 export type ApiProvider = 'ollama' | 'openai'
 
 export interface Message {

@@ -26,7 +26,8 @@
             @click="openImage(img)"
           />
         </div>
-        <div v-if="message.content" class="markdown-body" v-html="renderedContent" @click="onMarkdownClick"></div>
+        <div v-if="message.content && message.role === 'assistant'" class="markdown-body" v-html="renderedContent" @click="onMarkdownClick"></div>
+        <div v-else-if="message.content && message.role === 'user'" class="user-text">{{ message.content }}</div>
         <span v-if="message.loading && message.content" class="streaming-cursor"></span>
         <div v-if="message.loading && !message.content" class="loading-dots">
           <span></span>
@@ -272,6 +273,14 @@ const openImage = (url: string) => {
 .message-item.user .message-bubble {
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.25), rgba(118, 75, 162, 0.25));
   border-color: rgba(124, 92, 255, 0.4);
+}
+
+.user-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  font-size: 14px;
+  line-height: 1.65;
 }
 
 .message-bubble:hover {

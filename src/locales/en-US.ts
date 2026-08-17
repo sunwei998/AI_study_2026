@@ -56,8 +56,8 @@ export default {
     ocean: 'Ocean Blue',
     midnight: 'Midnight Violet',
     amber: 'Amber Orange',
-    rose: 'Crimson Rose',
-    forest: 'Aurora Forest'
+    mint: 'Mint Green',
+    sand: 'Warm Sand'
   },
   api: {
     noKey: 'No API key configured. Set VITE_LLM_API_KEY in .env.local',

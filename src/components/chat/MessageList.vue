@@ -98,9 +98,20 @@ const isNearBottom = (): boolean => {
   return el.scrollHeight - el.scrollTop - el.clientHeight < 120
 }
 
+let lastUserMsgId = ''
+
 watch(
   () => props.messages,
-  () => {
+  (msgs) => {
+    // 检测到「新出现的用户消息」（发送消息）时强制滚动到最新对话
+    const lastUser = [...msgs].reverse().find((m) => m.role === 'user')
+    if (lastUser && lastUser.id !== lastUserMsgId) {
+      lastUserMsgId = lastUser.id
+      nextTick(() => {
+        listRef.value?.scrollTo({ top: listRef.value.scrollHeight, behavior: 'auto' })
+      })
+      return
+    }
     if (isNearBottom()) {
       nextTick(() => {
         listRef.value?.scrollTo({

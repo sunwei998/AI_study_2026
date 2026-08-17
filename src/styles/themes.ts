@@ -91,35 +91,35 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     grid: 'rgba(255, 183, 77, 0.08)',
     glow: 'rgba(255, 183, 77, 0.4)'
   },
-  rose: {
-    name: 'rose',
-    primary: '#ff5c8a',
-    secondary: '#1c0a12',
-    background: '#16070d',
-    surface: '#2a1020',
-    text: '#ffe4ec',
-    textSecondary: '#d99aae',
-    accent: '#ff2e63',
-    border: '#5a2136',
-    glass: 'rgba(42, 16, 32, 0.6)',
-    overlay: 'rgba(22, 7, 13, 0.45)',
-    grid: 'rgba(255, 92, 138, 0.08)',
-    glow: 'rgba(255, 92, 138, 0.4)'
+  mint: {
+    name: 'mint',
+    primary: '#43a047',
+    secondary: '#e8f5e9',
+    background: '#eef6ee',
+    surface: '#ffffff',
+    text: '#263a2a',
+    textSecondary: '#6b8a70',
+    accent: '#00897b',
+    border: '#cfe6cf',
+    glass: 'rgba(255, 255, 255, 0.72)',
+    overlay: 'rgba(238, 246, 238, 0.55)',
+    grid: 'rgba(67, 160, 71, 0.06)',
+    glow: 'rgba(67, 160, 71, 0.28)'
   },
-  forest: {
-    name: 'forest',
-    primary: '#4ade80',
-    secondary: '#05150c',
-    background: '#04100a',
-    surface: '#0a2417',
-    text: '#d9ffe9',
-    textSecondary: '#7fc9a2',
-    accent: '#22d3ee',
-    border: '#1d4a33',
-    glass: 'rgba(10, 36, 23, 0.6)',
-    overlay: 'rgba(4, 16, 10, 0.45)',
-    grid: 'rgba(74, 222, 128, 0.08)',
-    glow: 'rgba(74, 222, 128, 0.4)'
+  sand: {
+    name: 'sand',
+    primary: '#b07838',
+    secondary: '#f5ecdc',
+    background: '#faf4e8',
+    surface: '#ffffff',
+    text: '#3d3a2e',
+    textSecondary: '#8d8474',
+    accent: '#c2612f',
+    border: '#e6dcc2',
+    glass: 'rgba(255, 255, 255, 0.72)',
+    overlay: 'rgba(250, 244, 232, 0.55)',
+    grid: 'rgba(176, 120, 56, 0.06)',
+    glow: 'rgba(176, 120, 56, 0.28)'
   }
 }
 
