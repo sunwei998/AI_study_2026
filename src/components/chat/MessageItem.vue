@@ -26,11 +26,9 @@
             @click="openImage(img)"
           />
         </div>
-        <p v-if="message.content" class="message-text">
-          {{ message.content }}
-          <span v-if="message.loading" class="streaming-cursor"></span>
-        </p>
-        <div v-else-if="message.loading" class="loading-dots">
+        <div v-if="message.content" class="markdown-body" v-html="renderedContent"></div>
+        <span v-if="message.loading && message.content" class="streaming-cursor"></span>
+        <div v-if="message.loading && !message.content" class="loading-dots">
           <span></span>
           <span></span>
           <span></span>
@@ -55,7 +53,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import type { Message } from '@/types/chat'
 
 const props = defineProps<{
@@ -67,6 +67,20 @@ const emit = defineEmits<{
 }>()
 
 const copied = ref(false)
+
+marked.use({ gfm: true, breaks: true })
+
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A') {
+    node.setAttribute('target', '_blank')
+    node.setAttribute('rel', 'noopener noreferrer')
+  }
+})
+
+const renderedContent = computed(() => {
+  if (!props.message.content) return ''
+  return DOMPurify.sanitize(marked.parse(props.message.content) as string)
+})
 
 const formatTime = (timestamp: number): string => {
   const date = new Date(timestamp)
@@ -185,7 +199,6 @@ const openImage = (url: string) => {
   box-shadow: var(--shadow-sm);
   transition: var(--transition-normal);
   word-wrap: break-word;
-  white-space: pre-wrap;
   position: relative;
 }
 
@@ -221,13 +234,6 @@ const openImage = (url: string) => {
   border-color: var(--color-primary);
   box-shadow: 0 0 14px var(--color-glow);
   transform: scale(1.02);
-}
-
-.message-text {
-  margin: 0;
-  line-height: 1.6;
-  color: var(--color-text);
-  font-size: 14px;
 }
 
 .streaming-cursor {

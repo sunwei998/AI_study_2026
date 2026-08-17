@@ -56,7 +56,7 @@
               ✕
             </button>
           </div>
-          <button class="header-btn sidebar-new" @click="createNew, closeSidebar()">
+          <button class="header-btn sidebar-new" @click="createNew(), closeSidebar()">
             ➕ <span>{{ $t('common.newSession') }}</span>
           </button>
         </div>
@@ -535,9 +535,10 @@ const handleRegenerate = async (message: Message) => {
     display: none;
   }
 
-  .sidebar-new {
+  .sidebar-header .sidebar-new {
     display: flex;
     width: 100%;
+    height: 40px;
     justify-content: center;
     align-items: center;
     gap: 6px;

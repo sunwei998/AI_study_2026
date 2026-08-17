@@ -345,8 +345,10 @@ const handleSubmit = (event: KeyboardEvent) => {
 
 @media (max-width: 768px) {
   .input-box {
-    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+    margin: 0 10px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
     gap: 6px;
+    border-radius: 18px;
   }
 
   .input-field {
