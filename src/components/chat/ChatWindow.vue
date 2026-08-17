@@ -19,7 +19,7 @@
         <button
           v-if="currentSession && currentSession.messages.length > 0"
           class="header-btn"
-          @click="confirmClear"
+          @click="askClearSession"
           :title="$t('common.clearSession')"
         >
           🗑️
@@ -35,26 +35,34 @@
       <div
         v-if="sidebarOpen"
         class="sidebar-backdrop"
-        @click="sidebarOpen = false"
+        @click="closeSidebar()"
       ></div>
-      <aside class="sidebar" :class="{ open: sidebarOpen, collapsed: sidebarCollapsed }">
+      <aside
+        class="sidebar"
+        :class="{ open: sidebarOpen, collapsed: sidebarCollapsed }"
+        @click="onSidebarClick"
+      >
+        <button
+          class="header-btn collapse-btn"
+          :title="$t('common.collapseSessions')"
+          @click="toggleCollapsed"
+        >
+          «
+        </button>
         <div class="sidebar-header">
           <div class="sidebar-header-row">
-            <h2>{{ $t('chat.title') }}</h2>
-            <button
-              class="header-btn collapse-btn"
-              :title="$t('common.collapseSessions')"
-              @click="toggleCollapsed"
-            >
-              «
-            </button>
-            <button
-              class="header-btn sidebar-close"
-              :title="$t('common.close')"
-              @click="closeSidebar"
-            >
-              ✕
-            </button>
+            <div class="sidebar-filter">
+              <input
+                v-model="searchTerm"
+                type="text"
+                class="filter-input"
+                :placeholder="$t('chat.filterPlaceholder')"
+                @keydown.enter="onFilterEnter"
+              />
+              <button class="filter-btn" :title="$t('chat.filterSearch')" @click="applyFilter">
+                🔍
+              </button>
+            </div>
           </div>
           <button class="header-btn sidebar-new" @click="createNew(), closeSidebar()">
             ➕ <span>{{ $t('common.newSession') }}</span>
@@ -62,10 +70,20 @@
         </div>
         <div class="sessions-list">
           <div
-            v-for="session in sessions"
+            v-for="session in filteredSessions"
             :key="session.id"
-            :class="['session-item', { active: session.id === currentSessionId }]"
-            @click="selectSession(session.id)"
+            :class="[
+              'session-item',
+              {
+                active: session.id === currentSessionId,
+                deleting: deleteRevealedId === session.id
+              }
+            ]"
+            @click="onSessionClick(session.id)"
+            @touchstart.passive="onSessionPressStart(session.id)"
+            @touchmove.passive="onSessionPressMove"
+            @touchend="onSessionPressEnd"
+            @touchcancel="onSessionPressEnd"
           >
             <div class="session-content">
               <div class="session-title">{{ session.title }}</div>
@@ -74,12 +92,40 @@
               </div>
             </div>
             <button
+              class="pin-btn"
+              :class="{ pinned: session.pinned }"
+              :disabled="pinningId === session.id"
+              @click.stop="togglePin(session.id)"
+              @touchstart.stop
+              :title="session.pinned ? $t('common.unpin') : $t('common.pin')"
+            >
+              <AppLoading v-if="pinningId === session.id" :size="13" />
+              <svg
+                v-else
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 17v5" />
+                <path
+                  d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"
+                />
+              </svg>
+            </button>
+            <button
               class="delete-btn"
-              @click.stop="deleteSession(session.id)"
+              @click.stop="askDeleteSession(session.id)"
+              @touchstart.stop
               :title="$t('common.delete')"
             >
               ✕
             </button>
+          </div>
+          <div v-if="filteredSessions.length === 0" class="filter-empty">
+            {{ $t('chat.filterEmpty') }}
           </div>
         </div>
       </aside>
@@ -107,6 +153,18 @@
         />
       </main>
     </div>
+
+    <ConfirmModal
+      v-model:visible="confirmVisible"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      :confirm-text="$t('confirm.confirm')"
+      :cancel-text="$t('confirm.cancel')"
+      :confirming="confirmLoading"
+      danger
+      @confirm="handleConfirm"
+      @cancel="handleCancel"
+    />
   </div>
 </template>
 
@@ -121,20 +179,95 @@ import InputBox from './InputBox.vue'
 import ThemeSwitcher from './ThemeSwitcher.vue'
 import ModelSelector from './ModelSelector.vue'
 import LanguageSwitcher from './LanguageSwitcher.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import AppLoading from '@/components/common/AppLoading.vue'
 
 const { t } = useI18n()
 
 const store = useChatStore()
 
-const sessions = computed(() => store.sessions)
 const currentSessionId = computed(() => store.currentSessionId)
 const currentSession = computed(() => store.currentSession)
 const messages = computed(() => store.messages)
 const isLoading = computed(() => store.isLoading)
 
+const searchTerm = ref('')
+const activeFilter = ref('')
+
+const applyFilter = () => {
+  activeFilter.value = searchTerm.value.trim().toLowerCase()
+}
+
+const onFilterEnter = (event: KeyboardEvent) => {
+  if (event.key === 'Enter' && !event.isComposing) {
+    applyFilter()
+  }
+}
+
+const filteredSessions = computed(() => {
+  const kw = activeFilter.value
+  const base = store.sortedSessions
+  if (!kw) return base
+  return base.filter((s) => s.title.toLowerCase().includes(kw))
+})
+
 const sidebarOpen = ref(false)
 const closeSidebar = () => {
   sidebarOpen.value = false
+  deleteRevealedId.value = null
+}
+
+const deleteRevealedId = ref<string | null>(null)
+let longPressTimer: ReturnType<typeof setTimeout> | null = null
+let longPressFired = false
+let suppressClick = false
+
+const clearLongPress = () => {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
+
+const onSessionPressStart = (id: string) => {
+  suppressClick = false
+  longPressFired = false
+  clearLongPress()
+  longPressTimer = setTimeout(() => {
+    longPressFired = true
+    deleteRevealedId.value = id
+    navigator.vibrate?.(8)
+  }, 500)
+}
+
+const onSessionPressMove = () => {
+  clearLongPress()
+}
+
+const onSessionPressEnd = (e: TouchEvent) => {
+  const fired = longPressFired
+  longPressFired = false
+  clearLongPress()
+  if (fired) {
+    suppressClick = true
+    if (!(e.target as HTMLElement).closest('.pin-btn, .delete-btn')) {
+      e.preventDefault()
+    }
+  }
+}
+
+const onSessionClick = (id: string) => {
+  if (suppressClick) {
+    suppressClick = false
+    return
+  }
+  selectSession(id)
+}
+
+const onSidebarClick = (e: MouseEvent) => {
+  if (!(e.target as HTMLElement).closest('.session-item')) {
+    deleteRevealedId.value = null
+  }
 }
 
 const sidebarCollapsed = ref(localStorage.getItem('chatSidebarCollapsed') === '1')
@@ -147,7 +280,6 @@ onMounted(() => {
   // 加载本地数据
   store.loadSessions()
   store.loadTheme()
-  store.loadModel()
   applyTheme(store.currentTheme)
 })
 
@@ -165,12 +297,66 @@ const deleteSession = (sessionId: string) => {
   closeSidebar()
 }
 
-const confirmClear = () => {
-  if (
-    confirm(t('chat.confirmClear'))
-  ) {
-    store.clearMessages()
+const togglePin = async (sessionId: string) => {
+  if (pinningId.value) return
+  pinningId.value = sessionId
+  await sleep(300)
+  store.togglePin(sessionId)
+  pinningId.value = null
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const pinningId = ref<string | null>(null)
+
+const confirmVisible = ref(false)
+const confirmState = ref<{
+  title: string
+  message: string
+  onConfirm: () => void
+} | null>(null)
+
+const confirmTitle = computed(() => confirmState.value?.title ?? '')
+const confirmMessage = computed(() => confirmState.value?.message ?? '')
+
+const openConfirm = (opts: { title: string; message: string; onConfirm: () => void }) => {
+  confirmState.value = opts
+  confirmVisible.value = true
+}
+
+const confirmLoading = ref(false)
+
+const handleConfirm = async () => {
+  const cb = confirmState.value?.onConfirm
+  if (!cb) return
+  confirmLoading.value = true
+  try {
+    await sleep(300)
+    confirmState.value = null
+    confirmVisible.value = false
+    cb()
+  } finally {
+    confirmLoading.value = false
   }
+}
+
+const handleCancel = () => {
+  confirmState.value = null
+}
+
+const askDeleteSession = (sessionId: string) => {
+  openConfirm({
+    title: t('confirm.deleteSessionTitle'),
+    message: t('confirm.deleteSessionMessage'),
+    onConfirm: () => deleteSession(sessionId)
+  })
+}
+
+const askClearSession = () => {
+  openConfirm({
+    title: t('confirm.clearTitle'),
+    message: t('confirm.clearMessage'),
+    onConfirm: () => store.clearMessages()
+  })
 }
 
 const handleSendMessage = async (payload: SendPayload) => {
@@ -325,28 +511,118 @@ const handleRegenerate = async (message: Message) => {
 }
 
 .sidebar-new,
-.collapse-btn,
-.sidebar-close {
+.collapse-btn {
   display: none;
 }
 
-.sidebar-header h2 {
-  margin: 0;
-  font-family: var(--font-display);
+.sidebar-filter {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  transition: var(--transition-normal);
+}
+
+.sidebar-filter:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 10px var(--color-glow);
+}
+
+.filter-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  padding: 6px 0;
+  color: var(--color-text);
   font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
+  line-height: 1.4;
+  outline: none;
+}
+
+.sidebar-filter .filter-input:focus {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.filter-input::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+.filter-btn {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: var(--transition-normal);
+}
+
+.filter-btn:hover {
   color: var(--color-primary);
+  text-shadow: 0 0 10px var(--color-glow);
+}
+
+.filter-empty {
+  padding: 28px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 
 .sessions-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 8px 16px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-primary) 45%, transparent) transparent;
+}
+
+.sessions-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sessions-list::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.sessions-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-primary) 32%, transparent),
+    color-mix(in srgb, var(--color-accent) 32%, transparent)
+  );
+  border-radius: 3px;
+}
+
+.sidebar:hover .sessions-list {
+  scrollbar-color: var(--color-primary) transparent;
+}
+
+.sidebar:hover .sessions-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--color-primary), var(--color-accent));
+  box-shadow: 0 0 8px var(--color-glow), 0 0 16px var(--color-glow);
+}
+
+.sidebar:hover .sessions-list::-webkit-scrollbar-track {
+  background: var(--color-overlay);
 }
 
 .session-item {
@@ -361,6 +637,9 @@ const handleRegenerate = async (message: Message) => {
   align-items: center;
   gap: 8px;
   position: relative;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .session-item:hover {
@@ -368,6 +647,12 @@ const handleRegenerate = async (message: Message) => {
   background: var(--color-glass);
   box-shadow: 0 0 12px var(--color-glow);
   transform: translateX(2px);
+}
+
+.session-item.deleting {
+  border-color: var(--color-primary);
+  background: var(--color-glass);
+  box-shadow: 0 0 14px var(--color-glow);
 }
 
 .session-item.active {
@@ -410,7 +695,8 @@ const handleRegenerate = async (message: Message) => {
   margin-top: 4px;
 }
 
-.delete-btn {
+.delete-btn,
+.pin-btn {
   width: 24px;
   height: 24px;
   border-radius: 6px;
@@ -424,6 +710,37 @@ const handleRegenerate = async (message: Message) => {
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.session-item:hover .delete-btn,
+.session-item:hover .pin-btn,
+.session-item:focus-within .delete-btn,
+.session-item:focus-within .pin-btn,
+.session-item.deleting .delete-btn,
+.session-item.deleting .pin-btn {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.pin-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.pin-btn:hover {
+  background: rgba(255, 193, 7, 0.18);
+  color: #ffc107;
+  box-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+}
+
+.pin-btn.pinned {
+  background: rgba(255, 193, 7, 0.22);
+  color: #ffc107;
+  box-shadow: 0 0 10px rgba(255, 193, 7, 0.55);
 }
 
 .delete-btn:hover {
@@ -462,6 +779,7 @@ const handleRegenerate = async (message: Message) => {
 /* 桌面端：可折叠面板 */
 @media (min-width: 769px) {
   .sidebar {
+    position: relative;
     min-width: 0;
     overflow: hidden;
     transition: width 0.45s cubic-bezier(0.32, 0.72, 0, 1);
@@ -474,7 +792,21 @@ const handleRegenerate = async (message: Message) => {
   }
 
   .collapse-btn {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 5;
     display: flex;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 14px;
+  }
+
+  .collapse-btn:hover:not(:disabled) {
+    transform: translateY(-50%);
+    box-shadow: 0 0 14px var(--color-glow), inset 0 0 12px var(--color-glow);
   }
 
   .sidebar.collapsed {
@@ -557,10 +889,6 @@ const handleRegenerate = async (message: Message) => {
     border-color: var(--color-primary);
   }
 
-  .sidebar-close {
-    display: flex;
-  }
-
   .sidebar-header {
     padding-top: calc(14px + var(--safe-top, 0px));
   }
@@ -568,6 +896,10 @@ const handleRegenerate = async (message: Message) => {
   .sidebar-header,
   .sessions-list {
     min-width: 0;
+  }
+
+  .sidebar-filter .filter-input {
+    font-size: 16px;
   }
 
   .title {
@@ -657,13 +989,19 @@ const handleRegenerate = async (message: Message) => {
   }
 
   .session-item {
-    padding: 13px 12px;
+    padding: 8px 12px;
   }
 
-  .delete-btn {
-    width: 30px;
-    height: 30px;
-    font-size: 14px;
+  .session-meta {
+    display: none;
+  }
+
+  .delete-btn,
+.pin-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+    border-radius: 5px;
   }
 }
 </style>

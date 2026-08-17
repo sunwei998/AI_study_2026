@@ -21,7 +21,7 @@ interface ChatResponse {
 
 class APIService {
   private config: ApiConfig
-  private abortController: AbortController | null = null
+  private controllers = new Map<string, AbortController>()
 
   constructor(config: ApiConfig) {
     this.config = config
@@ -35,12 +35,13 @@ class APIService {
     return this.config.provider === 'ollama' ? `${url}/api/chat` : `${url}/chat/completions`
   }
 
-  private buildBody(messages: ChatHistoryItem[], stream: boolean): string {
-    const { provider, model, temperature, maxTokens } = this.config
+  private buildBody(messages: ChatHistoryItem[], stream: boolean, model?: string): string {
+    const { provider, temperature, maxTokens } = this.config
+    const resolvedModel = model || this.config.model
     const body =
       provider === 'ollama'
         ? {
-            model,
+            model: resolvedModel,
             messages: messages.map((m) => ({
               role: m.role,
               content: m.content,
@@ -53,7 +54,7 @@ class APIService {
             options: { num_predict: maxTokens }
           }
         : {
-            model,
+            model: resolvedModel,
             messages: messages.map((m) =>
               m.images?.length
                 ? {
@@ -123,17 +124,19 @@ class APIService {
   /**
    * 调用模型API获取回复（携带历史消息，模型具备上下文记忆）
    * @param messages - 对话历史（含最新用户消息）
+   * @param requestId - 请求唯一标识，用于取消
+   * @param model - 模型ID（默认取全局配置）
    * @returns 模型回复文本
    */
-  async chat(messages: ChatHistoryItem[]): Promise<string> {
+  async chat(messages: ChatHistoryItem[], requestId: string, model?: string): Promise<string> {
     this.assertApiKey()
     const controller = new AbortController()
-    this.abortController = controller
+    this.controllers.set(requestId, controller)
     try {
       const response = await fetch(this.endpoint, {
         method: 'POST',
         headers: this.buildHeaders(),
-        body: this.buildBody(messages, false),
+        body: this.buildBody(messages, false, model),
         signal: controller.signal
       })
       if (!response.ok) {
@@ -147,7 +150,7 @@ class APIService {
       console.error('API调用失败:', error)
       throw new Error(i18n.global.t('api.failed'))
     } finally {
-      this.abortController = null
+      this.controllers.delete(requestId)
     }
   }
 
@@ -155,19 +158,23 @@ class APIService {
    * 流式调用（fetch + ReadableStream 逐 chunk 输出）
    * @param messages - 对话历史（含最新用户消息）
    * @param onChunk - 每个数据块的回调
+   * @param requestId - 请求唯一标识，用于取消
+   * @param model - 模型ID（默认取全局配置）
    */
   async chatStream(
     messages: ChatHistoryItem[],
-    onChunk: (chunk: string) => void
+    onChunk: (chunk: string) => void,
+    requestId: string,
+    model?: string
   ): Promise<void> {
     this.assertApiKey()
     const controller = new AbortController()
-    this.abortController = controller
+    this.controllers.set(requestId, controller)
     try {
       const response = await fetch(this.endpoint, {
         method: 'POST',
         headers: this.buildHeaders(),
-        body: this.buildBody(messages, true),
+        body: this.buildBody(messages, true, model),
         signal: controller.signal
       })
       if (!response.ok) {
@@ -209,15 +216,15 @@ class APIService {
       console.error('流式API调用失败:', error)
       throw new Error(i18n.global.t('api.streamFailed'))
     } finally {
-      this.abortController = null
+      this.controllers.delete(requestId)
     }
   }
 
   /**
-   * 取消当前进行中的请求
+   * 取消指定请求
    */
-  abort(): void {
-    this.abortController?.abort()
+  abort(requestId: string): void {
+    this.controllers.get(requestId)?.abort()
   }
 
   /**
@@ -237,11 +244,11 @@ class APIService {
 
 // 默认配置：SiliconFlow（OpenAI 兼容）。若改用本地 Ollama，把 provider 改为 'ollama'、
 // baseUrl 改为 ''（走 vite proxy）或 'http://localhost:11434'，apiKey 留空即可。
-// 默认模型为官方价格页标注「免费」的 GLM-Z1-9B。
+// 默认模型为 tencent/Hunyuan-MT-7B（新会话默认模型）。
 const defaultConfig: ApiConfig = {
   provider: 'openai',
   baseUrl: 'https://api.siliconflow.cn/v1',
-  model: 'THUDM/GLM-Z1-9B-0414',
+  model: 'tencent/Hunyuan-MT-7B',
   apiKey: import.meta.env.VITE_LLM_API_KEY || '',
   temperature: 0.7,
   maxTokens: 2048

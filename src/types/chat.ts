@@ -30,6 +30,8 @@ export interface ChatSession {
   messages: Message[]
   createdAt: number
   updatedAt: number
+  pinned?: boolean
+  model?: string
 }
 
 export interface ThemeConfig {

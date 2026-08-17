@@ -10,6 +10,8 @@ export default {
     copied: '已复制',
     regenerate: '重新生成',
     delete: '删除',
+    pin: '置顶',
+    unpin: '取消置顶',
     newSession: '新建会话',
     clearSession: '清空当前会话',
     switchTheme: '切换主题',
@@ -27,8 +29,10 @@ export default {
   },
   chat: {
     title: '会话历史',
+    filterPlaceholder: '搜索会话标题...',
+    filterSearch: '搜索',
+    filterEmpty: '未找到匹配的会话',
     messageCount: '{count} 条消息',
-    confirmClear: '确定要清空当前会话的所有消息吗？此操作无法撤销。',
     emptyTitle: '开始对话',
     emptyDesc: '与AI助手开始一场令人兴奋的交流吧',
     suggestions: ['请解释一下量子计算', '如何学习编程？', '写一个Python函数', '讲一个有趣的笑话'],
@@ -60,5 +64,13 @@ export default {
     failed: '无法获取AI回复，请检查API连接',
     noStream: '响应不支持流式读取',
     streamFailed: '流式获取回复失败'
+  },
+  confirm: {
+    confirm: '确认删除',
+    cancel: '取消',
+    deleteSessionTitle: '删除会话',
+    deleteSessionMessage: '确定要删除该会话吗？该会话的全部消息将被永久移除，此操作无法撤销。',
+    clearTitle: '清空当前会话',
+    clearMessage: '确定要清空当前会话的所有消息吗？此操作无法撤销。'
   }
 }

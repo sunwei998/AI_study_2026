@@ -10,6 +10,8 @@ export default {
     copied: 'Copied',
     regenerate: 'Regenerate',
     delete: 'Delete',
+    pin: 'Pin',
+    unpin: 'Unpin',
     newSession: 'New chat',
     clearSession: 'Clear current chat',
     switchTheme: 'Switch theme',
@@ -27,8 +29,10 @@ export default {
   },
   chat: {
     title: 'Chat history',
+    filterPlaceholder: 'Search session titles...',
+    filterSearch: 'Search',
+    filterEmpty: 'No matching sessions',
     messageCount: '{count} messages',
-    confirmClear: 'Clear all messages in this chat? This cannot be undone.',
     emptyTitle: 'Start a conversation',
     emptyDesc: 'Start an exciting conversation with the AI assistant',
     suggestions: [
@@ -65,5 +69,13 @@ export default {
     failed: 'Unable to get AI reply, please check the API connection',
     noStream: 'Response does not support streaming',
     streamFailed: 'Failed to get streaming reply'
+  },
+  confirm: {
+    confirm: 'Delete',
+    cancel: 'Cancel',
+    deleteSessionTitle: 'Delete Session',
+    deleteSessionMessage: 'Delete this session? All messages will be permanently removed. This cannot be undone.',
+    clearTitle: 'Clear Current Chat',
+    clearMessage: 'Clear all messages in this chat? This cannot be undone.'
   }
 }

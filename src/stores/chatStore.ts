@@ -8,44 +8,76 @@ import { themes } from '@/styles/themes'
 
 const THEMES: ThemeType[] = Object.keys(themes) as ThemeType[]
 const MAX_HISTORY = 20
+const DEFAULT_MODEL = 'tencent/Hunyuan-MT-7B'
 
 export const useChatStore = defineStore('chat', () => {
   // 状态
   const sessions = ref<ChatSession[]>([])
   const currentSessionId = ref<string>('')
   const currentTheme = ref<ThemeType>('dark')
-  const currentModel = ref<string>(apiService.getConfig().model)
-  const isLoading = ref(false)
+  const loadingSessions = ref<Record<string, boolean>>({})
+  const requestIds = new Map<string, string>()
 
   // 计算属性
   const currentSession = computed(() => {
     return sessions.value.find((s) => s.id === currentSessionId.value)
   })
 
+  const sortedSessions = computed(() => {
+    return sessions.value
+      .slice()
+      .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || a.createdAt - b.createdAt)
+  })
+
   const messages = computed(() => {
     return currentSession.value?.messages || []
   })
 
+  const isLoading = computed(() => {
+    return currentSessionId.value ? !!loadingSessions.value[currentSessionId.value] : false
+  })
+
+  const isSessionLoading = (sessionId: string) => !!loadingSessions.value[sessionId]
+
+  const setSessionLoading = (sessionId: string, loading: boolean) => {
+    const next = { ...loadingSessions.value }
+    if (loading) {
+      next[sessionId] = true
+    } else {
+      delete next[sessionId]
+    }
+    loadingSessions.value = next
+  }
+
   const availableThemes = THEMES
 
   const availableModels = MODEL_LIST
+
+  const currentModel = computed(() => {
+    const session = currentSession.value
+    if (session?.model && availableModels.some((m) => m.id === session.model)) {
+      return session.model
+    }
+    return DEFAULT_MODEL
+  })
 
   const currentModelInfo = computed(() => {
     return availableModels.find((m) => m.id === currentModel.value) || null
   })
 
   const setModel = (model: ModelInfo) => {
-    currentModel.value = model.id
-    apiService.updateConfig({ model: model.id })
-    localStorage.setItem('chatModel', model.id)
+    const session = currentSession.value
+    if (session) {
+      session.model = model.id
+      saveSessions()
+    }
   }
 
-  const loadModel = () => {
-    const saved = localStorage.getItem('chatModel')
-    if (saved && availableModels.some((m) => m.id === saved)) {
-      currentModel.value = saved
-      apiService.updateConfig({ model: saved })
+  const resolveSessionModel = (session: ChatSession): string => {
+    if (session.model && availableModels.some((m) => m.id === session.model)) {
+      return session.model
     }
+    return DEFAULT_MODEL
   }
 
   const getSession = (sessionId: string): ChatSession | undefined => {
@@ -92,7 +124,9 @@ export const useChatStore = defineStore('chat', () => {
       }),
       messages: [],
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      pinned: false,
+      model: DEFAULT_MODEL
     }
     sessions.value.push(newSession)
     currentSessionId.value = id
@@ -101,6 +135,12 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   const deleteSession = (sessionId: string) => {
+    const requestId = requestIds.get(sessionId)
+    if (requestId) {
+      apiService.abort(requestId)
+      requestIds.delete(sessionId)
+      setSessionLoading(sessionId, false)
+    }
     sessions.value = sessions.value.filter((s) => s.id !== sessionId)
     if (currentSessionId.value === sessionId) {
       currentSessionId.value = sessions.value[0]?.id || ''
@@ -109,6 +149,14 @@ export const useChatStore = defineStore('chat', () => {
       }
     }
     saveSessions()
+  }
+
+  const togglePin = (sessionId: string) => {
+    const session = sessions.value.find((s) => s.id === sessionId)
+    if (session) {
+      session.pinned = !session.pinned
+      saveSessions()
+    }
   }
 
   const addMessage = (
@@ -197,17 +245,22 @@ export const useChatStore = defineStore('chat', () => {
 
     // 捕获会话ID，避免请求期间切换会话导致更新错位
     const sessionId = currentSessionId.value || createNewSession()
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
     addMessage(content, 'user', sessionId, images)
     const assistantMsg = addMessage('', 'assistant', sessionId)
     setMessageLoading(assistantMsg.id, true, sessionId)
-
-    isLoading.value = true
+    requestIds.set(sessionId, requestId)
+    setSessionLoading(sessionId, true)
 
     try {
       const session = getSession(sessionId)
       if (!session) return
-      const response = await apiService.chat(buildHistory(session, assistantMsg.id))
+      const response = await apiService.chat(
+        buildHistory(session, assistantMsg.id),
+        requestId,
+        resolveSessionModel(session)
+      )
       updateMessage(assistantMsg.id, response, sessionId)
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -217,7 +270,8 @@ export const useChatStore = defineStore('chat', () => {
       updateMessage(assistantMsg.id, i18n.global.t('chat.error', { msg: errorMsg }), sessionId)
     } finally {
       setMessageLoading(assistantMsg.id, false, sessionId)
-      isLoading.value = false
+      setSessionLoading(sessionId, false)
+      requestIds.delete(sessionId)
       saveSessions()
     }
   }
@@ -229,12 +283,13 @@ export const useChatStore = defineStore('chat', () => {
     if (!content.trim() && images.length === 0) return
 
     const sessionId = currentSessionId.value || createNewSession()
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
     addMessage(content, 'user', sessionId, images)
     const assistantMsg = addMessage('', 'assistant', sessionId)
     setMessageLoading(assistantMsg.id, true, sessionId)
-
-    isLoading.value = true
+    requestIds.set(sessionId, requestId)
+    setSessionLoading(sessionId, true)
 
     try {
       const session = getSession(sessionId)
@@ -244,7 +299,7 @@ export const useChatStore = defineStore('chat', () => {
         const currentContent =
           getSession(sessionId)?.messages.find((m) => m.id === assistantMsg.id)?.content || ''
         updateMessage(assistantMsg.id, currentContent + chunk, sessionId)
-      })
+      }, requestId, resolveSessionModel(session))
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return
@@ -253,16 +308,21 @@ export const useChatStore = defineStore('chat', () => {
       updateMessage(assistantMsg.id, i18n.global.t('chat.error', { msg: errorMsg }), sessionId)
     } finally {
       setMessageLoading(assistantMsg.id, false, sessionId)
-      isLoading.value = false
+      setSessionLoading(sessionId, false)
+      requestIds.delete(sessionId)
       saveSessions()
     }
   }
 
   /**
-   * 取消当前请求
+   * 取消当前会话的请求
    */
   const abortCurrentRequest = () => {
-    apiService.abort()
+    if (!currentSessionId.value) return
+    const requestId = requestIds.get(currentSessionId.value)
+    if (requestId) {
+      apiService.abort(requestId)
+    }
   }
 
   const setTheme = (theme: ThemeType) => {
@@ -299,13 +359,16 @@ export const useChatStore = defineStore('chat', () => {
     currentModelInfo,
     availableModels,
     isLoading,
+    isSessionLoading,
     // 计算属性
     currentSession,
+    sortedSessions,
     messages,
     availableThemes,
     // 方法
     createNewSession,
     deleteSession,
+    togglePin,
     addMessage,
     updateMessage,
     setMessageLoading,
@@ -315,7 +378,6 @@ export const useChatStore = defineStore('chat', () => {
     sendMessageStream,
     abortCurrentRequest,
     setModel,
-    loadModel,
     setTheme,
     loadTheme,
     loadSessions,
