@@ -15,7 +15,7 @@
         </button>
       </div>
     </div>
-    <div v-else ref="listRef" class="messages-container">
+    <div v-else ref="listRef" class="messages-container" @scroll="onScroll">
       <MessageItem
         v-for="message in messages"
         :key="message.id"
@@ -23,6 +23,19 @@
         @regenerate="handleRegenerate(message)"
       />
     </div>
+    <Transition name="backtop">
+      <button
+        v-if="showTopBtn"
+        class="back-top-btn"
+        :title="$t('common.backToTop')"
+        :disabled="isLoading"
+        @click="scrollToTop"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 19V5M5 12l7-7 7 7" />
+        </svg>
+      </button>
+    </Transition>
   </div>
 </template>
 
@@ -45,6 +58,32 @@ const emit = defineEmits<{
 }>()
 
 const listRef = ref<HTMLElement>()
+const showTopBtn = ref(false)
+
+const onScroll = () => {
+  const el = listRef.value
+  showTopBtn.value = !!el && el.scrollTop > 200
+}
+
+const scrollToTop = () => {
+  if (props.isLoading) return
+  const el = listRef.value
+  if (!el) return
+  if ('scrollBehavior' in document.documentElement.style) {
+    el.scrollTo({ top: 0, behavior: 'smooth' })
+    return
+  }
+  const start = el.scrollTop
+  const duration = 320
+  const startTime = performance.now()
+  const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+  const step = (now: number) => {
+    const t = Math.min((now - startTime) / duration, 1)
+    el.scrollTop = Math.round(start * (1 - easeOutCubic(t)))
+    if (t < 1) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
+}
 
 const suggestions = computed<string[]>(() => tm('chat.suggestions') as unknown as string[])
 
@@ -77,11 +116,74 @@ watch(
 
 <style scoped>
 .message-list {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
   padding: 20px 0;
+}
+
+.back-top-btn {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  z-index: 10;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  color: var(--color-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px var(--color-glow);
+  transition: var(--transition-normal);
+  will-change: transform, opacity;
+}
+
+.back-top-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.back-top-btn:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 18px var(--color-glow), inset 0 0 12px var(--color-glow);
+  transform: translateY(-2px);
+}
+
+.back-top-btn:active {
+  transform: translateY(0) scale(0.92);
+}
+
+.back-top-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.backtop-enter-active,
+.backtop-leave-active {
+  transition:
+    opacity 0.25s ease,
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.backtop-enter-from,
+.backtop-leave-to {
+  opacity: 0;
+  transform: translateY(12px) scale(0.7);
 }
 
 .empty-state {
@@ -188,6 +290,33 @@ watch(
 
   .empty-state h2 {
     font-size: 20px;
+  }
+
+  .back-top-btn {
+    left: 0;
+    right: 0;
+    bottom: 10px;
+    width: 38px;
+    height: 38px;
+    margin: 0 auto;
+  }
+
+  .back-top-btn svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2.2;
+  }
+
+  .backtop-enter-active,
+  .backtop-leave-active {
+    transition:
+      opacity 0.22s ease,
+      transform 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  .backtop-enter-from,
+  .backtop-leave-to {
+    transform: translateY(8px) scale(0.85);
   }
 }
 </style>

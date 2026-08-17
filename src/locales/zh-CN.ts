@@ -16,6 +16,7 @@ export default {
     switchModel: '切换模型',
     collapseSessions: '收起会话列表',
     expandSessions: '展开会话列表',
+    backToTop: '回到顶部',
     close: '关闭',
     errorOccurred: '发生错误'
   },

@@ -24,6 +24,9 @@
   --radius-lg: 18px;
   --glass-blur: 18px;
 
+  --safe-top: 0px;
+  --safe-bottom: 0px;
+
   --transition-normal: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-fast: all 0.15s ease-out;
   --shadow-sm: 0 2px 8px var(--color-glow);
@@ -306,17 +309,68 @@ body::after {
   color: var(--color-accent);
 }
 
-.markdown-body pre {
+.markdown-body .code-block {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
-  overflow-x: auto;
   margin: 0.7em 0;
+  overflow: hidden;
   box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.28);
 }
 
-.markdown-body pre code {
+.markdown-body .code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--color-glass);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.markdown-body .code-lang {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown-body .code-copy-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-fast);
+}
+
+.markdown-body .code-copy-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 0 10px var(--color-glow);
+}
+
+.markdown-body .code-block pre {
+  background: none;
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  box-shadow: none;
+}
+
+.markdown-body .code-block pre code {
   background: none;
   border: none;
   padding: 0;
@@ -468,5 +522,10 @@ textarea:focus {
   :root {
     --control-h: 32px;
     --glass-blur: 12px;
+  }
+
+  .markdown-body .code-copy-btn {
+    width: 32px;
+    height: 32px;
   }
 }

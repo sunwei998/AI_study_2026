@@ -181,18 +181,26 @@ const handleSendMessage = async (payload: SendPayload) => {
 const handleRegenerate = async (message: Message) => {
   // 找到该助手消息之前最近的用户消息
   const msgs = store.messages
+  const idx = msgs.findIndex((m) => m.id === message.id)
+  if (idx < 0) return
+
   let userContent = ''
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    if (msgs[i].id === message.id) break
+  let userImages: string[] = []
+  let userId = ''
+  for (let i = idx - 1; i >= 0; i--) {
     if (msgs[i].role === 'user') {
+      userId = msgs[i].id
       userContent = msgs[i].content
+      userImages = msgs[i].images || []
       break
     }
   }
-  if (userContent) {
-    // 删除该助手消息并重新发送
+
+  if (userContent || userImages.length) {
+    // 删除该助手消息及对应的用户消息，再重新发送
     store.deleteMessage(message.id)
-    await store.sendMessage(userContent)
+    if (userId) store.deleteMessage(userId)
+    await store.sendMessage(userContent, userImages)
   }
 }
 </script>
@@ -204,6 +212,7 @@ const handleRegenerate = async (message: Message) => {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   background: var(--color-overlay);
 }
 
@@ -516,7 +525,7 @@ const handleRegenerate = async (message: Message) => {
 
 @media (max-width: 768px) {
   .chat-header {
-    padding: calc(10px + env(safe-area-inset-top)) 10px 10px;
+    padding: calc(var(--safe-top, 0px) + 10px) 10px 10px;
   }
 
   .header-left {
@@ -550,6 +559,10 @@ const handleRegenerate = async (message: Message) => {
 
   .sidebar-close {
     display: flex;
+  }
+
+  .sidebar-header {
+    padding-top: calc(14px + var(--safe-top, 0px));
   }
 
   .sidebar-header,

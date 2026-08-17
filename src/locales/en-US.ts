@@ -16,6 +16,7 @@ export default {
     switchModel: 'Switch model',
     collapseSessions: 'Collapse session list',
     expandSessions: 'Expand session list',
+    backToTop: 'Back to top',
     close: 'Close',
     errorOccurred: 'An error occurred'
   },

@@ -26,7 +26,7 @@
             @click="openImage(img)"
           />
         </div>
-        <div v-if="message.content" class="markdown-body" v-html="renderedContent"></div>
+        <div v-if="message.content" class="markdown-body" v-html="renderedContent" @click="onMarkdownClick"></div>
         <span v-if="message.loading && message.content" class="streaming-cursor"></span>
         <div v-if="message.loading && !message.content" class="loading-dots">
           <span></span>
@@ -68,7 +68,19 @@ const emit = defineEmits<{
 
 const copied = ref(false)
 
-marked.use({ gfm: true, breaks: true })
+marked.use({
+  gfm: true,
+  breaks: true,
+  renderer: {
+    code({ text, lang, escaped }: { text: string; lang?: string; escaped?: boolean }) {
+      const safeLang = (lang || '').replace(/[^\w+#.-]/g, '')
+      const escapeHtml = (s: string) =>
+        s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      const content = escaped ? text : escapeHtml(text)
+      return `<div class="code-block"><div class="code-header"><span class="code-lang">${safeLang || 'code'}</span><button class="code-copy-btn" type="button" title="copy">📋</button></div><pre><code${safeLang ? ` class="language-${safeLang}"` : ''}>${content}</code></pre></div>`
+    }
+  }
+})
 
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'A') {
@@ -82,6 +94,32 @@ const renderedContent = computed(() => {
   return DOMPurify.sanitize(marked.parse(props.message.content) as string)
 })
 
+const flashBtn = (btn: Element) => {
+  btn.textContent = '✓'
+  setTimeout(() => {
+    btn.textContent = '📋'
+  }, 1500)
+}
+
+const onMarkdownClick = (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  const btn = target.closest('.code-copy-btn')
+  if (!btn) return
+  const codeEl = (btn as HTMLElement).closest('.code-block')?.querySelector('code')
+  const text = codeEl?.textContent ?? ''
+  if (!text) return
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => flashBtn(btn))
+      .catch(() => {
+        if (legacyCopy(text)) flashBtn(btn)
+      })
+  } else if (legacyCopy(text)) {
+    flashBtn(btn)
+  }
+}
+
 const formatTime = (timestamp: number): string => {
   const date = new Date(timestamp)
   return date.toLocaleTimeString('zh-CN', {
@@ -90,15 +128,44 @@ const formatTime = (timestamp: number): string => {
   })
 }
 
-const copyToClipboard = async () => {
+const legacyCopy = (text: string): boolean => {
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.setAttribute('readonly', '')
+  ta.style.position = 'fixed'
+  ta.style.top = '-9999px'
+  ta.style.opacity = '0'
+  document.body.appendChild(ta)
+  ta.focus()
+  ta.select()
+  ta.setSelectionRange(0, ta.value.length)
+  let ok = false
   try {
-    await navigator.clipboard.writeText(props.message.content)
+    ok = document.execCommand('copy')
+  } catch (err) {
+    console.error('复制失败:', err)
+  }
+  document.body.removeChild(ta)
+  return ok
+}
+
+const copyToClipboard = () => {
+  const text = props.message.content
+  const showCopied = () => {
     copied.value = true
     setTimeout(() => {
       copied.value = false
     }, 1500)
-  } catch (err) {
-    console.error('复制失败:', err)
+  }
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard
+      .writeText(text)
+      .then(showCopied)
+      .catch(() => {
+        if (legacyCopy(text)) showCopied()
+      })
+  } else if (legacyCopy(text)) {
+    showCopied()
   }
 }
 
