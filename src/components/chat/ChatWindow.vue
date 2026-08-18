@@ -13,6 +13,21 @@
         <h1 class="title">{{ $t('app.name') }}</h1>
       </div>
       <div class="header-right">
+        <button
+          v-if="auth.isAdmin"
+          class="admin-btn"
+          :title="$t('console.title')"
+          @click="auth.openConsole()"
+        >
+          <AppIcon name="lucide:settings-2" :size="18" theme-fill />
+        </button>
+        <button
+          class="header-btn"
+          :title="$t('auth.logout')"
+          @click="askLogout"
+        >
+          <AppIcon name="lucide:log-out" :size="18" />
+        </button>
         <LanguageSwitcher />
         <ThemeSwitcher />
         <ModelSelector />
@@ -158,7 +173,7 @@
       v-model:visible="confirmVisible"
       :title="confirmTitle"
       :message="confirmMessage"
-      :confirm-text="$t('confirm.confirm')"
+      :confirm-text="confirmText"
       :cancel-text="$t('confirm.cancel')"
       :confirming="confirmLoading"
       danger
@@ -181,10 +196,13 @@ import ModelSelector from './ModelSelector.vue'
 import LanguageSwitcher from './LanguageSwitcher.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
+import { useAuthStore } from '@/stores/authStore'
 
 const { t } = useI18n()
 
 const store = useChatStore()
+const auth = useAuthStore()
 
 const currentSessionId = computed(() => store.currentSessionId)
 const currentSession = computed(() => store.currentSession)
@@ -313,13 +331,20 @@ const confirmVisible = ref(false)
 const confirmState = ref<{
   title: string
   message: string
+  confirmText?: string
   onConfirm: () => void
 } | null>(null)
 
 const confirmTitle = computed(() => confirmState.value?.title ?? '')
 const confirmMessage = computed(() => confirmState.value?.message ?? '')
+const confirmText = computed(() => confirmState.value?.confirmText ?? t('confirm.confirm'))
 
-const openConfirm = (opts: { title: string; message: string; onConfirm: () => void }) => {
+const openConfirm = (opts: {
+  title: string
+  message: string
+  confirmText?: string
+  onConfirm: () => void
+}) => {
   confirmState.value = opts
   confirmVisible.value = true
 }
@@ -357,6 +382,15 @@ const askClearSession = () => {
     title: t('confirm.clearTitle'),
     message: t('confirm.clearMessage'),
     onConfirm: () => store.clearMessages()
+  })
+}
+
+const askLogout = () => {
+  openConfirm({
+    title: t('auth.logout'),
+    message: t('auth.logoutConfirm'),
+    confirmText: t('auth.logoutConfirmBtn'),
+    onConfirm: () => auth.logout()
   })
 }
 
@@ -453,6 +487,33 @@ const handleRegenerate = async (message: Message) => {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.admin-btn {
+  width: var(--control-h);
+  height: var(--control-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--color-glass), var(--color-glass)) padding-box,
+    linear-gradient(135deg, var(--color-primary), var(--color-accent)) border-box;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  color: var(--color-text);
+  cursor: pointer;
+  transition: var(--transition-normal);
+}
+
+.admin-btn:hover {
+  box-shadow: 0 0 16px var(--color-glow), inset 0 0 12px var(--color-glow);
+  transform: translateY(-1px);
+}
+
+.admin-btn:active {
+  transform: translateY(0);
 }
 
 .header-btn {

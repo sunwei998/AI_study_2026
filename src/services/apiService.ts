@@ -1,6 +1,7 @@
 import type { MessageRole, ModelInfo } from '@/types/chat'
 import { i18n } from '@/locales'
-import { getToken } from './token'
+import { clearToken, getToken } from './token'
+import { notifyUnauthorized } from './unauthorized'
 
 export interface ChatHistoryItem {
   role: MessageRole
@@ -83,6 +84,11 @@ async function chatStream(
       signal: controller.signal
     })
     if (!response.ok) {
+      if (response.status === 401) {
+        clearToken()
+        notifyUnauthorized()
+        throw new Error(i18n.global.t('auth.expired'))
+      }
       let detail = ''
       try {
         const err = await response.json()
