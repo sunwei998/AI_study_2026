@@ -17,9 +17,9 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      // 开发环境把 /api 代理到本地 Ollama，避免跨域
+      // 开发环境把 /api 代理到本地后端（ai-chat-server），key 由后端持有
       '/api': {
-        target: 'http://localhost:11434',
+        target: 'http://localhost:8000',
         changeOrigin: true
       }
     }

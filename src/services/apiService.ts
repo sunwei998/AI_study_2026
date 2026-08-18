@@ -1,5 +1,6 @@
-import type { ApiConfig, MessageRole } from '@/types/chat'
+import type { MessageRole, ModelInfo } from '@/types/chat'
 import { i18n } from '@/locales'
+import { getToken } from './token'
 
 export interface ChatHistoryItem {
   role: MessageRole
@@ -8,250 +9,149 @@ export interface ChatHistoryItem {
 }
 
 interface StreamChunk {
-  message?: { content?: string }
-  response?: string
   choices?: Array<{ delta?: { content?: string } }>
+  error?: string
 }
 
-interface ChatResponse {
-  message?: { content?: string }
-  response?: string
-  choices?: Array<{ message?: { content?: string } }>
+const STREAM_TIMEOUT = 90_000
+
+const API_BASE = '/api'
+
+/**
+ * 通用请求：带 token（若有）
+ */
+function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const token = getToken()
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+  return headers
 }
 
-class APIService {
-  private config: ApiConfig
-  private controllers = new Map<string, AbortController>()
-
-  constructor(config: ApiConfig) {
-    this.config = config
-  }
-
-  /**
-   * 请求地址：Ollama 用 /api/chat，OpenAI 兼容用 /chat/completions
-   */
-  private get endpoint(): string {
-    const url = this.config.baseUrl.replace(/\/+$/, '')
-    return this.config.provider === 'ollama' ? `${url}/api/chat` : `${url}/chat/completions`
-  }
-
-  private buildBody(messages: ChatHistoryItem[], stream: boolean, model?: string): string {
-    const { provider, temperature, maxTokens } = this.config
-    const resolvedModel = model || this.config.model
-    const body =
-      provider === 'ollama'
-        ? {
-            model: resolvedModel,
-            messages: messages.map((m) => ({
-              role: m.role,
-              content: m.content,
-              ...(m.images?.length
-                ? { images: m.images.map((url) => url.split(',')[1] ?? url) }
-                : {})
-            })),
-            stream,
-            temperature,
-            options: { num_predict: maxTokens }
-          }
-        : {
-            model: resolvedModel,
-            messages: messages.map((m) =>
-              m.images?.length
-                ? {
-                    role: m.role,
-                    content: [
-                      { type: 'text', text: m.content },
-                      ...m.images.map((url) => ({
-                        type: 'image_url',
-                        image_url: { url }
-                      }))
-                    ]
-                  }
-                : { role: m.role, content: m.content }
-            ),
-            stream,
-            temperature,
-            max_tokens: maxTokens
-          }
-    return JSON.stringify(body)
-  }
-
-  private buildHeaders(): Record<string, string> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (this.config.provider !== 'ollama' && this.config.apiKey) {
-      headers.Authorization = `Bearer ${this.config.apiKey}`
+/**
+ * 解析单个 SSE 行（后端透传 OpenAI 兼容格式：data: {json}）
+ * 返回 null 表示无可解析内容；content 表示增量文本；error 表示错误事件
+ */
+function parseStreamLine(line: string): { content: string; error?: string } | null {
+  const text = line.trim()
+  if (!text || !text.startsWith('data:')) return null
+  const data = text.slice(5).trim()
+  if (!data || data === '[DONE]') return null
+  try {
+    const json = JSON.parse(data) as StreamChunk
+    if (typeof json.error === 'string' && json.error) {
+      return { content: '', error: json.error }
     }
-    return headers
-  }
-
-  private assertApiKey(): void {
-    if (this.config.provider !== 'ollama' && !this.config.apiKey) {
-      throw new Error(i18n.global.t('api.noKey'))
-    }
-  }
-
-  /**
-   * 解析单个流式数据行（兼容 Ollama NDJSON 与 OpenAI SSE）
-   */
-  private parseStreamLine(line: string): string {
-    const text = line.trim()
-    if (!text) return ''
-    let json: StreamChunk
-    if (text.startsWith('data:')) {
-      const data = text.slice(5).trim()
-      if (!data || data === '[DONE]') return ''
-      json = JSON.parse(data) as StreamChunk
-    } else {
-      json = JSON.parse(text) as StreamChunk
-    }
-    // Ollama: { message: { content } }
-    if (json.message?.content) return json.message.content
-    // OpenAI: { choices: [{ delta: { content } }] }
     const delta = json.choices?.[0]?.delta?.content
-    return typeof delta === 'string' ? delta : ''
+    return typeof delta === 'string' && delta ? { content: delta } : null
+  } catch {
+    return null
   }
+}
 
-  /**
-   * 解析完整响应（兼容 Ollama / OpenAI）
-   */
-  private parseResponse(data: ChatResponse): string {
-    if (data.message?.content) return data.message.content
-    if (data.response) return data.response
-    const content = data.choices?.[0]?.message?.content
-    return typeof content === 'string' ? content : ''
+/**
+ * 读取模型列表（后端 models 表，管理员可在控制台配置）
+ */
+export async function fetchModels(): Promise<ModelInfo[]> {
+  const resp = await fetch(`${API_BASE}/models`)
+  if (!resp.ok) {
+    throw new Error(i18n.global.t('api.failed'))
   }
+  const data: ModelInfo[] = await resp.json()
+  return data
+}
 
-  /**
-   * 调用模型API获取回复（携带历史消息，模型具备上下文记忆）
-   * @param messages - 对话历史（含最新用户消息）
-   * @param requestId - 请求唯一标识，用于取消
-   * @param model - 模型ID（默认取全局配置）
-   * @returns 模型回复文本
-   */
-  async chat(messages: ChatHistoryItem[], requestId: string, model?: string): Promise<string> {
-    this.assertApiKey()
-    const controller = new AbortController()
-    this.controllers.set(requestId, controller)
-    try {
-      const response = await fetch(this.endpoint, {
-        method: 'POST',
-        headers: this.buildHeaders(),
-        body: this.buildBody(messages, false, model),
-        signal: controller.signal
-      })
-      if (!response.ok) {
-        throw new Error(i18n.global.t('api.requestFailed', { status: response.status }))
+/**
+ * 流式调用后端 /api/chat（SSE 逐字输出）
+ * @param model - 模型 ID（每个会话独立）
+ * @param requestId - 请求唯一标识，用于取消
+ */
+async function chatStream(
+  messages: ChatHistoryItem[],
+  onChunk: (chunk: string) => void,
+  requestId: string,
+  model: string
+): Promise<void> {
+  const controller = new AbortController()
+  abortControllers.set(requestId, controller)
+  try {
+    const response = await fetch(`${API_BASE}/chat`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ model, messages }),
+      signal: controller.signal
+    })
+    if (!response.ok) {
+      let detail = ''
+      try {
+        const err = await response.json()
+        detail = err?.detail || ''
+      } catch {
+        // ignore
       }
-      return this.parseResponse(await response.json())
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        throw error
-      }
-      console.error('API调用失败:', error)
-      throw new Error(i18n.global.t('api.failed'))
-    } finally {
-      this.controllers.delete(requestId)
+      throw new Error(detail || i18n.global.t('api.requestFailed', { status: response.status }))
     }
-  }
+    if (!response.body) {
+      throw new Error(i18n.global.t('api.noStream'))
+    }
 
-  /**
-   * 流式调用（fetch + ReadableStream 逐 chunk 输出）
-   * @param messages - 对话历史（含最新用户消息）
-   * @param onChunk - 每个数据块的回调
-   * @param requestId - 请求唯一标识，用于取消
-   * @param model - 模型ID（默认取全局配置）
-   */
-  async chatStream(
-    messages: ChatHistoryItem[],
-    onChunk: (chunk: string) => void,
-    requestId: string,
-    model?: string
-  ): Promise<void> {
-    this.assertApiKey()
-    const controller = new AbortController()
-    this.controllers.set(requestId, controller)
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    const timeout = setTimeout(() => controller.abort(), STREAM_TIMEOUT)
+
     try {
-      const response = await fetch(this.endpoint, {
-        method: 'POST',
-        headers: this.buildHeaders(),
-        body: this.buildBody(messages, true, model),
-        signal: controller.signal
-      })
-      if (!response.ok) {
-        throw new Error(i18n.global.t('api.requestFailed', { status: response.status }))
-      }
-      if (!response.body) {
-        throw new Error(i18n.global.t('api.noStream'))
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         buffer += decoder.decode(value, { stream: true })
 
-        // 按行解析（Ollama 为 NDJSON，OpenAI 为 SSE data: 行）
         let newlineIndex = buffer.indexOf('\n')
         while (newlineIndex !== -1) {
           const line = buffer.slice(0, newlineIndex)
           buffer = buffer.slice(newlineIndex + 1)
-          try {
-            const chunk = this.parseStreamLine(line)
-            if (chunk) {
-              onChunk(chunk)
-            }
-          } catch {
-            // 忽略解析错误的行
+          const parsed = parseStreamLine(line)
+          if (parsed?.error) {
+            throw new Error(parsed.error)
+          }
+          if (parsed?.content) {
+            onChunk(parsed.content)
           }
           newlineIndex = buffer.indexOf('\n')
         }
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
-        throw error
+        throw new Error(i18n.global.t('api.timeout'))
       }
-      console.error('流式API调用失败:', error)
-      throw new Error(i18n.global.t('api.streamFailed'))
+      throw error
     } finally {
-      this.controllers.delete(requestId)
+      clearTimeout(timeout)
     }
-  }
-
-  /**
-   * 取消指定请求
-   */
-  abort(requestId: string): void {
-    this.controllers.get(requestId)?.abort()
-  }
-
-  /**
-   * 更新API配置
-   */
-  updateConfig(newConfig: Partial<ApiConfig>): void {
-    this.config = { ...this.config, ...newConfig }
-  }
-
-  /**
-   * 获取当前配置
-   */
-  getConfig(): ApiConfig {
-    return { ...this.config }
+  } finally {
+    abortControllers.delete(requestId)
   }
 }
 
-// 默认配置：SiliconFlow（OpenAI 兼容）。若改用本地 Ollama，把 provider 改为 'ollama'、
-// baseUrl 改为 ''（走 vite proxy）或 'http://localhost:11434'，apiKey 留空即可。
-// 默认模型为 tencent/Hunyuan-MT-7B（新会话默认模型）。
-const defaultConfig: ApiConfig = {
-  provider: 'openai',
-  baseUrl: 'https://api.siliconflow.cn/v1',
-  model: 'tencent/Hunyuan-MT-7B',
-  apiKey: import.meta.env.VITE_LLM_API_KEY || '',
-  temperature: 0.7,
-  maxTokens: 2048
+/**
+ * 非流式调用（重新生成等场景复用流式接口，收集完整内容）
+ */
+async function chat(messages: ChatHistoryItem[], requestId: string, model: string): Promise<string> {
+  let full = ''
+  await chatStream(messages, (chunk) => (full += chunk), requestId, model)
+  return full
 }
 
-export default new APIService(defaultConfig)
+const abortControllers = new Map<string, AbortController>()
+
+export function abortRequest(requestId: string): void {
+  abortControllers.get(requestId)?.abort()
+}
+
+export default {
+  chat,
+  chatStream,
+  abort: abortRequest,
+  fetchModels
+}

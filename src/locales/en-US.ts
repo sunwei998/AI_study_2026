@@ -68,7 +68,8 @@ export default {
     requestFailed: 'Request failed ({status})',
     failed: 'Unable to get AI reply, please check the API connection',
     noStream: 'Response does not support streaming',
-    streamFailed: 'Failed to get streaming reply'
+    streamFailed: 'Failed to get streaming reply',
+    timeout: 'Request timed out, please retry'
   },
   confirm: {
     confirm: 'Delete',

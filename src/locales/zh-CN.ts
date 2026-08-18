@@ -63,7 +63,8 @@ export default {
     requestFailed: '请求失败 ({status})',
     failed: '无法获取AI回复，请检查API连接',
     noStream: '响应不支持流式读取',
-    streamFailed: '流式获取回复失败'
+    streamFailed: '流式获取回复失败',
+    timeout: '请求超时，请重试'
   },
   confirm: {
     confirm: '确认删除',

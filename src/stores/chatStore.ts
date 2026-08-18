@@ -51,18 +51,29 @@ export const useChatStore = defineStore('chat', () => {
 
   const availableThemes = THEMES
 
-  const availableModels = MODEL_LIST
+  const availableModels = ref<ModelInfo[]>(MODEL_LIST)
+
+  const loadModels = async () => {
+    try {
+      const list = await apiService.fetchModels()
+      if (list.length) {
+        availableModels.value = list
+      }
+    } catch {
+      // 后端不可用时保留本地兜底列表
+    }
+  }
 
   const currentModel = computed(() => {
     const session = currentSession.value
-    if (session?.model && availableModels.some((m) => m.id === session.model)) {
+    if (session?.model && availableModels.value.some((m) => m.id === session.model)) {
       return session.model
     }
     return DEFAULT_MODEL
   })
 
   const currentModelInfo = computed(() => {
-    return availableModels.find((m) => m.id === currentModel.value) || null
+    return availableModels.value.find((m) => m.id === currentModel.value) || null
   })
 
   const setModel = (model: ModelInfo) => {
@@ -74,7 +85,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   const resolveSessionModel = (session: ChatSession): string => {
-    if (session.model && availableModels.some((m) => m.id === session.model)) {
+    if (session.model && availableModels.value.some((m) => m.id === session.model)) {
       return session.model
     }
     return DEFAULT_MODEL
@@ -99,6 +110,13 @@ export const useChatStore = defineStore('chat', () => {
       if (saved) {
         const parsed = JSON.parse(saved)
         if (Array.isArray(parsed)) {
+          parsed.forEach((s: ChatSession) => {
+            if (Array.isArray(s.messages)) {
+              s.messages.forEach((m: Message) => {
+                m.loading = false
+              })
+            }
+          })
           sessions.value = parsed
           if (sessions.value.length > 0 && !currentSessionId.value) {
             currentSessionId.value = sessions.value[0].id
@@ -381,6 +399,7 @@ export const useChatStore = defineStore('chat', () => {
     setTheme,
     loadTheme,
     loadSessions,
+    loadModels,
     saveSessions,
     updateSessionTitle
   }

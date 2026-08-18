@@ -280,6 +280,7 @@ onMounted(() => {
   // 加载本地数据
   store.loadSessions()
   store.loadTheme()
+  store.loadModels()
   applyTheme(store.currentTheme)
 })
 
