@@ -120,7 +120,9 @@ export default {
     passwordWeak: '弱',
     passwordMedium: '中',
     passwordStrong: '强',
-    passwordTooWeak: '密码强度不足：至少 8 位，且包含字母、数字、特殊符号中的至少两类'
+    passwordTooWeak: '密码强度不足：至少 8 位，且包含字母、数字、特殊符号中的至少两类',
+    noAccount: '没有账号？先去注册',
+    hasAccount: '已有账号？去登录'
   },
   console: {
     title: '管理控制台',

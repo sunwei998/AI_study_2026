@@ -7,23 +7,6 @@
         <p class="auth-sub">{{ $t('auth.subtitle') }}</p>
       </div>
 
-      <div class="auth-tabs">
-        <button
-          class="auth-tab"
-          :class="{ active: mode === 'login' }"
-          @click="switchMode('login')"
-        >
-          {{ $t('auth.login') }}
-        </button>
-        <button
-          class="auth-tab"
-          :class="{ active: mode === 'register' }"
-          @click="switchMode('register')"
-        >
-          {{ $t('auth.register') }}
-        </button>
-      </div>
-
       <form class="auth-form" @submit.prevent="submit">
         <label class="auth-field">
           <span class="auth-label">{{ $t('auth.username') }}<em class="auth-required">*</em></span>
@@ -163,6 +146,15 @@
           }}
         </button>
       </form>
+
+      <div class="auth-switch">
+        <RouterLink v-if="mode === 'login'" class="auth-switch-link" to="/register">
+          {{ $t('auth.noAccount') }}
+        </RouterLink>
+        <RouterLink v-else class="auth-switch-link" to="/login">
+          {{ $t('auth.hasAccount') }}
+        </RouterLink>
+      </div>
     </div>
   </div>
 </template>
@@ -170,16 +162,20 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
 import { checkUsername } from '@/services/authService'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import RegionSelect, { type RegionValue } from '@/components/common/RegionSelect.vue'
 
+const props = defineProps<{ mode?: 'login' | 'register' }>()
+
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 
-const mode = ref<'login' | 'register'>('login')
 const username = ref('')
 const password = ref('')
 const confirm = ref('')
@@ -235,7 +231,7 @@ const pwStrength = computed<'weak' | 'medium' | 'strong'>(() =>
 
 const checkUsernameBlur = async () => {
   const name = username.value.trim()
-  if (mode.value !== 'register' || name.length < 3) {
+  if (props.mode !== 'register' || name.length < 3) {
     usernameCheckState.value = ''
     return
   }
@@ -248,18 +244,6 @@ const checkUsernameBlur = async () => {
   }
 }
 
-const switchMode = (m: 'login' | 'register') => {
-  mode.value = m
-  error.value = ''
-  confirm.value = ''
-  region.value = { province: '', city: '', district: '' }
-  regionTouched.value = false
-  age.value = null
-  gender.value = ''
-  ageTouched.value = false
-  usernameCheckState.value = ''
-}
-
 const submit = async () => {
   if (submitting.value) return
   error.value = ''
@@ -268,7 +252,7 @@ const submit = async () => {
     error.value = t('auth.fillAll')
     return
   }
-  if (mode.value === 'register') {
+  if (props.mode === 'register') {
     if (pwScore.value === 0) {
       error.value = t('auth.passwordTooWeak')
       return
@@ -294,7 +278,7 @@ const submit = async () => {
   }
   submitting.value = true
   try {
-    if (mode.value === 'login') {
+    if (props.mode === 'login') {
       await auth.login(name, password.value)
     } else {
       await auth.register(
@@ -305,6 +289,8 @@ const submit = async () => {
         gender.value
       )
     }
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    await router.replace(redirect && redirect.startsWith('/') ? redirect : '/chat')
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
@@ -369,32 +355,22 @@ const submit = async () => {
   color: var(--color-text-secondary);
 }
 
-.auth-tabs {
-  display: flex;
-  gap: 6px;
-  padding: 4px;
-  margin-bottom: 22px;
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+.auth-switch {
+  margin-top: 18px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 
-.auth-tab {
-  flex: 1;
-  height: 36px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  cursor: pointer;
+.auth-switch-link {
+  color: var(--color-primary);
+  text-decoration: none;
   transition: var(--transition-fast);
 }
 
-.auth-tab.active {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-  color: #fff;
-  box-shadow: 0 4px 12px var(--color-glow);
+.auth-switch-link:hover {
+  text-shadow: 0 0 10px var(--color-glow);
 }
 
 .auth-form {

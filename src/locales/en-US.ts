@@ -125,7 +125,9 @@ export default {
     passwordWeak: 'Weak',
     passwordMedium: 'Medium',
     passwordStrong: 'Strong',
-    passwordTooWeak: 'Password too weak: at least 8 characters with 2+ of letters, digits, symbols'
+    passwordTooWeak: 'Password too weak: at least 8 characters with 2+ of letters, digits, symbols',
+    noAccount: "Don't have an account? Register",
+    hasAccount: 'Already have an account? Log in'
   },
   console: {
     title: 'Admin Console',

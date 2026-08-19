@@ -6,23 +6,23 @@
         <span>{{ $t('console.title') }}</span>
       </div>
       <nav class="console-menu">
-        <button
+        <RouterLink
           v-for="tab in tabs"
           :key="tab.key"
           class="console-menu-item"
-          :class="{ active: activeTab === tab.key }"
-          @click="activeTab = tab.key"
+          :class="{ active: isActive(tab.key) }"
+          :to="`/admin/${tab.key}`"
         >
-          <AppIcon :name="tab.icon" :size="17" :glow="activeTab === tab.key" />
+          <AppIcon :name="tab.icon" :size="17" :glow="isActive(tab.key)" />
           <span>{{ tab.label }}</span>
-        </button>
+        </RouterLink>
       </nav>
     </aside>
 
     <div class="console-main">
       <header class="console-header">
         <div class="console-header-left">
-          <button class="console-back" :title="$t('console.backToChat')" @click="closeConsole">
+          <button class="console-back" :title="$t('console.backToChat')" @click="backToChat">
             <AppIcon name="lucide:message-square" :size="17" />
             <span>{{ $t('console.backToChat') }}</span>
           </button>
@@ -41,13 +41,7 @@
       </header>
 
       <main class="console-content">
-        <AdminOverview v-if="activeTab === 'overview'" />
-        <ModelManage v-else-if="activeTab === 'models'" />
-        <AdminUsers v-else-if="activeTab === 'users'" />
-        <AdminMap v-else-if="activeTab === 'map'" />
-        <AdminUsage v-else-if="activeTab === 'usage'" />
-        <AdminSuggestions v-else-if="activeTab === 'suggestions'" />
-        <AdminSettings v-else />
+        <RouterView />
       </main>
     </div>
 
@@ -67,20 +61,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
-import AdminOverview from './AdminOverview.vue'
-import ModelManage from './ModelManage.vue'
-import AdminUsers from './AdminUsers.vue'
-import AdminMap from './AdminMap.vue'
-import AdminUsage from './AdminUsage.vue'
-import AdminSuggestions from './AdminSuggestions.vue'
-import AdminSettings from './AdminSettings.vue'
 import ThemeSwitcher from '@/components/chat/ThemeSwitcher.vue'
 import LanguageSwitcher from '@/components/chat/LanguageSwitcher.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 
 type TabKey = 'overview' | 'models' | 'users' | 'map' | 'usage' | 'suggestions' | 'settings'
@@ -95,9 +85,11 @@ const tabs = computed(() => [
   { key: 'settings' as TabKey, icon: 'lucide:sliders-horizontal', label: t('console.settings') }
 ])
 
-const activeTab = ref<TabKey>('overview')
+const isActive = (key: string) => route.path === `/admin/${key}` || route.path === `/admin/${key}/`
 
-const closeConsole = () => auth.closeConsole()
+const backToChat = () => {
+  router.push('/chat')
+}
 
 const logoutVisible = ref(false)
 const confirmLogout = () => {
@@ -106,6 +98,7 @@ const confirmLogout = () => {
 const logout = () => {
   logoutVisible.value = false
   auth.logout()
+  router.replace('/login')
 }
 </script>
 
@@ -164,6 +157,7 @@ const logout = () => {
   cursor: pointer;
   transition: var(--transition-normal);
   text-align: left;
+  text-decoration: none;
 }
 
 .console-menu-item:hover {

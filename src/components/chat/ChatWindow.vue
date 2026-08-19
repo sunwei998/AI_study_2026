@@ -13,11 +13,15 @@
         <h1 class="title">{{ $t('app.name') }}</h1>
       </div>
       <div class="header-right">
+        <span v-if="auth.user?.username" class="header-user">
+          <AppIcon name="lucide:user" :size="15" />
+          {{ auth.user.username }}
+        </span>
         <button
           v-if="auth.isAdmin"
           class="admin-btn"
           :title="$t('console.title')"
-          @click="auth.openConsole()"
+          @click="router.push('/admin')"
         >
           <AppIcon name="lucide:settings-2" :size="18" theme-fill />
         </button>
@@ -187,6 +191,7 @@
 import { computed, onMounted, ref } from 'vue'
 import type { Message, SendPayload } from '@/types/chat'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useChatStore } from '@/stores/chatStore'
 import { applyTheme } from '@/styles/themes'
 import MessageList from './MessageList.vue'
@@ -200,6 +205,7 @@ import AppIcon from '@/components/common/AppIcon.vue'
 import { useAuthStore } from '@/stores/authStore'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const store = useChatStore()
 const auth = useAuthStore()
@@ -390,7 +396,10 @@ const askLogout = () => {
     title: t('auth.logout'),
     message: t('auth.logoutConfirm'),
     confirmText: t('auth.logoutConfirmBtn'),
-    onConfirm: () => auth.logout()
+    onConfirm: () => {
+      auth.logout()
+      router.replace('/login')
+    }
   })
 }
 
@@ -487,6 +496,20 @@ const handleRegenerate = async (message: Message) => {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: var(--control-h);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 13px;
 }
 
 .admin-btn {
