@@ -138,3 +138,19 @@ export interface RegionStat {
   count: number
   top_users: RegionTopUser[]
 }
+
+export type HeatPeriod = 'day' | 'week' | 'month' | 'year'
+
+export interface ProvinceMetric {
+  province: string
+  new_users: number
+  active_users: number
+  requests: number
+  total_tokens: number
+}
+
+export interface RegionStatsData {
+  period: HeatPeriod
+  provinces: ProvinceMetric[]
+  regions: RegionStat[]
+}

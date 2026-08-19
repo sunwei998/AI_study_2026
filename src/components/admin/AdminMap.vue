@@ -1,11 +1,11 @@
 <template>
-  <div class="admin-map">
+  <div class="admin-map" :class="{ 'admin-map--fullscreen': fullscreen }">
     <div v-if="error" class="page-error">{{ error }}</div>
     <div v-if="loading" class="page-loading">
       <AppLoading :size="28" glow />
     </div>
     <template v-else>
-      <section class="map-card">
+      <section class="map-card" :class="{ 'map-card--fullscreen': fullscreen }">
         <div class="map-card-head">
           <div class="map-head-left">
             <span class="map-pulse"></span>
@@ -41,21 +41,47 @@
             <AppIcon name="lucide:arrow-left" :size="15" />
             <span>{{ $t('console.mapBack') }}</span>
           </button>
-          <button
-            class="map-reset"
-            :title="$t('console.mapFull')"
-            @click="showFullMap"
-          >
-            <AppIcon name="lucide:maximize-2" :size="14" />
-          </button>
-          <div v-if="cityLoading" class="map-loading-overlay">
-            <AppLoading :size="22" glow />
-          </div>
-          <div v-else-if="currentProvince" class="map-focus-chip">
+          <div v-if="currentProvince" class="map-focus-chip map-focus-chip--city">
             {{ $t('console.mapCityTitle', { name: currentProvince }) }}
           </div>
-          <div v-else-if="hotProvince && !forceFullView" class="map-focus-chip">
+          <div v-else-if="hotProvince && !forceFullView" class="map-focus-chip map-focus-chip--hot">
             {{ $t('console.mapHotProvince', { name: hotProvince }) }}
+          </div>
+          <div v-if="!currentProvince" class="map-period" :title="$t('console.mapPeriod')">
+            <span
+              class="map-period-track"
+              :style="{ transform: `translateX(${periodIndex * 100}%)` }"
+            ></span>
+            <button
+              v-for="p in HEAT_PERIODS"
+              :key="p.key"
+              :class="['map-period-btn', { active: period === p.key }]"
+              @click="switchPeriod(p.key)"
+            >
+              {{ $t(p.labelKey) }}
+            </button>
+          </div>
+          <div class="map-buttons">
+            <button
+              class="map-btn"
+              :title="$t('console.mapFull')"
+              @click="showFullMap"
+            >
+              <AppIcon name="lucide:maximize-2" :size="14" />
+            </button>
+            <button
+              class="map-btn"
+              :title="$t(fullscreen ? 'console.mapExitFullscreen' : 'console.mapEnterFullscreen')"
+              @click="toggleFullscreen"
+            >
+              <AppIcon
+                :name="fullscreen ? 'lucide:shrink' : 'lucide:expand'"
+                :size="14"
+              />
+            </button>
+          </div>
+          <div v-if="cityLoading" class="map-loading-overlay">
+            <AppLoading :size="22" glow />
           </div>
           <span class="map-corner map-corner--tl"></span>
           <span class="map-corner map-corner--tr"></span>
@@ -98,8 +124,9 @@ import {
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { useI18n } from 'vue-i18n'
-import type { RegionStat, RegionTopUser } from '@/types/admin'
+import type { HeatPeriod, ProvinceMetric, RegionStat, RegionTopUser } from '@/types/admin'
 import { fetchRegionStats } from '@/services/adminService'
+import { HEAT_PERIODS, computeProvinceHeat } from '@/utils/provinceHeat'
 import { useChatStore } from '@/stores/chatStore'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
@@ -139,10 +166,16 @@ type BBox = [[number, number], [number, number]]
 const { t } = useI18n()
 const chat = useChatStore()
 
-const stats = ref<RegionStat[]>([])
+const regions = ref<RegionStat[]>([])
+const provinces = ref<ProvinceMetric[]>([])
 const loading = ref(true)
 const error = ref('')
 const mapRef = ref<HTMLDivElement | null>(null)
+
+const period = ref<HeatPeriod>('month')
+const periodIndex = computed(() => Math.max(0, HEAT_PERIODS.findIndex((p) => p.key === period.value)))
+const heatMap = computed(() => computeProvinceHeat(provinces.value))
+const fullscreen = ref(false)
 
 const provinceFeatures = (chinaGeo.features as unknown as GeoFeature[]).filter(
   (f) => (f.properties.level ?? 'province') === 'province'
@@ -333,16 +366,16 @@ function makeStars(count: number, maxX = 1100, maxY = 540): string {
 const stars1 = makeStars(90)
 const stars2 = makeStars(34)
 
-const totalUsers = computed(() => stats.value.reduce((s, r) => s + r.count, 0))
+const totalUsers = computed(() => regions.value.reduce((s, r) => s + r.count, 0))
 const provinceCount = computed(
-  () => new Set(stats.value.map((r) => r.province).filter(Boolean)).size
+  () => new Set(regions.value.map((r) => r.province).filter(Boolean)).size
 )
 const cityCount = computed(
-  () => new Set(stats.value.map((r) => r.city).filter(Boolean)).size
+  () => new Set(regions.value.map((r) => r.city).filter(Boolean)).size
 )
 
 const regionList = computed(() =>
-  [...stats.value].sort((a, b) => b.count - a.count || a.province.localeCompare(b.province))
+  [...regions.value].sort((a, b) => b.count - a.count || a.province.localeCompare(b.province))
 )
 
 function formatRegion(r: RegionStat): string {
@@ -422,10 +455,10 @@ function buildTipHtml(
 const hotProvince = computed(() => {
   let best = ''
   let max = 0
-  for (const r of stats.value) {
-    if (r.province && r.count > max) {
-      max = r.count
-      best = r.province
+  for (const [name, heat] of heatMap.value) {
+    if (heat > max) {
+      max = heat
+      best = name
     }
   }
   return best || ''
@@ -603,7 +636,7 @@ async function render(): Promise<void> {
     const isMuni = MUNICIPALITIES.has(currentProvince.value)
     const regionInfo = new Map<string, { count: number; topUsers: RegionTopUser[] }>()
     const points: MapPoint[] = []
-    for (const r of stats.value) {
+    for (const r of regions.value) {
       if (r.province !== currentProvince.value) continue
       const key = isMuni ? r.district || r.city : r.city || r.province
       if (!key) continue
@@ -648,7 +681,7 @@ async function render(): Promise<void> {
   const points: MapPoint[] = []
   const coords = cityCoords as unknown as CityCoords
 
-  for (const r of stats.value) {
+  for (const r of regions.value) {
     if (r.province) {
       const cur = provinceInfo.get(r.province) ?? { count: 0, topUsers: [] as RegionTopUser[] }
       cur.count += r.count
@@ -671,8 +704,10 @@ async function render(): Promise<void> {
 
   for (const info of provinceInfo.values()) info.topUsers = sortTop(info.topUsers)
 
-  const maxCount = Math.max(1, ...[...provinceInfo.values()].map((v) => v.count))
-  const heat = [...provinceInfo.entries()].map(([name, info]) => ({ name, value: info.count }))
+  const heat = provinces.value.map((p) => ({
+    name: p.province,
+    value: heatMap.value.get(p.province) ?? 0
+  }))
 
   const geoView = nationalView.value.center
     ? { center: nationalView.value.center, zoom: nationalView.value.zoom }
@@ -684,7 +719,7 @@ async function render(): Promise<void> {
 
   chart = echarts.init(mapRef.value)
   chart.setOption(
-    buildMapOption(pal, contrast, 'china', (n) => provinceInfo.get(n) ?? { count: 0, topUsers: [] }, maxCount, heat, points, geoView)
+    buildMapOption(pal, contrast, 'china', (n) => provinceInfo.get(n) ?? { count: 0, topUsers: [] }, 100, heat, points, geoView)
   )
   bindEvents()
 }
@@ -733,25 +768,61 @@ async function backToNational(): Promise<void> {
   await render()
 }
 
-function onResize(): void {
-  chart?.resize()
-}
-
-onMounted(async () => {
+async function loadStats(): Promise<void> {
+  loading.value = true
+  error.value = ''
   try {
-    stats.value = await fetchRegionStats()
+    const data = await fetchRegionStats(period.value)
+    regions.value = data.regions
+    provinces.value = data.provinces
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
     loading.value = false
     await nextTick()
-    render()
+    await render()
   }
+}
+
+async function switchPeriod(p: HeatPeriod): Promise<void> {
+  if (p === period.value) return
+  period.value = p
+  currentProvince.value = null
+  nationalView.value = {}
+  provinceView.value = {}
+  forceFullView.value = false
+  await loadStats()
+}
+
+function toggleFullscreen(): void {
+  fullscreen.value = !fullscreen.value
+}
+
+function onKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape' && fullscreen.value) {
+    fullscreen.value = false
+  }
+}
+
+function onResize(): void {
+  chart?.resize()
+}
+
+watch(fullscreen, async () => {
+  await nextTick()
+  chart?.resize()
+  render()
+})
+
+onMounted(async () => {
+  await loadStats()
   window.addEventListener('resize', onResize)
+  window.addEventListener('keydown', onKeydown)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
+  window.removeEventListener('keydown', onKeydown)
   chart?.dispose()
   chart = null
 })
@@ -1063,11 +1134,8 @@ watch(
   transform: translateX(-2px);
 }
 
-.map-reset {
-  position: absolute;
-  bottom: 14px;
-  right: 14px;
-  z-index: 5;
+.map-reset,
+.map-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1084,15 +1152,24 @@ watch(
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
-.map-reset:hover {
+.map-reset:hover,
+.map-btn:hover {
   border-color: var(--color-primary);
   box-shadow: 0 0 12px var(--color-glow);
+}
+
+.map-buttons {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  z-index: 5;
+  display: flex;
+  gap: 8px;
 }
 
 .map-focus-chip {
   position: absolute;
   top: 14px;
-  right: 14px;
   z-index: 5;
   padding: 7px 14px;
   border-radius: 999px;
@@ -1106,6 +1183,69 @@ watch(
   letter-spacing: 0.04em;
   box-shadow: 0 0 12px var(--color-glow);
   pointer-events: none;
+}
+
+.map-focus-chip--hot {
+  left: 14px;
+}
+
+.map-focus-chip--city {
+  right: 14px;
+}
+
+.map-period {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35), inset 0 0 14px var(--color-glow);
+}
+
+.map-period-track {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 8px) / 4);
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  box-shadow: 0 0 12px var(--color-glow), inset 0 0 8px rgba(255, 255, 255, 0.25);
+  transition: transform 0.38s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.map-period-btn {
+  position: relative;
+  z-index: 1;
+  min-width: 52px;
+  height: 26px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: color 0.3s ease, text-shadow 0.3s ease;
+}
+
+.map-period-btn:hover {
+  color: var(--color-text);
+}
+
+.map-period-btn.active {
+  color: #fff;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.7);
 }
 
 .map-loading-overlay {
@@ -1224,6 +1364,57 @@ watch(
 
   .map-stats {
     gap: 14px;
+  }
+}
+
+/* 全屏展示 */
+.admin-map--fullscreen {
+  gap: 0;
+}
+
+.map-card--fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  border-radius: 0;
+  border: none;
+  background: var(--color-background);
+  padding: 16px;
+  animation: mapFullIn 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.admin-map--fullscreen .region-card {
+  display: none;
+}
+
+.map-card--fullscreen .map-frame {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+@keyframes mapFullIn {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 768px) {
+  .map-card--fullscreen {
+    padding: 10px;
+  }
+
+  .map-period-btn {
+    min-width: 44px;
+    padding: 0 8px;
   }
 }
 </style>

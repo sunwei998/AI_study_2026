@@ -3,8 +3,9 @@ import type {
   AdminStats,
   AdminUsage,
   AdminUser,
+  HeatPeriod,
   ModelPayload,
-  RegionStat,
+  RegionStatsData,
   SettingItem,
   SuggestionItem,
   SuggestionPayload,
@@ -83,8 +84,8 @@ export function fetchUsage(): Promise<AdminUsage> {
   return request('/usage')
 }
 
-export function fetchRegionStats(): Promise<RegionStat[]> {
-  return request('/region-stats')
+export function fetchRegionStats(period: HeatPeriod = 'month'): Promise<RegionStatsData> {
+  return request(`/region-stats?period=${period}`)
 }
 
 export function fetchSettings(): Promise<SettingItem[]> {
