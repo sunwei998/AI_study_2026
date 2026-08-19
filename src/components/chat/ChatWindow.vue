@@ -13,10 +13,17 @@
         <h1 class="title">{{ $t('app.name') }}</h1>
       </div>
       <div class="header-right">
-        <span v-if="auth.user?.username" v-show="!device.isMobile" class="header-user">
-          <AppIcon name="lucide:user" :size="15" />
+        <button
+          v-if="auth.user?.username"
+          v-show="!device.isMobile"
+          class="header-user"
+          :title="$t('profile.title')"
+          @click="profileOpen = true"
+        >
+          <span v-if="auth.user.avatar" class="header-user-avatar"><img :src="auth.user.avatar" alt="" /></span>
+          <AppIcon v-else name="lucide:user" :size="15" />
           {{ auth.user.username }}
-        </span>
+        </button>
         <button
           v-if="auth.isAdmin && !device.isMobile"
           class="admin-btn"
@@ -49,7 +56,7 @@
         <button class="header-btn header-new" @click="createNew" :title="$t('common.newSession')">
           ➕
         </button>
-        <UserMenu v-if="device.isMobile" @logout="askLogout" />
+        <UserMenu v-if="device.isMobile" @logout="askLogout" @edit-profile="profileOpen = true" />
       </div>
     </header>
 
@@ -188,6 +195,7 @@
       @confirm="handleConfirm"
       @cancel="handleCancel"
     />
+    <UserProfileDialog v-model:visible="profileOpen" />
   </div>
 </template>
 
@@ -207,6 +215,7 @@ import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import UserMenu from './UserMenu.vue'
+import UserProfileDialog from './UserProfileDialog.vue'
 import { useAuthStore } from '@/stores/authStore'
 import { useDevice } from '@/composables/useDevice'
 
@@ -216,6 +225,8 @@ const device = useDevice()
 
 const store = useChatStore()
 const auth = useAuthStore()
+
+const profileOpen = ref(false)
 
 const currentSessionId = computed(() => store.currentSessionId)
 const currentSession = computed(() => store.currentSession)
@@ -526,6 +537,32 @@ const handleRegenerate = async (message: Message) => {
   color: var(--color-text);
   font-family: var(--font-mono);
   font-size: 13px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.header-user:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 12px var(--color-glow);
+}
+
+.header-user-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+}
+
+.header-user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .admin-btn {

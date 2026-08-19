@@ -1,4 +1,4 @@
-import type { AuthUser } from '@/types/admin'
+import type { AuthUser, ProfileUpdatePayload } from '@/types/admin'
 import { clearToken, getToken } from './token'
 import { notifyUnauthorized } from './unauthorized'
 
@@ -71,6 +71,23 @@ export async function checkUsername(username: string): Promise<boolean> {
 
 export async function fetchMe(): Promise<AuthUser> {
   const resp = await fetch(`${API_BASE}/auth/me`, { headers: bearerHeaders() })
+  if (resp.status === 401) {
+    clearToken()
+    notifyUnauthorized()
+    throw new Error('unauthorized')
+  }
+  if (!resp.ok) {
+    throw new Error(await parseError(resp))
+  }
+  return resp.json()
+}
+
+export async function updateProfile(payload: ProfileUpdatePayload): Promise<AuthUser> {
+  const resp = await fetch(`${API_BASE}/auth/me`, {
+    method: 'PATCH',
+    headers: bearerHeaders(),
+    body: JSON.stringify(payload)
+  })
   if (resp.status === 401) {
     clearToken()
     notifyUnauthorized()

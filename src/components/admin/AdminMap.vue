@@ -67,7 +67,7 @@
               :title="$t('console.mapFull')"
               @click="showFullMap"
             >
-              <AppIcon name="lucide:maximize-2" :size="14" />
+              <AppIcon name="lucide:globe" :size="14" />
             </button>
             <button
               class="map-btn"
@@ -127,6 +127,7 @@ import { useI18n } from 'vue-i18n'
 import type { HeatPeriod, ProvinceMetric, RegionStat, RegionTopUser } from '@/types/admin'
 import { fetchRegionStats } from '@/services/adminService'
 import { HEAT_PERIODS, computeProvinceHeat } from '@/utils/provinceHeat'
+import { avatarSrc } from '@/utils/avatar'
 import { useChatStore } from '@/stores/chatStore'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
@@ -413,6 +414,7 @@ function buildTipHtml(
             const rank = i + 1
             return `<div class="tt-row">
             <span class="tt-rank tt-rank-${rank}">${rank}</span>
+            <img class="tt-avatar" src="${avatarSrc(u.avatar)}" alt="" />
             <span class="tt-uname">${u.username}</span>
             <span class="tt-req">${u.requests}${t('console.tipReqs')}</span>
             <span class="tt-tok">${fmtTokens(u.total_tokens)}</span>
@@ -433,6 +435,7 @@ function buildTipHtml(
     .tt-count{font-family:var(--font-mono);font-size:12px;color:${acc};text-shadow:0 0 8px ${hexToRgba(acc, 0.8)}}
     .tt-label{font-size:10px;letter-spacing:.18em;color:${sec};padding:0 14px 7px;text-transform:uppercase}
     .tt-row{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:0 8px 6px;border-radius:9px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
+    .tt-avatar{width:22px;height:22px;border-radius:50%;flex-shrink:0;object-fit:cover;border:1px solid ${hexToRgba(prim, 0.35)}}
     .tt-rank{width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
     .tt-rank-1{background:linear-gradient(135deg,${prim},${acc});box-shadow:0 0 10px ${hexToRgba(prim, 0.65)}}
     .tt-rank-2{background:linear-gradient(135deg,#ffb74d,#ff8a65);box-shadow:0 0 8px rgba(255,183,77,.5)}
@@ -452,6 +455,68 @@ function buildTipHtml(
   </div>`
 }
 
+function buildUserTipHtml(
+  pal: ReturnType<typeof mapPalette>,
+  m: UserMarker
+): string {
+  const prim = pal.primary
+  const acc = pal.accent
+  const text = pal.text
+  const sec = pal.textSec
+  return `<style>
+    .tt{min-width:220px;font-family:var(--font-mono)}
+    .tt-head{display:flex;align-items:center;gap:10px;padding:11px 14px 9px;border-bottom:1px solid ${hexToRgba(prim, 0.28)};margin-bottom:8px}
+    .tt-uavatar{width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1px solid ${hexToRgba(prim, 0.45)}}
+    .tt-uname{font-weight:700;color:${text};font-size:13px;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .tt-urank{font-size:11px;color:${acc};text-shadow:0 0 8px ${hexToRgba(acc, 0.8)}}
+    .tt-ubody{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:0 8px 6px;border-radius:9px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
+    .tt-req{color:${prim};font-size:12px;white-space:nowrap}
+    .tt-tok{color:${sec};font-size:11px;white-space:nowrap}
+  </style>
+  <div class="tt">
+    <div class="tt-head">
+      <img class="tt-uavatar" src="${avatarSrc(m.avatar)}" alt="" />
+      <div style="min-width:0">
+        <div class="tt-uname">${m.username}</div>
+        <div class="tt-urank">${t('console.tipRank')} #${m.rank}</div>
+      </div>
+    </div>
+    <div class="tt-ubody">
+      <span class="tt-req">${m.user.requests}${t('console.tipReqs')}</span>
+      <span class="tt-tok">${fmtTokens(m.user.total_tokens)}</span>
+    </div>
+  </div>`
+}
+
+const MARKER_OFFSETS: [number, number][] = [
+  [0, 0],
+  [0.16, 0],
+  [-0.16, 0],
+  [0, 0.16],
+  [0, -0.16],
+  [0.16, 0.16],
+  [-0.16, 0.16],
+  [0.16, -0.16],
+  [-0.16, -0.16],
+  [0, 0.28]
+]
+
+function spreadCoords(items: { value: [number, number, number] }[]): void {
+  const byKey = new Map<string, { value: [number, number, number] }[]>()
+  for (const it of items) {
+    const key = `${it.value[0].toFixed(3)}:${it.value[1].toFixed(3)}`
+    const list = byKey.get(key) ?? []
+    list.push(it)
+    byKey.set(key, list)
+  }
+  for (const list of byKey.values()) {
+    list.forEach((it, i) => {
+      const off = MARKER_OFFSETS[i % MARKER_OFFSETS.length]
+      it.value = [it.value[0] + off[0], it.value[1] + off[1], it.value[2]]
+    })
+  }
+}
+
 const hotProvince = computed(() => {
   let best = ''
   let max = 0
@@ -469,6 +534,69 @@ interface MapPoint {
   value: [number, number, number]
   topUsers: RegionTopUser[]
   province: string
+  labelTier: 0 | 1 | 2
+  labelUser: string
+  labelAvatarUrl: string
+  label?: Record<string, unknown>
+}
+
+function pointLabelOption(
+  pal: ReturnType<typeof mapPalette>,
+  p: MapPoint,
+  drill: boolean
+): Record<string, unknown> {
+  if (p.labelTier === 0) return { show: false }
+  const base = {
+    show: true,
+    position: 'right' as const,
+    fontSize: 10,
+    textShadowColor: hexToRgba(pal.primary, 0.9),
+    textShadowBlur: 6
+  }
+  return {
+    ...base,
+    color: drill && p.labelTier === 2 ? pal.textSec : pal.text,
+    formatter: p.labelUser
+  }
+}
+
+interface UserMarker {
+  username: string
+  value: [number, number, number]
+  avatar: string
+  rank: number
+  province: string
+  labelTier: 0 | 1 | 2
+  user: RegionTopUser
+}
+
+function buildUserLabelOption(
+  pal: ReturnType<typeof mapPalette>,
+  m: UserMarker
+): Record<string, unknown> {
+  const base = {
+    show: true,
+    position: 'right' as const,
+    fontSize: 10,
+    textShadowColor: hexToRgba(pal.primary, 0.9),
+    textShadowBlur: 6
+  }
+  if (m.labelTier === 1) {
+    return {
+      ...base,
+      formatter: `{a| }${m.username}`,
+      rich: {
+        a: {
+          backgroundColor: { image: avatarSrc(m.avatar) },
+          width: 16,
+          height: 16,
+          borderRadius: 8,
+          align: 'center'
+        }
+      }
+    }
+  }
+  return { ...base, color: pal.text, formatter: m.username }
 }
 
 function buildMapOption(
@@ -479,6 +607,7 @@ function buildMapOption(
   maxCount: number,
   heat: { name: string; value: number }[],
   points: MapPoint[],
+  userPoints: UserMarker[],
   geoView: { center?: [number, number]; zoom?: number } | { boundingCoords?: BBox }
 ): echarts.EChartsCoreOption {
   return {
@@ -495,8 +624,19 @@ function buildMapOption(
       formatter: (params: unknown) => {
         const p = params as {
           seriesType: string
+          seriesName: string
           name: string
-          data?: { name?: string; value?: [number, number, number]; topUsers?: RegionTopUser[] }
+          data?: {
+            name?: string
+            value?: [number, number, number]
+            topUsers?: RegionTopUser[]
+            rank?: number
+            avatar?: string
+            user?: RegionTopUser
+          }
+        }
+        if (p.seriesName === 'top-user' && p.data?.user) {
+          return buildUserTipHtml(pal, p.data as unknown as UserMarker)
         }
         let name = p.name
         let count = 0
@@ -581,9 +721,8 @@ function buildMapOption(
         rippleEffect: { brushType: 'stroke', scale: 4.5, period: 3 },
         symbolSize: (val: [number, number, number]) => 8 + (val[2] ?? 1) * 6,
         label: {
-          show: true,
+          show: false,
           position: 'right',
-          formatter: (p: { name: string; value: [number, number, number] }) => `${p.name}`,
           color: pal.text,
           fontSize: 10,
           textShadowColor: hexToRgba(pal.primary, 0.9),
@@ -599,7 +738,42 @@ function buildMapOption(
           name: p.name,
           value: p.value,
           topUsers: p.topUsers,
-          province: p.province
+          province: p.province,
+          label: p.label ?? { show: false }
+        }))
+      },
+      {
+        name: 'top-user',
+        type: 'effectScatter',
+        coordinateSystem: 'geo',
+        zlevel: 3,
+        rippleEffect: { brushType: 'stroke', scale: 2.5, period: 3 },
+        symbolSize: 6,
+        label: {
+          show: true,
+          position: 'right',
+          color: pal.text,
+          fontSize: 10,
+          textShadowColor: hexToRgba(pal.primary, 0.9),
+          textShadowBlur: 6
+        },
+        itemStyle: {
+          color: '#ffffff',
+          borderColor: contrast,
+          borderWidth: 2,
+          shadowColor: contrast,
+          shadowBlur: 14,
+          shadowOffsetY: 3
+        },
+        data: userPoints.map((m) => ({
+          name: m.username,
+          username: m.username,
+          value: m.value,
+          rank: m.rank,
+          avatar: m.avatar,
+          province: m.province,
+          user: m.user,
+          label: buildUserLabelOption(pal, m)
         }))
       }
     ]
@@ -609,7 +783,34 @@ function buildMapOption(
 function sortTop(list: RegionTopUser[]): RegionTopUser[] {
   return [...list]
     .sort((a, b) => b.requests - a.requests || b.total_tokens - a.total_tokens)
-    .slice(0, 3)
+    .slice(0, 10)
+}
+
+function buildProvinceRank(regions: RegionStat[]): Map<string, RegionTopUser[]> {
+  const byProvince = new Map<string, RegionTopUser[]>()
+  for (const r of regions) {
+    if (!r.province) continue
+    const list = byProvince.get(r.province) ?? []
+    list.push(...r.top_users)
+    byProvince.set(r.province, list)
+  }
+  for (const list of byProvince.values()) {
+    list.sort((a, b) => b.requests - a.requests || b.total_tokens - a.total_tokens)
+  }
+  return byProvince
+}
+
+function makePointLabel(
+  best: RegionTopUser | undefined,
+  rank: number
+): { labelTier: 0 | 1 | 2; labelUser: string; labelAvatarUrl: string } {
+  if (!best || rank <= 0) return { labelTier: 0, labelUser: '', labelAvatarUrl: '' }
+  const labelTier: 0 | 1 | 2 = rank <= 3 ? 1 : rank <= 10 ? 2 : 0
+  return {
+    labelTier,
+    labelUser: best.username,
+    labelAvatarUrl: avatarSrc(best.avatar)
+  }
 }
 
 async function render(): Promise<void> {
@@ -635,7 +836,7 @@ async function render(): Promise<void> {
     registerMap(cityName, gj.features)
     const isMuni = MUNICIPALITIES.has(currentProvince.value)
     const regionInfo = new Map<string, { count: number; topUsers: RegionTopUser[] }>()
-    const points: MapPoint[] = []
+    const regionRows: RegionStat[] = []
     for (const r of regions.value) {
       if (r.province !== currentProvince.value) continue
       const key = isMuni ? r.district || r.city : r.city || r.province
@@ -644,6 +845,20 @@ async function render(): Promise<void> {
       cur.count += r.count
       cur.topUsers.push(...r.top_users)
       regionInfo.set(key, cur)
+      regionRows.push(r)
+    }
+    for (const info of regionInfo.values()) info.topUsers = sortTop(info.topUsers)
+    const cityRank = new Map<string, number>()
+    const cityTopUser = new Map<string, string>()
+    ;[...regionInfo.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
+      .forEach(([name], i) => {
+        cityRank.set(name, i + 1)
+        cityTopUser.set(name, regionInfo.get(name)?.topUsers[0]?.username ?? '')
+      })
+    const points: MapPoint[] = []
+    for (const r of regionRows) {
+      const key = isMuni ? r.district || r.city : r.city || r.province
       const feat = gj.features.find((f) => f.properties.name === key)
       let coord: [number, number] | undefined
       if (feat?.properties.centroid) coord = feat.properties.centroid
@@ -654,15 +869,19 @@ async function render(): Promise<void> {
       }
       if (!coord) coord = provinceCentroid.get(r.province)
       if (coord) {
-        points.push({
+        const rank = cityRank.get(key) ?? 0
+        const best = regionInfo.get(key)?.topUsers[0]
+        const pt: MapPoint = {
           name: [r.province, r.city, r.district].filter(Boolean).join(' '),
           value: [coord[0], coord[1], r.count],
           topUsers: r.top_users,
-          province: r.province
-        })
+          province: r.province,
+          ...makePointLabel(best, rank)
+        }
+        pt.label = pointLabelOption(pal, pt, true)
+        points.push(pt)
       }
     }
-    for (const info of regionInfo.values()) info.topUsers = sortTop(info.topUsers)
     const maxCount = Math.max(1, ...[...regionInfo.values()].map((v) => v.count))
     const heat = [...regionInfo.entries()].map(([name, info]) => ({ name, value: info.count }))
     const geoView = provinceView.value.center
@@ -670,7 +889,7 @@ async function render(): Promise<void> {
       : { boundingCoords: computeBBox(gj.features) }
     chart = echarts.init(mapRef.value)
     chart.setOption(
-      buildMapOption(pal, contrast, cityName, (n) => regionInfo.get(n) ?? { count: 0, topUsers: [] }, maxCount, heat, points, geoView)
+      buildMapOption(pal, contrast, cityName, (n) => regionInfo.get(n) ?? { count: 0, topUsers: [] }, maxCount, heat, points, [], geoView)
     )
     bindEvents()
     return
@@ -678,6 +897,8 @@ async function render(): Promise<void> {
 
   registerChinaMap()
   const provinceInfo = new Map<string, { count: number; topUsers: RegionTopUser[] }>()
+  const provRanks = buildProvinceRank(regions.value)
+  const userCoord = new Map<string, [number, number]>()
   const points: MapPoint[] = []
   const coords = cityCoords as unknown as CityCoords
 
@@ -698,11 +919,41 @@ async function render(): Promise<void> {
       coord = provinceCentroid.get(r.province)
     }
     if (coord) {
-      points.push({ name, value: [coord[0], coord[1], r.count], topUsers: r.top_users, province: r.province })
+      for (const u of r.top_users) userCoord.set(u.username, [coord[0], coord[1]])
+      points.push({
+        name,
+        value: [coord[0], coord[1], r.count],
+        topUsers: r.top_users,
+        province: r.province,
+        labelTier: 0,
+        labelUser: '',
+        labelAvatarUrl: '',
+        label: { show: false }
+      })
     }
   }
 
   for (const info of provinceInfo.values()) info.topUsers = sortTop(info.topUsers)
+
+  const userMarkers: UserMarker[] = []
+  for (const [province, list] of provRanks) {
+    const markers: UserMarker[] = []
+    list.slice(0, 10).forEach((u, i) => {
+      const coord = userCoord.get(u.username) ?? provinceCentroid.get(province)
+      if (!coord) return
+      markers.push({
+        username: u.username,
+        value: [coord[0], coord[1], u.requests],
+        avatar: u.avatar,
+        rank: i + 1,
+        province,
+        labelTier: i < 3 ? 1 : 2,
+        user: u
+      })
+    })
+    spreadCoords(markers)
+    userMarkers.push(...markers)
+  }
 
   const heat = provinces.value.map((p) => ({
     name: p.province,
@@ -719,7 +970,7 @@ async function render(): Promise<void> {
 
   chart = echarts.init(mapRef.value)
   chart.setOption(
-    buildMapOption(pal, contrast, 'china', (n) => provinceInfo.get(n) ?? { count: 0, topUsers: [] }, 100, heat, points, geoView)
+    buildMapOption(pal, contrast, 'china', (n) => provinceInfo.get(n) ?? { count: 0, topUsers: [] }, 100, heat, points, userMarkers, geoView)
   )
   bindEvents()
 }

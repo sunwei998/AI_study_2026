@@ -20,6 +20,8 @@
             <th>{{ $t('console.totalTokens') }}</th>
             <th>{{ $t('console.lastSeen') }}</th>
             <th>{{ $t('console.createdAt') }}</th>
+            <th>{{ $t('console.updatedAt') }}</th>
+            <th>{{ $t('console.updatedBy') }}</th>
             <th class="actions-th">{{ $t('console.actions') }}</th>
           </tr>
         </thead>
@@ -52,6 +54,8 @@
             <td class="cell-num">{{ formatNum(u.total_tokens) }}</td>
             <td class="cell-time">{{ formatTime(u.last_seen_at) }}</td>
             <td class="cell-time">{{ formatTime(u.created_at) }}</td>
+            <td class="cell-time">{{ formatTime(u.updated_at) }}</td>
+            <td class="cell-time">{{ u.updated_by || '-' }}</td>
             <td class="actions-td">
               <div class="row-actions">
                 <button class="row-btn" :title="$t('console.roleSwitch')" @click="askToggleRole(u)">
@@ -78,7 +82,7 @@
             </td>
           </tr>
           <tr v-if="users.length === 0">
-            <td colspan="11" class="cell-empty">{{ $t('console.noUsers') }}</td>
+            <td colspan="13" class="cell-empty">{{ $t('console.noUsers') }}</td>
           </tr>
         </tbody>
       </table>
@@ -222,7 +226,7 @@ function formatTime(ms: number | null): string {
   if (!ms) return '-'
   const d = new Date(ms)
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
 function formatNum(n: number): string {
@@ -285,8 +289,14 @@ const askToggleActive = (u: AdminUser) => {
     async () => {
       await updateAdminUser(u.id, { is_active: target })
       u.is_active = target
+      touchUpdated(u)
     }
   )
+}
+
+const touchUpdated = (u: AdminUser) => {
+  u.updated_at = Date.now()
+  u.updated_by = auth.user?.username ?? ''
 }
 
 const askToggleRole = (u: AdminUser) => {
@@ -297,6 +307,7 @@ const askToggleRole = (u: AdminUser) => {
     async () => {
       await updateAdminUser(u.id, { role: target })
       u.role = target
+      touchUpdated(u)
     },
     false
   )
@@ -388,6 +399,7 @@ const submitRegion = async () => {
     u.district = regionValue.value.district
     u.age = ageVal === null || ageVal === '' ? u.age : Number(ageVal)
     u.gender = editGender.value
+    touchUpdated(u)
     regionVisible.value = false
   } catch (err) {
     regionError.value = err instanceof Error ? err.message : t('common.errorOccurred')

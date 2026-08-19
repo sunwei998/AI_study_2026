@@ -10,6 +10,18 @@ export interface AuthUser {
   district?: string
   age?: number | null
   gender?: string
+  avatar?: string
+  username_changes_left?: number
+}
+
+export interface ProfileUpdatePayload {
+  username?: string
+  avatar?: string
+  age?: number | null
+  gender?: string
+  province?: string
+  city?: string
+  district?: string
 }
 
 export interface AdminModel {
@@ -40,6 +52,8 @@ export interface AdminUser {
   is_active: boolean
   created_at: number
   last_seen_at: number | null
+  updated_at: number | null
+  updated_by: string
   logins: number
   total_tokens: number
   province: string
@@ -127,6 +141,7 @@ export interface SuggestionPayload {
 
 export interface RegionTopUser {
   username: string
+  avatar: string
   requests: number
   total_tokens: number
 }

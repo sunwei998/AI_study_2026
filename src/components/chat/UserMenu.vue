@@ -5,7 +5,8 @@
       :title="username"
       @click="open = !open"
     >
-      <span class="avatar-char">{{ avatarChar }}</span>
+      <span v-if="auth.user?.avatar" class="avatar-img"><img :src="auth.user.avatar" alt="" /></span>
+      <span v-else class="avatar-char">{{ avatarChar }}</span>
       <span v-if="auth.isAdmin" class="avatar-admin-dot" :title="$t('console.title')"></span>
     </button>
 
@@ -32,7 +33,8 @@
           </div>
 
           <div class="sheet-head">
-            <span class="sheet-avatar">{{ avatarChar }}</span>
+            <span v-if="auth.user?.avatar" class="sheet-avatar-img"><img :src="auth.user.avatar" alt="" /></span>
+            <span v-else class="sheet-avatar">{{ avatarChar }}</span>
             <div class="sheet-user">
               <span class="sheet-name">{{ username }}</span>
               <span class="sheet-role">{{ roleLabel }}</span>
@@ -40,6 +42,11 @@
           </div>
 
           <div class="sheet-section">
+            <button class="sheet-action" @click="editProfile">
+              <AppIcon name="lucide:user-pen" :size="16" />
+              <span>{{ $t('profile.title') }}</span>
+            </button>
+
             <div class="sheet-row">
               <span class="sheet-row-label">
                 <AppIcon name="lucide:languages" :size="16" />
@@ -91,7 +98,7 @@ import { applyTheme } from '@/styles/themes'
 import LanguageSwitcher from '@/components/chat/LanguageSwitcher.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 
-const emit = defineEmits<{ (e: 'logout'): void }>()
+const emit = defineEmits<{ (e: 'logout'): void; (e: 'edit-profile'): void }>()
 
 const { t } = useI18n()
 const router = useRouter()
@@ -131,6 +138,11 @@ const selectTheme = (theme: ThemeType) => {
 const goAdmin = () => {
   open.value = false
   router.push('/admin')
+}
+
+const editProfile = () => {
+  open.value = false
+  emit('edit-profile')
 }
 
 const requestLogout = () => {
@@ -197,6 +209,23 @@ import type { ThemeType } from '@/types/chat'
   align-items: center;
   justify-content: center;
   transition: var(--transition-normal);
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .avatar-btn:hover {
@@ -297,6 +326,25 @@ import type { ThemeType } from '@/types/chat'
   color: #fff;
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
   box-shadow: 0 0 16px var(--color-glow);
+  overflow: hidden;
+}
+
+.sheet-avatar-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 16px var(--color-glow);
+}
+
+.sheet-avatar-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .sheet-user {
