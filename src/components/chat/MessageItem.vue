@@ -2,7 +2,13 @@
   <div :class="['message-item', message.role]">
     <div class="message-avatar">
       <div class="avatar-icon">
-        {{ message.role === 'user' ? '👤' : '🤖' }}
+        <img
+          v-if="message.role === 'user' && auth.user?.avatar"
+          :src="avatarSrc(auth.user.avatar)"
+          class="avatar-img"
+          alt=""
+        />
+        <template v-else>{{ message.role === 'user' ? '👤' : '🤖' }}</template>
       </div>
     </div>
     <div class="message-content-wrapper">
@@ -58,6 +64,8 @@ import { computed, ref } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import type { Message } from '@/types/chat'
+import { useAuthStore } from '@/stores/authStore'
+import { avatarSrc } from '@/utils/avatar'
 
 const props = defineProps<{
   message: Message
@@ -67,6 +75,7 @@ const emit = defineEmits<{
   regenerate: []
 }>()
 
+const auth = useAuthStore()
 const copied = ref(false)
 
 marked.use({
@@ -212,6 +221,15 @@ const openImage = (url: string) => {
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
   box-shadow: 0 0 14px var(--color-glow);
   border: 1px solid var(--color-primary);
+  overflow: hidden;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 
 .message-item.user .avatar-icon {

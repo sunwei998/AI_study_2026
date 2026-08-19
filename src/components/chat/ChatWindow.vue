@@ -53,7 +53,12 @@
         >
           🗑️
         </button>
-        <button class="header-btn header-new" @click="createNew" :title="$t('common.newSession')">
+        <button
+          class="header-btn header-new"
+          :disabled="!canCreateNew"
+          :title="$t('common.newSession')"
+          @click="createNew"
+        >
           ➕
         </button>
         <UserMenu v-if="device.isMobile" @logout="askLogout" @edit-profile="profileOpen = true" />
@@ -94,7 +99,11 @@
               </button>
             </div>
           </div>
-          <button class="header-btn sidebar-new" @click="createNew(), closeSidebar()">
+          <button
+            class="header-btn sidebar-new"
+            :disabled="!canCreateNew"
+            @click="createNew(), closeSidebar()"
+          >
             ➕ <span>{{ $t('common.newSession') }}</span>
           </button>
         </div>
@@ -232,6 +241,10 @@ const currentSessionId = computed(() => store.currentSessionId)
 const currentSession = computed(() => store.currentSession)
 const messages = computed(() => store.messages)
 const isLoading = computed(() => store.isLoading)
+
+const canCreateNew = computed(
+  () => !currentSession.value || currentSession.value.messages.length > 0
+)
 
 const searchTerm = ref('')
 const activeFilter = ref('')
@@ -613,6 +626,14 @@ const handleRegenerate = async (message: Message) => {
   border-color: var(--color-primary);
   box-shadow: 0 0 14px var(--color-glow), inset 0 0 12px var(--color-glow);
   transform: translateY(-1px);
+}
+
+.header-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  border-color: var(--color-border);
 }
 
 .chat-container {

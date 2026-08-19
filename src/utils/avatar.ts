@@ -15,3 +15,40 @@ export const DEFAULT_AVATAR = `data:image/svg+xml;charset=utf-8,${encodeURICompo
 export function avatarSrc(avatar?: string | null): string {
   return avatar && avatar.trim() ? avatar : DEFAULT_AVATAR
 }
+
+const roundCache = new Map<string, string>()
+
+export function roundAvatarDataUrl(src: string, size = 32): Promise<string> {
+  const key = `${src}|${size}`
+  const cached = roundCache.get(key)
+  if (cached) return Promise.resolve(cached)
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = size
+        canvas.height = size
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          resolve(src)
+          return
+        }
+        ctx.clearRect(0, 0, size, size)
+        ctx.save()
+        ctx.beginPath()
+        ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2)
+        ctx.clip()
+        ctx.drawImage(img, 0, 0, size, size)
+        ctx.restore()
+        const out = canvas.toDataURL('image/png')
+        roundCache.set(key, out)
+        resolve(out)
+      } catch {
+        resolve(src)
+      }
+    }
+    img.onerror = () => resolve(src)
+    img.src = src
+  })
+}

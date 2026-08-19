@@ -127,7 +127,7 @@ import { useI18n } from 'vue-i18n'
 import type { HeatPeriod, ProvinceMetric, RegionStat, RegionTopUser } from '@/types/admin'
 import { fetchRegionStats } from '@/services/adminService'
 import { HEAT_PERIODS, computeProvinceHeat } from '@/utils/provinceHeat'
-import { avatarSrc } from '@/utils/avatar'
+import { avatarSrc, roundAvatarDataUrl } from '@/utils/avatar'
 import { useChatStore } from '@/stores/chatStore'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
@@ -960,6 +960,12 @@ async function render(): Promise<void> {
     name: p.province,
     value: heatMap.value.get(p.province) ?? 0
   }))
+
+  for (const m of userMarkers) {
+    if (m.labelTier === 1) {
+      m.avatar = await roundAvatarDataUrl(avatarSrc(m.avatar), 32)
+    }
+  }
 
   const geoView = nationalView.value.center
     ? { center: nationalView.value.center, zoom: nationalView.value.zoom }
