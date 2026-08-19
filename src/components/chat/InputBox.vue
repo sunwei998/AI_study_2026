@@ -1,6 +1,19 @@
 <template>
   <div class="input-box">
     <div class="input-wrapper">
+      <button
+        class="search-btn"
+        :class="{ active: webSearch }"
+        :disabled="isLoading"
+        @click="toggleSearch"
+        :title="webSearch ? $t('input.webSearchOn') : $t('input.webSearch')"
+      >
+        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+          <path d="M2 12h20" />
+        </svg>
+      </button>
       <textarea
         v-model="inputText"
         :placeholder="placeholder"
@@ -103,6 +116,11 @@ const fileInput = ref<HTMLInputElement>()
 const placeholder = computed(() => t('input.placeholder'))
 const visionSupported = computed(() => Boolean(store.currentModelInfo?.vision))
 const canSend = computed(() => inputText.value.trim() !== '' || images.value.length > 0)
+const webSearch = computed(() => store.currentSession?.webSearch ?? false)
+
+const toggleSearch = () => {
+  store.setWebSearch(!webSearch.value)
+}
 
 const readFileAsDataURL = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -213,7 +231,57 @@ const handleSubmit = (event: KeyboardEvent) => {
 .input-actions {
   display: flex;
   gap: 8px;
-  align-items: flex-end;
+  align-items: center;
+}
+
+.search-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-glass);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: var(--transition-normal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.search-icon {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
+}
+
+.search-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 0 10px var(--color-glow);
+  transform: translateY(-1px);
+}
+
+.search-btn.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-glass));
+  box-shadow: 0 0 14px var(--color-glow), inset 0 0 10px var(--color-glow);
+}
+
+.search-btn.active:hover {
+  transform: translateY(-1px);
+}
+
+.search-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .clear-btn,
@@ -370,7 +438,8 @@ const handleSubmit = (event: KeyboardEvent) => {
 
   .clear-btn,
   .send-btn,
-  .attach-btn {
+  .attach-btn,
+  .search-btn {
     width: 40px;
     height: 40px;
     font-size: 16px;

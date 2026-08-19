@@ -61,7 +61,7 @@
               class="confirm-btn confirm-btn--ghost"
               @click="onCancel"
             >
-              {{ cancelText }}
+              {{ resolvedCancelText }}
             </button>
             <button
               ref="confirmBtn"
@@ -72,7 +72,7 @@
               @click="onConfirm"
             >
               <AppLoading v-if="confirming" :size="14" color="#fff" glow />
-              {{ confirmText }}
+              {{ resolvedConfirmText }}
             </button>
           </div>
         </div>
@@ -82,8 +82,11 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import AppLoading from './AppLoading.vue'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -96,8 +99,8 @@ const props = withDefaults(
     confirming?: boolean
   }>(),
   {
-    confirmText: 'Confirm',
-    cancelText: 'Cancel',
+    confirmText: '',
+    cancelText: '',
     danger: true,
     confirming: false
   }
@@ -108,6 +111,9 @@ const emit = defineEmits<{
   confirm: []
   cancel: []
 }>()
+
+const resolvedConfirmText = computed(() => props.confirmText || t('confirm.ok'))
+const resolvedCancelText = computed(() => props.cancelText || t('confirm.cancel'))
 
 const modalEl = ref<HTMLElement | null>(null)
 const confirmBtn = ref<HTMLElement | null>(null)

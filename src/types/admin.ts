@@ -4,6 +4,9 @@ export interface AuthUser {
   id: number
   username: string
   role: UserRole
+  province?: string
+  city?: string
+  district?: string
 }
 
 export interface AdminModel {
@@ -36,6 +39,9 @@ export interface AdminUser {
   last_seen_at: number | null
   logins: number
   total_tokens: number
+  province: string
+  city: string
+  district: string
 }
 
 export interface ModelPayload {
@@ -51,6 +57,9 @@ export interface ModelPayload {
 export interface UserUpdatePayload {
   is_active?: boolean
   role?: UserRole
+  province?: string
+  city?: string
+  district?: string
 }
 
 export interface UsageByUser {
@@ -84,4 +93,34 @@ export interface AdminUsage {
 export interface SettingItem {
   key: string
   value: string
+}
+
+export interface SuggestionItem {
+  id: number
+  title_zh: string
+  title_en: string
+  sort_order: number
+  enabled: boolean
+  created_at: number
+}
+
+export interface SuggestionPayload {
+  title_zh: string
+  title_en: string
+  sort_order: number
+  enabled: boolean
+}
+
+export interface RegionTopUser {
+  username: string
+  requests: number
+  total_tokens: number
+}
+
+export interface RegionStat {
+  province: string
+  city: string
+  district: string
+  count: number
+  top_users: RegionTopUser[]
 }

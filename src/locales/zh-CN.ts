@@ -25,7 +25,9 @@ export default {
   input: {
     placeholder: '输入您的问题... (按 Enter 发送)',
     tip: '按 Enter 发送，Shift+Enter 换行',
-    attachImage: '添加图片'
+    attachImage: '添加图片',
+    webSearch: '联网搜索（当前会话关闭）',
+    webSearchOn: '联网搜索（当前会话已开启）'
   },
   chat: {
     title: '会话历史',
@@ -69,6 +71,7 @@ export default {
   confirm: {
     confirm: '确认删除',
     cancel: '取消',
+    ok: '确认',
     deleteSessionTitle: '删除会话',
     deleteSessionMessage: '确定要删除该会话吗？该会话的全部消息将被永久移除，此操作无法撤销。',
     clearTitle: '清空当前会话',
@@ -94,7 +97,12 @@ export default {
     logout: '退出登录',
     logoutConfirm: '确定要退出登录吗？',
     logoutConfirmBtn: '退出',
-    newPassword: '新密码'
+    newPassword: '新密码',
+    region: '所在地区',
+    regionRequired: '请选择完整的省 / 市 / 区',
+    selectProvince: '选择省份',
+    selectCity: '选择城市',
+    selectDistrict: '选择区县'
   },
   console: {
     title: '管理控制台',
@@ -106,6 +114,18 @@ export default {
     users: '用户管理',
     usage: '用量统计',
     settings: '系统设置',
+    map: '用户热点',
+    mapTitle: '全国用户分布 · 热点地图',
+    mapUsers: '用户',
+    mapProvinces: '覆盖省份',
+    mapCities: '覆盖城市',
+    regionList: '归属地明细',
+    noRegion: '暂无用户归属地数据',
+    region: '归属地',
+    tipTop: '活跃 TOP3',
+    tipReqs: '次',
+    tipEmpty: '暂无活跃数据',
+    tipNoUsers: '暂无用户',
     addModel: '新增模型',
     editModel: '编辑模型',
     searchModels: '搜索模型...',
@@ -145,6 +165,8 @@ export default {
     enableUserMessage: '确定启用用户「{name}」吗？',
     disableUserMessage: '确定禁用用户「{name}」吗？禁用后将无法登录。',
     resetPassword: '重置密码',
+    resetPasswordConfirm: '重置',
+    editRegion: '编辑归属地',
     dailyTrend: '近 30 天趋势',
     byModel: '按模型用量',
     byUser: '按用户用量',
@@ -154,6 +176,16 @@ export default {
     value: '值',
     save: '保存',
     noSettings: '暂无设置',
-    keyRequired: '请输入键名'
+    keyRequired: '请输入键名',
+    suggestions: '热词配置',
+    suggAdd: '新增热词',
+    suggEdit: '编辑热词',
+    suggCount: '共 {count} 条 · 首页展示前 {shown} 条',
+    suggOrder: '排序',
+    suggZh: '中文标题',
+    suggEn: '英文标题',
+    suggRequired: '请填写中文标题和英文标题',
+    suggDeleteMessage: '确定删除热词「{name}」吗？',
+    noSuggestions: '暂无热词'
   }
 }

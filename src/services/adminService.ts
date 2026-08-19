@@ -4,7 +4,10 @@ import type {
   AdminUsage,
   AdminUser,
   ModelPayload,
+  RegionStat,
   SettingItem,
+  SuggestionItem,
+  SuggestionPayload,
   UserRole,
   UserUpdatePayload
 } from '@/types/admin'
@@ -80,12 +83,35 @@ export function fetchUsage(): Promise<AdminUsage> {
   return request('/usage')
 }
 
+export function fetchRegionStats(): Promise<RegionStat[]> {
+  return request('/region-stats')
+}
+
 export function fetchSettings(): Promise<SettingItem[]> {
   return request('/settings')
 }
 
 export function updateSetting(key: string, value: string): Promise<{ ok: boolean }> {
   return request(`/settings/${encodeURIComponent(key)}`, { method: 'PATCH', body: JSON.stringify({ value }) })
+}
+
+export function fetchAdminSuggestions(): Promise<SuggestionItem[]> {
+  return request('/suggestions')
+}
+
+export function createAdminSuggestion(payload: SuggestionPayload): Promise<{ ok: boolean }> {
+  return request('/suggestions', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function updateAdminSuggestion(
+  suggestionId: number,
+  payload: SuggestionPayload
+): Promise<{ ok: boolean }> {
+  return request(`/suggestions/${suggestionId}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export function deleteAdminSuggestion(suggestionId: number): Promise<{ ok: boolean }> {
+  return request(`/suggestions/${suggestionId}`, { method: 'DELETE' })
 }
 
 export type { UserRole }

@@ -31,8 +31,9 @@
           <span class="console-user">
             <AppIcon name="lucide:user" :size="15" />
             {{ auth.user?.username }}
-            <span class="console-role">{{ auth.user?.role }}</span>
           </span>
+          <LanguageSwitcher :size="32" />
+          <ThemeSwitcher :size="32" />
           <button class="console-logout" :title="$t('console.logout')" @click="logout">
             <AppIcon name="lucide:log-out" :size="16" />
           </button>
@@ -43,7 +44,9 @@
         <AdminOverview v-if="activeTab === 'overview'" />
         <ModelManage v-else-if="activeTab === 'models'" />
         <AdminUsers v-else-if="activeTab === 'users'" />
+        <AdminMap v-else-if="activeTab === 'map'" />
         <AdminUsage v-else-if="activeTab === 'usage'" />
+        <AdminSuggestions v-else-if="activeTab === 'suggestions'" />
         <AdminSettings v-else />
       </main>
     </div>
@@ -57,20 +60,26 @@ import { useAuthStore } from '@/stores/authStore'
 import AdminOverview from './AdminOverview.vue'
 import ModelManage from './ModelManage.vue'
 import AdminUsers from './AdminUsers.vue'
+import AdminMap from './AdminMap.vue'
 import AdminUsage from './AdminUsage.vue'
+import AdminSuggestions from './AdminSuggestions.vue'
 import AdminSettings from './AdminSettings.vue'
+import ThemeSwitcher from '@/components/chat/ThemeSwitcher.vue'
+import LanguageSwitcher from '@/components/chat/LanguageSwitcher.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
 
-type TabKey = 'overview' | 'models' | 'users' | 'usage' | 'settings'
+type TabKey = 'overview' | 'models' | 'users' | 'map' | 'usage' | 'suggestions' | 'settings'
 
 const tabs = computed(() => [
   { key: 'overview' as TabKey, icon: 'lucide:layout-dashboard', label: t('console.overview') },
   { key: 'models' as TabKey, icon: 'lucide:cpu', label: t('console.models') },
   { key: 'users' as TabKey, icon: 'lucide:users', label: t('console.users') },
+  { key: 'map' as TabKey, icon: 'lucide:map', label: t('console.map') },
   { key: 'usage' as TabKey, icon: 'lucide:chart-bar', label: t('console.usage') },
+  { key: 'suggestions' as TabKey, icon: 'lucide:flame', label: t('console.suggestions') },
   { key: 'settings' as TabKey, icon: 'lucide:sliders-horizontal', label: t('console.settings') }
 ])
 
@@ -158,6 +167,8 @@ const logout = () => auth.logout()
 }
 
 .console-header {
+  position: relative;
+  z-index: 30;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -205,15 +216,6 @@ const logout = () => auth.logout()
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--color-text);
-}
-
-.console-role {
-  padding: 2px 8px;
-  border-radius: 20px;
-  font-size: 11px;
-  background: var(--color-glass);
-  border: 1px solid var(--color-primary);
-  color: var(--color-primary);
 }
 
 .console-logout {

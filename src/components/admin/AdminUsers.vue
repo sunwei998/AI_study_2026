@@ -13,11 +13,12 @@
             <th>{{ $t('console.username') }}</th>
             <th>{{ $t('console.role') }}</th>
             <th>{{ $t('console.enabled') }}</th>
+            <th>{{ $t('console.region') }}</th>
             <th>{{ $t('console.logins') }}</th>
             <th>{{ $t('console.totalTokens') }}</th>
             <th>{{ $t('console.lastSeen') }}</th>
             <th>{{ $t('console.createdAt') }}</th>
-            <th>{{ $t('console.actions') }}</th>
+            <th class="actions-th">{{ $t('console.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -42,17 +43,25 @@
                 <span class="toggle-knob"></span>
               </button>
             </td>
+            <td class="cell-region">{{ formatRegion(u) }}</td>
             <td class="cell-num">{{ u.logins }}</td>
             <td class="cell-num">{{ formatNum(u.total_tokens) }}</td>
             <td class="cell-time">{{ formatTime(u.last_seen_at) }}</td>
             <td class="cell-time">{{ formatTime(u.created_at) }}</td>
-            <td>
+            <td class="actions-td">
               <div class="row-actions">
                 <button class="row-btn" :title="$t('console.roleSwitch')" @click="askToggleRole(u)">
                   <AppIcon
                     :name="u.role === 'admin' ? 'lucide:user' : 'lucide:shield'"
                     :size="15"
                   />
+                </button>
+                <button
+                  class="row-btn"
+                  :title="$t('console.editRegion')"
+                  @click="openEditRegion(u)"
+                >
+                  <AppIcon name="lucide:map-pin" :size="15" />
                 </button>
                 <button
                   class="row-btn"
@@ -65,11 +74,43 @@
             </td>
           </tr>
           <tr v-if="users.length === 0">
-            <td colspan="8" class="cell-empty">{{ $t('console.noUsers') }}</td>
+            <td colspan="9" class="cell-empty">{{ $t('console.noUsers') }}</td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    <Teleport to="body">
+      <Transition name="confirm" appear>
+        <div v-if="regionVisible" class="form-overlay" @click.self="regionVisible = false">
+          <div class="form-modal" role="dialog" aria-modal="true">
+            <span class="form-accent-line"></span>
+            <h3 class="form-title">{{ $t('console.editRegion') }} — {{ regionUser?.username }}</h3>
+
+            <div class="form-body">
+              <div class="region-preview" v-if="regionPreview">{{ regionPreview }}</div>
+              <RegionSelect v-model="regionValue" vertical />
+              <p v-if="regionError" class="form-error">{{ regionError }}</p>
+
+              <div class="form-actions">
+                <button type="button" class="form-btn form-btn--ghost" @click="regionVisible = false">
+                  {{ $t('confirm.cancel') }}
+                </button>
+                <button
+                  type="button"
+                  class="form-btn form-btn--primary"
+                  :disabled="regionSubmitting"
+                  @click="submitRegion"
+                >
+                  <AppLoading v-if="regionSubmitting" :size="14" color="#fff" glow />
+                  {{ $t('confirm.ok') }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <Teleport to="body">
       <Transition name="confirm" appear>
@@ -92,7 +133,7 @@
                 </button>
                 <button type="submit" class="form-btn form-btn--primary" :disabled="resetSubmitting">
                   <AppLoading v-if="resetSubmitting" :size="14" color="#fff" glow />
-                  {{ $t('confirm.confirm') }}
+                  {{ $t('console.resetPasswordConfirm') }}
                 </button>
               </div>
             </form>
@@ -114,7 +155,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AdminUser, UserRole } from '@/types/admin'
 import { fetchAdminUsers, resetUserPassword, updateAdminUser } from '@/services/adminService'
@@ -122,6 +163,7 @@ import { useAuthStore } from '@/stores/authStore'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import RegionSelect, { type RegionValue } from '@/components/common/RegionSelect.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -155,6 +197,11 @@ function formatNum(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
   return String(n)
+}
+
+function formatRegion(u: AdminUser): string {
+  const parts = [u.province, u.city, u.district].filter(Boolean)
+  return parts.length ? parts.join('') : '-'
 }
 
 const confirmVisible = ref(false)
@@ -241,6 +288,55 @@ const submitReset = async () => {
     resetSubmitting.value = false
   }
 }
+
+const regionVisible = ref(false)
+const regionSubmitting = ref(false)
+const regionError = ref('')
+const regionUser = ref<AdminUser | null>(null)
+const regionValue = ref<RegionValue>({ province: '', city: '', district: '' })
+
+const regionPreview = computed(() => {
+  const v = regionValue.value
+  const parts = [v.province, v.city, v.district].filter(Boolean)
+  return parts.join('')
+})
+
+const openEditRegion = (u: AdminUser) => {
+  regionUser.value = u
+  regionValue.value = {
+    province: u.province || '',
+    city: u.city || '',
+    district: u.district || ''
+  }
+  regionError.value = ''
+  regionVisible.value = true
+}
+
+const submitRegion = async () => {
+  if (regionSubmitting.value || !regionUser.value) return
+  regionError.value = ''
+  if (!regionValue.value.province || !regionValue.value.city || !regionValue.value.district) {
+    regionError.value = t('auth.regionRequired')
+    return
+  }
+  regionSubmitting.value = true
+  try {
+    await updateAdminUser(regionUser.value.id, {
+      province: regionValue.value.province,
+      city: regionValue.value.city,
+      district: regionValue.value.district
+    })
+    const u = regionUser.value
+    u.province = regionValue.value.province
+    u.city = regionValue.value.city
+    u.district = regionValue.value.district
+    regionVisible.value = false
+  } catch (err) {
+    regionError.value = err instanceof Error ? err.message : t('common.errorOccurred')
+  } finally {
+    regionSubmitting.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -309,6 +405,22 @@ const submitReset = async () => {
   white-space: nowrap;
 }
 
+.users-table th.actions-th,
+.users-table td.actions-td {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  box-shadow: -6px 0 12px rgba(0, 0, 0, 0.18);
+}
+
+.users-table th.actions-th {
+  top: 0;
+  z-index: 3;
+  background: var(--color-glass);
+}
+
 .users-table tbody tr:hover {
   background: var(--color-glass);
 }
@@ -320,6 +432,12 @@ const submitReset = async () => {
 .cell-num {
   font-family: var(--font-mono);
   color: var(--color-text-secondary);
+}
+
+.cell-region {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-primary);
 }
 
 .cell-time {
@@ -513,6 +631,18 @@ const submitReset = async () => {
   font-family: var(--font-mono);
   font-size: 12px;
   color: #ff5b6a;
+}
+
+.region-preview {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-glass);
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-align: center;
+  box-shadow: 0 0 10px var(--color-glow);
 }
 
 .form-actions {

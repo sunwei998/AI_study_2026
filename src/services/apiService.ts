@@ -9,6 +9,11 @@ export interface ChatHistoryItem {
   images?: string[]
 }
 
+export interface ChatSuggestion {
+  title_zh: string
+  title_en: string
+}
+
 interface StreamChunk {
   choices?: Array<{ delta?: { content?: string } }>
   error?: string
@@ -64,6 +69,18 @@ export async function fetchModels(): Promise<ModelInfo[]> {
 }
 
 /**
+ * 首页推荐热词（后端可配置，取前 6 条）
+ */
+export async function fetchSuggestions(): Promise<ChatSuggestion[]> {
+  const resp = await fetch(`${API_BASE}/suggestions`)
+  if (!resp.ok) {
+    throw new Error(i18n.global.t('api.failed'))
+  }
+  const data: ChatSuggestion[] = await resp.json()
+  return data
+}
+
+/**
  * 流式调用后端 /api/chat（SSE 逐字输出）
  * @param model - 模型 ID（每个会话独立）
  * @param requestId - 请求唯一标识，用于取消
@@ -72,7 +89,8 @@ async function chatStream(
   messages: ChatHistoryItem[],
   onChunk: (chunk: string) => void,
   requestId: string,
-  model: string
+  model: string,
+  webSearch = false
 ): Promise<void> {
   const controller = new AbortController()
   abortControllers.set(requestId, controller)
@@ -80,7 +98,7 @@ async function chatStream(
     const response = await fetch(`${API_BASE}/chat`, {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ model, messages }),
+      body: JSON.stringify({ model, messages, web_search: webSearch }),
       signal: controller.signal
     })
     if (!response.ok) {
@@ -143,9 +161,14 @@ async function chatStream(
 /**
  * 非流式调用（重新生成等场景复用流式接口，收集完整内容）
  */
-async function chat(messages: ChatHistoryItem[], requestId: string, model: string): Promise<string> {
+async function chat(
+  messages: ChatHistoryItem[],
+  requestId: string,
+  model: string,
+  webSearch = false
+): Promise<string> {
   let full = ''
-  await chatStream(messages, (chunk) => (full += chunk), requestId, model)
+  await chatStream(messages, (chunk) => (full += chunk), requestId, model, webSearch)
   return full
 }
 
@@ -159,5 +182,6 @@ export default {
   chat,
   chatStream,
   abort: abortRequest,
-  fetchModels
+  fetchModels,
+  fetchSuggestions
 }

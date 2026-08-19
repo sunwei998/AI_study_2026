@@ -32,6 +32,7 @@ export interface ChatSession {
   updatedAt: number
   pinned?: boolean
   model?: string
+  webSearch?: boolean
 }
 
 export interface ThemeConfig {

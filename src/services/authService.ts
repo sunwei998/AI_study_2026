@@ -36,12 +36,19 @@ export async function login(username: string, password: string): Promise<{ token
 
 export async function register(
   username: string,
-  password: string
+  password: string,
+  region?: { province: string; city: string; district: string }
 ): Promise<{ token: string; user: AuthUser }> {
   const resp = await fetch(`${API_BASE}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify({
+      username,
+      password,
+      province: region?.province ?? '',
+      city: region?.city ?? '',
+      district: region?.district ?? ''
+    })
   })
   if (!resp.ok) {
     throw new Error(await parseError(resp))

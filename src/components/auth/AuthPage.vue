@@ -59,6 +59,17 @@
           />
         </label>
 
+        <label v-if="mode === 'register'" class="auth-field">
+          <span class="auth-label">
+            {{ $t('auth.region') }}
+            <em class="auth-required">*</em>
+          </span>
+          <RegionSelect v-model="region" :disabled="submitting" />
+          <span v-if="regionTouched && !regionComplete" class="auth-hint">
+            {{ $t('auth.regionRequired') }}
+          </span>
+        </label>
+
         <p v-if="error" class="auth-error">{{ error }}</p>
 
         <button type="submit" class="auth-submit" :disabled="submitting">
@@ -79,11 +90,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/authStore'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import RegionSelect, { type RegionValue } from '@/components/common/RegionSelect.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -92,13 +104,21 @@ const mode = ref<'login' | 'register'>('login')
 const username = ref('')
 const password = ref('')
 const confirm = ref('')
+const region = ref<RegionValue>({ province: '', city: '', district: '' })
+const regionTouched = ref(false)
 const error = ref('')
 const submitting = ref(false)
+
+const regionComplete = computed(() =>
+  Boolean(region.value.province && region.value.city && region.value.district)
+)
 
 const switchMode = (m: 'login' | 'register') => {
   mode.value = m
   error.value = ''
   confirm.value = ''
+  region.value = { province: '', city: '', district: '' }
+  regionTouched.value = false
 }
 
 const submit = async () => {
@@ -118,13 +138,18 @@ const submit = async () => {
       error.value = t('auth.passwordMismatch')
       return
     }
+    regionTouched.value = true
+    if (!regionComplete.value) {
+      error.value = t('auth.regionRequired')
+      return
+    }
   }
   submitting.value = true
   try {
     if (mode.value === 'login') {
       await auth.login(name, password.value)
     } else {
-      await auth.register(name, password.value)
+      await auth.register(name, password.value, region.value)
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
@@ -264,6 +289,17 @@ const submit = async () => {
   font-size: 12px;
   color: #ff5b6a;
   text-shadow: 0 0 8px rgba(255, 77, 94, 0.4);
+}
+
+.auth-required {
+  font-style: normal;
+  color: #ff5b6a;
+}
+
+.auth-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #ffb74d;
 }
 
 .auth-submit {

@@ -1,83 +1,62 @@
 <template>
-  <div class="model-manage">
-    <div class="page-toolbar">
-      <div class="page-search">
-        <input
-          v-model="search"
-          type="text"
-          class="page-input"
-          :placeholder="$t('console.searchModels')"
-        />
+  <div class="admin-suggestions">
+    <div class="sugg-head">
+      <div class="sugg-head-left">
+        <span class="sugg-count">
+          {{ $t('console.suggCount', { count: suggestions.length, shown: Math.min(suggestions.length, 6) }) }}
+        </span>
       </div>
-      <button class="page-btn page-btn--primary" @click="openCreate">
+      <button class="sugg-add" @click="openCreate">
         <AppIcon name="lucide:plus" :size="15" />
-        {{ $t('console.addModel') }}
+        <span>{{ $t('console.suggAdd') }}</span>
       </button>
     </div>
 
     <div v-if="error" class="page-error">{{ error }}</div>
 
     <div v-if="loading" class="page-loading">
-      <AppLoading :size="26" glow />
+      <AppLoading :size="28" glow />
     </div>
 
-    <div v-else class="model-table-wrap">
-      <table class="model-table">
+    <div v-else class="sugg-table-wrap">
+      <table class="sugg-table">
         <thead>
           <tr>
+            <th>{{ $t('console.suggOrder') }}</th>
+            <th>{{ $t('console.suggZh') }}</th>
+            <th>{{ $t('console.suggEn') }}</th>
             <th>{{ $t('console.enabled') }}</th>
-            <th>model_key</th>
-            <th>{{ $t('console.name') }}</th>
-            <th>{{ $t('console.provider') }}</th>
-            <th>{{ $t('console.free') }}</th>
-            <th>{{ $t('console.vision') }}</th>
-            <th>{{ $t('console.sortOrder') }}</th>
             <th>{{ $t('console.actions') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="m in filtered" :key="m.id">
+          <tr v-for="s in suggestions" :key="s.id">
+            <td class="cell-num">{{ s.sort_order }}</td>
+            <td class="cell-zh">{{ s.title_zh }}</td>
+            <td class="cell-en">{{ s.title_en }}</td>
             <td>
               <button
                 class="toggle"
-                :class="{ on: m.enabled }"
-                :title="m.enabled ? $t('console.disable') : $t('console.enable')"
-                @click="toggleEnabled(m)"
+                :class="{ on: s.enabled }"
+                :title="s.enabled ? $t('console.disable') : $t('console.enable')"
+                @click="toggleEnabled(s)"
               >
                 <span class="toggle-knob"></span>
               </button>
             </td>
-            <td class="cell-key">{{ m.model_key }}</td>
-            <td>{{ m.name }}</td>
-            <td><span class="badge">{{ m.provider }}</span></td>
-            <td>
-              <AppIcon
-                :name="m.free ? 'lucide:check-circle' : 'lucide:circle'"
-                :size="16"
-                :glow="m.free"
-              />
-            </td>
-            <td>
-              <AppIcon
-                :name="m.vision ? 'lucide:check-circle' : 'lucide:circle'"
-                :size="16"
-                :glow="m.vision"
-              />
-            </td>
-            <td class="cell-order">{{ m.sort_order }}</td>
             <td>
               <div class="row-actions">
-                <button class="row-btn" :title="$t('console.edit')" @click="openEdit(m)">
+                <button class="row-btn" :title="$t('console.edit')" @click="openEdit(s)">
                   <AppIcon name="lucide:pencil" :size="15" />
                 </button>
-                <button class="row-btn row-btn--danger" :title="$t('console.delete')" @click="askDelete(m)">
+                <button class="row-btn" :title="$t('common.delete')" @click="askDelete(s)">
                   <AppIcon name="lucide:trash-2" :size="15" />
                 </button>
               </div>
             </td>
           </tr>
-          <tr v-if="filtered.length === 0">
-            <td colspan="8" class="cell-empty">{{ $t('console.noModels') }}</td>
+          <tr v-if="suggestions.length === 0">
+            <td colspan="5" class="cell-empty">{{ $t('console.noSuggestions') }}</td>
           </tr>
         </tbody>
       </table>
@@ -88,42 +67,32 @@
         <div v-if="formVisible" class="form-overlay" @click.self="formVisible = false">
           <div class="form-modal" role="dialog" aria-modal="true">
             <span class="form-accent-line"></span>
-            <h3 class="form-title">{{ formMode === 'create' ? $t('console.addModel') : $t('console.editModel') }}</h3>
+            <h3 class="form-title">{{ editingId ? $t('console.suggEdit') : $t('console.suggAdd') }}</h3>
 
-            <form class="form-body" @submit.prevent="submitForm">
+            <form class="form-body" @submit.prevent="submit">
               <label class="form-field">
-                <span class="form-label">model_key</span>
-                <input v-model="form.model_key" type="text" class="form-input" :placeholder="'Qwen/Qwen2.5-7B'" />
+                <span class="form-label">{{ $t('console.suggZh') }}</span>
+                <input v-model="form.title_zh" class="form-input" maxlength="60" required />
               </label>
               <label class="form-field">
-                <span class="form-label">{{ $t('console.name') }}</span>
-                <input v-model="form.name" type="text" class="form-input" :placeholder="$t('console.namePlaceholder')" />
+                <span class="form-label">{{ $t('console.suggEn') }}</span>
+                <input v-model="form.title_en" class="form-input" maxlength="60" required />
               </label>
               <div class="form-row">
-                <label class="form-field">
-                  <span class="form-label">{{ $t('console.provider') }}</span>
-                  <select v-model="form.provider" class="form-input">
-                    <option value="openai">openai</option>
-                    <option value="ollama">ollama</option>
-                  </select>
+                <label class="form-field form-field--sort">
+                  <span class="form-label">{{ $t('console.suggOrder') }}</span>
+                  <input v-model.number="form.sort_order" type="number" min="0" class="form-input" />
                 </label>
-                <label class="form-field">
-                  <span class="form-label">{{ $t('console.sortOrder') }}</span>
-                  <input v-model.number="form.sort_order" type="number" class="form-input" />
-                </label>
-              </div>
-              <div class="form-checks">
-                <label class="form-check">
-                  <input v-model="form.free" type="checkbox" />
-                  <span>{{ $t('console.free') }}</span>
-                </label>
-                <label class="form-check">
-                  <input v-model="form.vision" type="checkbox" />
-                  <span>{{ $t('console.vision') }}</span>
-                </label>
-                <label class="form-check">
-                  <input v-model="form.enabled" type="checkbox" />
-                  <span>{{ $t('console.enabled') }}</span>
+                <label class="form-field form-field--toggle">
+                  <span class="form-label">{{ $t('console.enabled') }}</span>
+                  <button
+                    type="button"
+                    class="toggle"
+                    :class="{ on: form.enabled }"
+                    @click="form.enabled = !form.enabled"
+                  >
+                    <span class="toggle-knob"></span>
+                  </button>
                 </label>
               </div>
 
@@ -133,8 +102,8 @@
                 <button type="button" class="form-btn form-btn--ghost" @click="formVisible = false">
                   {{ $t('confirm.cancel') }}
                 </button>
-                <button type="submit" class="form-btn form-btn--primary" :disabled="formSubmitting">
-                  <AppLoading v-if="formSubmitting" :size="14" color="#fff" glow />
+                <button type="submit" class="form-btn form-btn--primary" :disabled="submitting">
+                  <AppLoading v-if="submitting" :size="14" color="#fff" glow />
                   {{ $t('confirm.ok') }}
                 </button>
               </div>
@@ -146,25 +115,25 @@
 
     <ConfirmModal
       v-model:visible="confirmVisible"
-      :title="$t('console.deleteModelTitle')"
-      :message="$t('console.deleteModelMessage', { key: deletingKey })"
+      :title="confirmTitle"
+      :message="confirmMessage"
       :confirming="confirmLoading"
       danger
-      @confirm="doDelete"
+      @confirm="doConfirm"
       @cancel="confirmVisible = false"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { AdminModel, ModelPayload } from '@/types/admin'
+import type { SuggestionItem, SuggestionPayload } from '@/types/admin'
 import {
-  createAdminModel,
-  deleteAdminModel,
-  fetchAdminModels,
-  updateAdminModel
+  createAdminSuggestion,
+  deleteAdminSuggestion,
+  fetchAdminSuggestions,
+  updateAdminSuggestion
 } from '@/services/adminService'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
@@ -172,24 +141,15 @@ import AppIcon from '@/components/common/AppIcon.vue'
 
 const { t } = useI18n()
 
-const models = ref<AdminModel[]>([])
+const suggestions = ref<SuggestionItem[]>([])
 const loading = ref(true)
 const error = ref('')
-const search = ref('')
-
-const filtered = computed(() => {
-  const kw = search.value.trim().toLowerCase()
-  if (!kw) return models.value
-  return models.value.filter(
-    (m) => m.model_key.toLowerCase().includes(kw) || m.name.toLowerCase().includes(kw)
-  )
-})
 
 const load = async () => {
   loading.value = true
   error.value = ''
   try {
-    models.value = await fetchAdminModels()
+    suggestions.value = await fetchAdminSuggestions()
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
@@ -199,104 +159,101 @@ const load = async () => {
 
 onMounted(load)
 
-const toggleEnabled = async (m: AdminModel) => {
-  const target = { ...m, enabled: !m.enabled }
-  try {
-    await updateAdminModel(m.id, toPayload(target))
-    m.enabled = target.enabled
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : t('common.errorOccurred')
-  }
-}
-
 const formVisible = ref(false)
-const formMode = ref<'create' | 'edit'>('create')
-const formSubmitting = ref(false)
+const submitting = ref(false)
 const formError = ref('')
 const editingId = ref<number | null>(null)
-const form = ref<ModelPayload>(emptyForm())
-
-function emptyForm(): ModelPayload {
-  return {
-    model_key: '',
-    name: '',
-    provider: 'openai',
-    free: false,
-    vision: false,
-    enabled: true,
-    sort_order: 100
-  }
-}
-
-function toPayload(m: AdminModel): ModelPayload {
-  return {
-    model_key: m.model_key,
-    name: m.name,
-    provider: m.provider,
-    free: m.free,
-    vision: m.vision,
-    enabled: m.enabled,
-    sort_order: m.sort_order
-  }
-}
+const form = ref<SuggestionPayload>({ title_zh: '', title_en: '', sort_order: 0, enabled: true })
 
 const openCreate = () => {
-  formMode.value = 'create'
   editingId.value = null
-  form.value = emptyForm()
+  form.value = {
+    title_zh: '',
+    title_en: '',
+    sort_order: suggestions.value.length + 1,
+    enabled: true
+  }
   formError.value = ''
   formVisible.value = true
 }
 
-const openEdit = (m: AdminModel) => {
-  formMode.value = 'edit'
-  editingId.value = m.id
-  form.value = toPayload(m)
+const openEdit = (s: SuggestionItem) => {
+  editingId.value = s.id
+  form.value = {
+    title_zh: s.title_zh,
+    title_en: s.title_en,
+    sort_order: s.sort_order,
+    enabled: s.enabled
+  }
   formError.value = ''
   formVisible.value = true
 }
 
-const submitForm = async () => {
-  if (formSubmitting.value) return
+const submit = async () => {
+  if (submitting.value) return
   formError.value = ''
-  if (!form.value.model_key.trim() || !form.value.name.trim()) {
-    formError.value = t('console.fillRequired')
+  if (!form.value.title_zh.trim() || !form.value.title_en.trim()) {
+    formError.value = t('console.suggRequired')
     return
   }
-  formSubmitting.value = true
+  submitting.value = true
   try {
-    if (formMode.value === 'create') {
-      await createAdminModel(form.value)
-    } else if (editingId.value != null) {
-      await updateAdminModel(editingId.value, form.value)
+    const payload: SuggestionPayload = {
+      title_zh: form.value.title_zh.trim(),
+      title_en: form.value.title_en.trim(),
+      sort_order: form.value.sort_order || 0,
+      enabled: form.value.enabled
+    }
+    if (editingId.value) {
+      await updateAdminSuggestion(editingId.value, payload)
+    } else {
+      await createAdminSuggestion(payload)
     }
     formVisible.value = false
     await load()
   } catch (err) {
     formError.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
-    formSubmitting.value = false
+    submitting.value = false
+  }
+}
+
+const toggleEnabled = async (s: SuggestionItem) => {
+  try {
+    await updateAdminSuggestion(s.id, {
+      title_zh: s.title_zh,
+      title_en: s.title_en,
+      sort_order: s.sort_order,
+      enabled: !s.enabled
+    })
+    s.enabled = !s.enabled
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   }
 }
 
 const confirmVisible = ref(false)
 const confirmLoading = ref(false)
-const deletingKey = ref('')
-const deletingId = ref<number | null>(null)
+const confirmTitle = ref('')
+const confirmMessage = ref('')
+let confirmAction: (() => Promise<void>) | null = null
 
-const askDelete = (m: AdminModel) => {
-  deletingId.value = m.id
-  deletingKey.value = m.model_key
+const askDelete = (s: SuggestionItem) => {
+  confirmTitle.value = t('common.delete')
+  confirmMessage.value = t('console.suggDeleteMessage', { name: s.title_zh })
+  confirmAction = async () => {
+    await deleteAdminSuggestion(s.id)
+    suggestions.value = suggestions.value.filter((x) => x.id !== s.id)
+  }
   confirmVisible.value = true
 }
 
-const doDelete = async () => {
-  if (deletingId.value == null) return
+const doConfirm = async () => {
+  if (!confirmAction) return
   confirmLoading.value = true
   try {
-    await deleteAdminModel(deletingId.value)
+    await confirmAction()
     confirmVisible.value = false
-    await load()
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
     confirmVisible.value = false
@@ -307,7 +264,7 @@ const doDelete = async () => {
 </script>
 
 <style scoped>
-.model-manage {
+.admin-suggestions {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -315,59 +272,37 @@ const doDelete = async () => {
   min-height: 0;
 }
 
-.page-toolbar {
+.sugg-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.page-search {
-  flex: 1;
-  max-width: 320px;
+.sugg-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 
-.page-input {
-  width: 100%;
-  height: 38px;
-  padding: 0 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: 13px;
-  outline: none;
-  transition: var(--transition-normal);
-}
-
-.page-input:focus {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 10px var(--color-glow);
-}
-
-.page-btn {
-  height: 38px;
-  padding: 0 16px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-glass);
-  color: var(--color-text);
-  font-size: 13px;
-  cursor: pointer;
+.sugg-add {
   display: flex;
   align-items: center;
   gap: 6px;
-  transition: var(--transition-fast);
-}
-
-.page-btn--primary {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-md);
   border: none;
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
   color: #fff;
-  box-shadow: 0 4px 14px var(--color-glow);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 18px var(--color-glow);
+  transition: var(--transition-normal);
 }
 
-.page-btn--primary:hover {
+.sugg-add:hover {
   filter: brightness(1.08);
   transform: translateY(-1px);
 }
@@ -390,7 +325,7 @@ const doDelete = async () => {
   min-height: 200px;
 }
 
-.model-table-wrap {
+.sugg-table-wrap {
   flex: 1;
   overflow: auto;
   border-radius: var(--radius-lg);
@@ -400,13 +335,13 @@ const doDelete = async () => {
   scrollbar-color: color-mix(in srgb, var(--color-primary) 40%, transparent) transparent;
 }
 
-.model-table {
+.sugg-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
 }
 
-.model-table th {
+.sugg-table th {
   position: sticky;
   top: 0;
   z-index: 1;
@@ -422,24 +357,26 @@ const doDelete = async () => {
   white-space: nowrap;
 }
 
-.model-table td {
+.sugg-table td {
   padding: 10px 14px;
   border-bottom: 1px solid var(--color-border);
   color: var(--color-text);
-  white-space: nowrap;
 }
 
-.model-table tbody tr:hover {
+.sugg-table tbody tr:hover {
   background: var(--color-glass);
 }
 
-.cell-key {
+.cell-num {
   font-family: var(--font-mono);
-  color: var(--color-primary);
+  color: var(--color-text-secondary);
 }
 
-.cell-order {
-  font-family: var(--font-mono);
+.cell-zh {
+  font-weight: 500;
+}
+
+.cell-en {
   color: var(--color-text-secondary);
 }
 
@@ -449,14 +386,29 @@ const doDelete = async () => {
   padding: 32px !important;
 }
 
-.badge {
-  padding: 2px 8px;
-  border-radius: 20px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  background: var(--color-glass);
+.row-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.row-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   border: 1px solid var(--color-border);
+  background: var(--color-glass);
   color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-fast);
+}
+
+.row-btn:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 8px var(--color-glow);
 }
 
 .toggle {
@@ -492,37 +444,6 @@ const doDelete = async () => {
   background: #fff;
 }
 
-.row-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.row-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: 1px solid var(--color-border);
-  background: var(--color-glass);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: var(--transition-fast);
-}
-
-.row-btn:hover {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-  box-shadow: 0 0 8px var(--color-glow);
-}
-
-.row-btn--danger:hover {
-  color: #ff5b6a;
-  border-color: #ff5b6a;
-  box-shadow: 0 0 8px rgba(255, 77, 94, 0.5);
-}
-
 .form-overlay {
   position: fixed;
   inset: 0;
@@ -538,9 +459,7 @@ const doDelete = async () => {
 
 .form-modal {
   position: relative;
-  width: min(460px, 100%);
-  max-height: 90vh;
-  overflow-y: auto;
+  width: min(440px, 100%);
   padding: 26px 26px 22px;
   background: var(--color-glass);
   backdrop-filter: blur(20px);
@@ -582,12 +501,6 @@ const doDelete = async () => {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  flex: 1;
-}
-
-.form-row {
-  display: flex;
-  gap: 12px;
 }
 
 .form-label {
@@ -613,23 +526,17 @@ const doDelete = async () => {
   box-shadow: 0 0 10px var(--color-glow);
 }
 
-.form-checks {
+.form-row {
   display: flex;
-  gap: 18px;
-  flex-wrap: wrap;
+  gap: 14px;
 }
 
-.form-check {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--color-text);
-  cursor: pointer;
+.form-field--sort {
+  flex: 1;
 }
 
-.form-check input {
-  accent-color: var(--color-primary);
+.form-field--toggle {
+  width: 90px;
 }
 
 .form-error {
@@ -723,20 +630,5 @@ const doDelete = async () => {
 .confirm-leave-to .form-modal {
   transform: translateY(8px) scale(0.96);
   opacity: 0;
-}
-
-@media (max-width: 640px) {
-  .form-row {
-    flex-direction: column;
-  }
-
-  .page-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .page-search {
-    max-width: none;
-  }
 }
 </style>

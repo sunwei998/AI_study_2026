@@ -40,10 +40,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, nextTick } from 'vue'
+import { ref, watch, computed, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Message, SendPayload } from '@/types/chat'
 import MessageItem from './MessageItem.vue'
+import apiService from '@/services/apiService'
+import { i18n } from '@/locales'
 
 const { tm } = useI18n()
 
@@ -85,7 +87,31 @@ const scrollToTop = () => {
   requestAnimationFrame(step)
 }
 
-const suggestions = computed<string[]>(() => tm('chat.suggestions') as unknown as string[])
+const i18nFallback = computed<string[]>(() => tm('chat.suggestions') as unknown as string[])
+
+const configSuggestions = ref<{ title_zh: string; title_en: string }[]>([])
+const configLoaded = ref(false)
+
+const suggestions = computed<string[]>(() => {
+  if (configLoaded.value && configSuggestions.value.length) {
+    const isEn = i18n.global.locale.value === 'en-US'
+    return configSuggestions.value.map((s) => (isEn ? s.title_en : s.title_zh)).slice(0, 6)
+  }
+  return i18nFallback.value.slice(0, 6)
+})
+
+onMounted(async () => {
+  try {
+    const list = await apiService.fetchSuggestions()
+    if (Array.isArray(list)) {
+      configSuggestions.value = list
+    }
+  } catch {
+    // 后端不可用时使用 i18n 兜底
+  } finally {
+    configLoaded.value = true
+  }
+})
 
 const handleRegenerate = (message: Message) => {
   emit('regenerate', message)

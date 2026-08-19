@@ -1,5 +1,10 @@
 <template>
-  <button class="lang-switcher" title="切换语言 / Switch language" @click="toggleLocale">
+  <button
+    class="lang-switcher"
+    :style="toggleStyle"
+    title="切换语言 / Switch language"
+    @click="toggleLocale"
+  >
     {{ isZh ? '中' : 'EN' }}
   </button>
 </template>
@@ -8,7 +13,19 @@
 import { computed } from 'vue'
 import { getLocale, setLocale, type AppLocale } from '@/locales'
 
+const props = withDefaults(defineProps<{ size?: number }>(), { size: 0 })
+
 const isZh = computed(() => getLocale() === 'zh-CN')
+
+const toggleStyle = computed(() =>
+  props.size > 0
+    ? {
+        width: `${props.size}px`,
+        height: `${props.size}px`,
+        fontSize: props.size >= 36 ? '14px' : '12px'
+      }
+    : undefined
+)
 
 const toggleLocale = () => {
   const next: AppLocale = isZh.value ? 'en-US' : 'zh-CN'

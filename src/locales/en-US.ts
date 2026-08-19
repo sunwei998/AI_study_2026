@@ -25,7 +25,9 @@ export default {
   input: {
     placeholder: 'Type your question... (Enter to send)',
     tip: 'Enter to send, Shift+Enter for newline',
-    attachImage: 'Attach image'
+    attachImage: 'Attach image',
+    webSearch: 'Web search (off for this session)',
+    webSearchOn: 'Web search (on for this session)'
   },
   chat: {
     title: 'Chat history',
@@ -74,6 +76,7 @@ export default {
   confirm: {
     confirm: 'Delete',
     cancel: 'Cancel',
+    ok: 'OK',
     deleteSessionTitle: 'Delete Session',
     deleteSessionMessage: 'Delete this session? All messages will be permanently removed. This cannot be undone.',
     clearTitle: 'Clear Current Chat',
@@ -99,7 +102,12 @@ export default {
     logout: 'Logout',
     logoutConfirm: 'Log out of this account?',
     logoutConfirmBtn: 'Logout',
-    newPassword: 'New Password'
+    newPassword: 'New Password',
+    region: 'Region',
+    regionRequired: 'Please select province / city / district',
+    selectProvince: 'Select Province',
+    selectCity: 'Select City',
+    selectDistrict: 'Select District'
   },
   console: {
     title: 'Admin Console',
@@ -111,6 +119,18 @@ export default {
     users: 'Users',
     usage: 'Usage',
     settings: 'Settings',
+    map: 'User Heatmap',
+    mapTitle: 'User Distribution · Heat Map',
+    mapUsers: 'Users',
+    mapProvinces: 'Provinces',
+    mapCities: 'Cities',
+    regionList: 'Region Details',
+    noRegion: 'No region data yet',
+    region: 'Region',
+    tipTop: 'Top 3 Active',
+    tipReqs: ' reqs',
+    tipEmpty: 'No activity yet',
+    tipNoUsers: 'No users',
     addModel: 'Add Model',
     editModel: 'Edit Model',
     searchModels: 'Search models...',
@@ -150,6 +170,8 @@ export default {
     enableUserMessage: 'Enable user "{name}"?',
     disableUserMessage: 'Disable user "{name}"? They will not be able to log in.',
     resetPassword: 'Reset Password',
+    resetPasswordConfirm: 'Reset',
+    editRegion: 'Edit Region',
     dailyTrend: '30-Day Trend',
     byModel: 'Usage by Model',
     byUser: 'Usage by User',
@@ -159,6 +181,16 @@ export default {
     value: 'Value',
     save: 'Save',
     noSettings: 'No settings',
-    keyRequired: 'Key is required'
+    keyRequired: 'Key is required',
+    suggestions: 'Hot Words',
+    suggAdd: 'Add Hot Word',
+    suggEdit: 'Edit Hot Word',
+    suggCount: '{count} total · top {shown} shown on home',
+    suggOrder: 'Order',
+    suggZh: 'Chinese Title',
+    suggEn: 'English Title',
+    suggRequired: 'Both Chinese and English titles are required',
+    suggDeleteMessage: 'Delete hot word "{name}"?',
+    noSuggestions: 'No hot words yet'
   }
 }

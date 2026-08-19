@@ -144,7 +144,8 @@ export const useChatStore = defineStore('chat', () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       pinned: false,
-      model: DEFAULT_MODEL
+      model: DEFAULT_MODEL,
+      webSearch: false
     }
     sessions.value.push(newSession)
     currentSessionId.value = id
@@ -173,6 +174,14 @@ export const useChatStore = defineStore('chat', () => {
     const session = sessions.value.find((s) => s.id === sessionId)
     if (session) {
       session.pinned = !session.pinned
+      saveSessions()
+    }
+  }
+
+  const setWebSearch = (enabled: boolean) => {
+    const session = currentSession.value
+    if (session) {
+      session.webSearch = enabled
       saveSessions()
     }
   }
@@ -277,7 +286,8 @@ export const useChatStore = defineStore('chat', () => {
       const response = await apiService.chat(
         buildHistory(session, assistantMsg.id),
         requestId,
-        resolveSessionModel(session)
+        resolveSessionModel(session),
+        session.webSearch
       )
       updateMessage(assistantMsg.id, response, sessionId)
     } catch (error) {
@@ -317,7 +327,7 @@ export const useChatStore = defineStore('chat', () => {
         const currentContent =
           getSession(sessionId)?.messages.find((m) => m.id === assistantMsg.id)?.content || ''
         updateMessage(assistantMsg.id, currentContent + chunk, sessionId)
-      }, requestId, resolveSessionModel(session))
+      }, requestId, resolveSessionModel(session), session.webSearch)
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return
@@ -396,6 +406,7 @@ export const useChatStore = defineStore('chat', () => {
     sendMessageStream,
     abortCurrentRequest,
     setModel,
+    setWebSearch,
     setTheme,
     loadTheme,
     loadSessions,

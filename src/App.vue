@@ -6,13 +6,18 @@ import AdminConsole from './components/admin/AdminConsole.vue'
 import AuthPage from './components/auth/AuthPage.vue'
 import { useSafeArea } from './composables/useSafeArea'
 import { useAuthStore } from './stores/authStore'
+import { useChatStore } from './stores/chatStore'
+import { applyTheme } from './styles/themes'
 
 useSafeArea()
 
 const auth = useAuthStore()
+const chat = useChatStore()
 
 onMounted(() => {
   auth.init()
+  chat.loadTheme()
+  applyTheme(chat.currentTheme)
 })
 </script>
 

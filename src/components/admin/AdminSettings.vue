@@ -76,7 +76,7 @@
                 </button>
                 <button type="submit" class="form-btn form-btn--primary" :disabled="addSubmitting">
                   <AppLoading v-if="addSubmitting" :size="14" color="#fff" glow />
-                  {{ $t('confirm.confirm') }}
+                  {{ $t('confirm.ok') }}
                 </button>
               </div>
             </form>

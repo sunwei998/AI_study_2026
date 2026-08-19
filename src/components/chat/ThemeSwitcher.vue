@@ -12,7 +12,12 @@
         <div :class="['theme-preview', theme]"></div>
       </button>
     </div>
-    <button class="theme-toggle" @click="isOpen = !isOpen" :title="$t('common.switchTheme')">
+    <button
+      class="theme-toggle"
+      :style="toggleStyle"
+      @click="isOpen = !isOpen"
+      :title="$t('common.switchTheme')"
+    >
       🎨
     </button>
   </div>
@@ -26,6 +31,18 @@ import { useChatStore } from '@/stores/chatStore'
 import { applyTheme } from '@/styles/themes'
 
 const { t } = useI18n()
+
+const props = withDefaults(defineProps<{ size?: number }>(), { size: 0 })
+
+const toggleStyle = computed(() =>
+  props.size
+    ? {
+        width: `${props.size}px`,
+        height: `${props.size}px`,
+        fontSize: `${props.size >= 36 ? 20 : 16}px`
+      }
+    : {}
+)
 
 const store = useChatStore()
 const isOpen = ref(false)
