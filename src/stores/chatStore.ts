@@ -1,37 +1,36 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { Message, ChatSession, ThemeType, ModelInfo } from '@/types/chat'
 import apiService, { type ChatHistoryItem } from '@/services/apiService'
 import { MODEL_LIST } from '@/config/models'
 import { i18n } from '@/locales'
 import { themes } from '@/styles/themes'
+import { useAuthStore } from '@/stores/authStore'
 
 const THEMES: ThemeType[] = Object.keys(themes) as ThemeType[]
 const MAX_HISTORY = 20
 const DEFAULT_MODEL = 'tencent/Hunyuan-MT-7B'
 
 export const useChatStore = defineStore('chat', () => {
+  const auth = useAuthStore()
+
   // 状态
   const sessions = ref<ChatSession[]>([])
+  const messageCache = ref<Record<string, Message[]>>({})
   const currentSessionId = ref<string>('')
   const currentTheme = ref<ThemeType>('dark')
   const loadingSessions = ref<Record<string, boolean>>({})
   const requestIds = new Map<string, string>()
 
   // 计算属性
-  const currentSession = computed(() => {
-    return sessions.value.find((s) => s.id === currentSessionId.value)
-  })
+  const currentSession = computed(
+    () => sessions.value.find((s) => s.id === currentSessionId.value) ?? null
+  )
 
-  const sortedSessions = computed(() => {
-    return sessions.value
-      .slice()
-      .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || a.createdAt - b.createdAt)
-  })
+  // 排序由后端统一决定（置顶最新在前，非置顶最近活跃在前）
+  const sortedSessions = computed(() => sessions.value)
 
-  const messages = computed(() => {
-    return currentSession.value?.messages || []
-  })
+  const messages = computed(() => messageCache.value[currentSessionId.value] || [])
 
   const isLoading = computed(() => {
     return currentSessionId.value ? !!loadingSessions.value[currentSessionId.value] : false
@@ -76,16 +75,8 @@ export const useChatStore = defineStore('chat', () => {
     return availableModels.value.find((m) => m.id === currentModel.value) || null
   })
 
-  const setModel = (model: ModelInfo) => {
-    const session = currentSession.value
-    if (session) {
-      session.model = model.id
-      saveSessions()
-    }
-  }
-
-  const resolveSessionModel = (session: ChatSession): string => {
-    if (session.model && availableModels.value.some((m) => m.id === session.model)) {
+  const resolveSessionModel = (session: ChatSession | null): string => {
+    if (session?.model && availableModels.value.some((m) => m.id === session.model)) {
       return session.model
     }
     return DEFAULT_MODEL
@@ -95,111 +86,156 @@ export const useChatStore = defineStore('chat', () => {
     return sessions.value.find((s) => s.id === sessionId)
   }
 
-  // 持久化
-  const saveSessions = () => {
-    try {
-      localStorage.setItem('chatSessions', JSON.stringify(sessions.value))
-    } catch (error) {
-      console.warn('保存会话失败:', error)
+  // 服务端列表同步
+  const applyList = (list: ChatSession[]) => {
+    sessions.value = list
+    if (list.length && !list.some((s) => s.id === currentSessionId.value)) {
+      currentSessionId.value = list[0].id
     }
   }
 
-  const loadSessions = () => {
+  const refreshSessions = async () => {
     try {
-      const saved = localStorage.getItem('chatSessions')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed)) {
-          parsed.forEach((s: ChatSession) => {
-            if (Array.isArray(s.messages)) {
-              s.messages.forEach((m: Message) => {
-                m.loading = false
-              })
-            }
-          })
-          sessions.value = parsed
-          if (sessions.value.length > 0 && !currentSessionId.value) {
-            currentSessionId.value = sessions.value[0].id
-          }
-        }
-      }
-    } catch (error) {
-      console.warn('加载会话数据失败，已重置:', error)
-      localStorage.removeItem('chatSessions')
-      sessions.value = []
+      applyList(await apiService.fetchSessions())
+    } catch {
+      // 保留当前内存数据
+    }
+  }
+
+  const getMessages = (sessionId?: string): Message[] => {
+    const id = sessionId || currentSessionId.value
+    if (!id) return []
+    if (!messageCache.value[id]) {
+      messageCache.value[id] = []
+    }
+    return messageCache.value[id]
+  }
+
+  const loadMessages = async (sessionId: string) => {
+    if (messageCache.value[sessionId] || loadingSessions.value[sessionId]) return
+    setSessionLoading(sessionId, true)
+    try {
+      messageCache.value[sessionId] = await apiService.fetchSessionMessages(sessionId)
+    } catch {
+      messageCache.value[sessionId] = []
+    } finally {
+      setSessionLoading(sessionId, false)
+    }
+  }
+
+  const selectSession = async (sessionId: string) => {
+    if (currentSessionId.value === sessionId) return
+    currentSessionId.value = sessionId
+    await loadMessages(sessionId)
+  }
+
+  const init = async () => {
+    await auth.init()
+    if (!auth.user) return
+    try {
+      applyList(await apiService.fetchSessions())
+    } catch {
+      // 未登录或后端不可用时静默
     }
     if (sessions.value.length === 0) {
-      createNewSession()
+      await createNewSession()
+    } else {
+      currentSessionId.value = sessions.value[0].id
+      await loadMessages(currentSessionId.value)
     }
   }
 
-  const createNewSession = () => {
-    const id = `session_${Date.now()}`
-    const newSession: ChatSession = {
-      id,
-      title: i18n.global.t('chat.sessionTitle', {
-        time: new Date().toLocaleString()
-      }),
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      pinned: false,
-      model: DEFAULT_MODEL,
-      webSearch: false
+  const createNewSession = async () => {
+    try {
+      applyList(await apiService.createSession())
+    } catch {
+      const id = `session_${Date.now()}`
+      sessions.value.unshift({
+        id,
+        title: '',
+        model: DEFAULT_MODEL,
+        webSearch: false,
+        pinned: false,
+        pinnedAt: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        messageCount: 0,
+        lastPreview: ''
+      })
+      currentSessionId.value = id
     }
-    sessions.value.push(newSession)
-    currentSessionId.value = id
-    saveSessions()
-    return id
+    return currentSessionId.value
   }
 
-  const deleteSession = (sessionId: string) => {
+  const deleteSession = async (sessionId: string) => {
     const requestId = requestIds.get(sessionId)
     if (requestId) {
       apiService.abort(requestId)
       requestIds.delete(sessionId)
       setSessionLoading(sessionId, false)
     }
-    sessions.value = sessions.value.filter((s) => s.id !== sessionId)
-    if (currentSessionId.value === sessionId) {
-      currentSessionId.value = sessions.value[0]?.id || ''
-      if (!currentSessionId.value) {
-        createNewSession()
-      }
+    delete messageCache.value[sessionId]
+    try {
+      applyList(await apiService.deleteSession(sessionId))
+    } catch {
+      sessions.value = sessions.value.filter((s) => s.id !== sessionId)
     }
-    saveSessions()
+    if (sessions.value.length === 0) {
+      await createNewSession()
+    } else if (!sessions.value.some((s) => s.id === currentSessionId.value)) {
+      currentSessionId.value = sessions.value[0].id
+      await loadMessages(currentSessionId.value)
+    }
   }
 
-  const togglePin = (sessionId: string) => {
+  const togglePin = async (sessionId: string) => {
     const session = sessions.value.find((s) => s.id === sessionId)
-    if (session) {
-      session.pinned = !session.pinned
-      saveSessions()
+    if (!session) return
+    try {
+      applyList(await apiService.patchSession(sessionId, { pinned: !session.pinned }))
+    } catch {
+      // 保留原状态
     }
   }
 
-  const setWebSearch = (enabled: boolean) => {
+  const setModel = async (model: ModelInfo) => {
     const session = currentSession.value
-    if (session) {
-      session.webSearch = enabled
-      saveSessions()
+    if (!session) return
+    try {
+      applyList(await apiService.patchSession(session.id, { model: model.id }))
+    } catch {
+      session.model = model.id
     }
   }
 
+  const setWebSearch = async (enabled: boolean) => {
+    const session = currentSession.value
+    if (!session) return
+    try {
+      applyList(await apiService.patchSession(session.id, { web_search: enabled }))
+    } catch {
+      session.webSearch = enabled
+    }
+  }
+
+  const updateSessionTitle = async (sessionId: string, title: string) => {
+    try {
+      applyList(await apiService.patchSession(sessionId, { title }))
+    } catch {
+      const session = getSession(sessionId)
+      if (session) session.title = title
+    }
+  }
+
+  // 本地消息操作（乐观更新；最终以服务端落库为准）
   const addMessage = (
     content: string,
     role: Message['role'] = 'user',
     sessionId?: string,
     images?: string[]
   ): Message => {
-    let session = sessionId ? getSession(sessionId) : currentSession.value
-    if (!session) {
-      if (!sessionId || !getSession(sessionId)) {
-        createNewSession()
-      }
-      session = sessionId ? getSession(sessionId) : currentSession.value
-    }
-    if (!session) {
+    const id = sessionId || currentSessionId.value
+    if (!id || !getSession(id)) {
       throw new Error('无法定位会话')
     }
     const message: Message = {
@@ -209,111 +245,93 @@ export const useChatStore = defineStore('chat', () => {
       timestamp: Date.now(),
       ...(images && images.length ? { images } : {})
     }
-    session.messages.push(message)
-    session.updatedAt = Date.now()
-    saveSessions()
+    const list = getMessages(id)
+    list.push(message)
+    const session = getSession(id)
+    if (session) {
+      session.messageCount += 1
+      session.updatedAt = message.timestamp
+      session.lastPreview = content.slice(0, 50)
+    }
     return message
   }
 
   const updateMessage = (messageId: string, content: string, sessionId?: string) => {
-    const session = sessionId ? getSession(sessionId) : currentSession.value
-    if (session) {
-      const message = session.messages.find((m) => m.id === messageId)
-      if (message) {
-        message.content = content
+    const id = sessionId || currentSessionId.value
+    const message = getMessages(id).find((m) => m.id === messageId)
+    if (message) {
+      message.content = content
+      const session = getSession(id)
+      if (session) {
         session.updatedAt = Date.now()
+        session.lastPreview = content.slice(0, 50)
       }
     }
   }
 
   const setMessageLoading = (messageId: string, loading: boolean, sessionId?: string) => {
-    const session = sessionId ? getSession(sessionId) : currentSession.value
+    const id = sessionId || currentSessionId.value
+    const message = getMessages(id).find((m) => m.id === messageId)
+    if (message) {
+      message.loading = loading
+    }
+  }
+
+  const deleteMessage = async (messageId: string, sessionId?: string) => {
+    const id = sessionId || currentSessionId.value
+    const list = getMessages(id)
+    const idx = list.findIndex((m) => m.id === messageId)
+    if (idx >= 0) list.splice(idx, 1)
+    const session = getSession(id)
+    if (session) session.messageCount = list.length
+    try {
+      applyList(await apiService.deleteMessage(id, messageId))
+    } catch {
+      // 忽略
+    }
+  }
+
+  const clearMessages = async () => {
+    const id = currentSessionId.value
+    if (!id) return
+    messageCache.value[id] = []
+    const session = getSession(id)
     if (session) {
-      const message = session.messages.find((m) => m.id === messageId)
-      if (message) {
-        message.loading = loading
-      }
+      session.messageCount = 0
+      session.lastPreview = ''
+      session.updatedAt = Date.now()
     }
-  }
-
-  const deleteMessage = (messageId: string) => {
-    if (currentSession.value) {
-      currentSession.value.messages = currentSession.value.messages.filter(
-        (m) => m.id !== messageId
-      )
-      currentSession.value.updatedAt = Date.now()
-      saveSessions()
-    }
-  }
-
-  const clearMessages = () => {
-    if (currentSession.value) {
-      currentSession.value.messages = []
-      currentSession.value.updatedAt = Date.now()
-      saveSessions()
+    try {
+      applyList(await apiService.clearSessionMessages(id))
+    } catch {
+      // 忽略
     }
   }
 
   /**
    * 组装发送给模型的对话历史（去除占位助手消息，限制条数防止超长）
    */
-  const buildHistory = (session: ChatSession, assistantMsgId: string): ChatHistoryItem[] => {
-    return session.messages
+  const buildHistory = (sessionId: string, assistantMsgId: string): ChatHistoryItem[] => {
+    return getMessages(sessionId)
       .filter((m) => m.id !== assistantMsgId)
       .slice(-MAX_HISTORY)
       .map((m) => ({ role: m.role, content: m.content, images: m.images }))
   }
 
   /**
-   * 发送消息并获取AI回复
-   */
-  const sendMessage = async (content: string, images: string[] = []) => {
-    if (!content.trim() && images.length === 0) return
-
-    // 捕获会话ID，避免请求期间切换会话导致更新错位
-    const sessionId = currentSessionId.value || createNewSession()
-    const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-
-    addMessage(content, 'user', sessionId, images)
-    const assistantMsg = addMessage('', 'assistant', sessionId)
-    setMessageLoading(assistantMsg.id, true, sessionId)
-    requestIds.set(sessionId, requestId)
-    setSessionLoading(sessionId, true)
-
-    try {
-      const session = getSession(sessionId)
-      if (!session) return
-      const response = await apiService.chat(
-        buildHistory(session, assistantMsg.id),
-        requestId,
-        resolveSessionModel(session),
-        session.webSearch
-      )
-      updateMessage(assistantMsg.id, response, sessionId)
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        return
-      }
-      const errorMsg = error instanceof Error ? error.message : i18n.global.t('common.errorOccurred')
-      updateMessage(assistantMsg.id, i18n.global.t('chat.error', { msg: errorMsg }), sessionId)
-    } finally {
-      setMessageLoading(assistantMsg.id, false, sessionId)
-      setSessionLoading(sessionId, false)
-      requestIds.delete(sessionId)
-      saveSessions()
-    }
-  }
-
-  /**
-   * 流式发送消息（逐字输出）
+   * 发送消息并获取AI回复（流式；会话与消息由后端 /api/chat 落库）
    */
   const sendMessageStream = async (content: string, images: string[] = []) => {
     if (!content.trim() && images.length === 0) return
 
-    const sessionId = currentSessionId.value || createNewSession()
+    let sessionId = currentSessionId.value
+    if (!sessionId || !getSession(sessionId)) {
+      await createNewSession()
+      sessionId = currentSessionId.value
+    }
     const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
-    addMessage(content, 'user', sessionId, images)
+    const userMsg = addMessage(content, 'user', sessionId, images)
     const assistantMsg = addMessage('', 'assistant', sessionId)
     setMessageLoading(assistantMsg.id, true, sessionId)
     requestIds.set(sessionId, requestId)
@@ -322,12 +340,23 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const session = getSession(sessionId)
       if (!session) return
-      const history = buildHistory(session, assistantMsg.id)
-      await apiService.chatStream(history, (chunk) => {
-        const currentContent =
-          getSession(sessionId)?.messages.find((m) => m.id === assistantMsg.id)?.content || ''
-        updateMessage(assistantMsg.id, currentContent + chunk, sessionId)
-      }, requestId, resolveSessionModel(session), session.webSearch)
+      const history = buildHistory(sessionId, assistantMsg.id)
+      await apiService.chatStream(
+        history,
+        (chunk) => {
+          const currentContent =
+            getMessages(sessionId).find((m) => m.id === assistantMsg.id)?.content || ''
+          updateMessage(assistantMsg.id, currentContent + chunk, sessionId)
+        },
+        requestId,
+        resolveSessionModel(session),
+        session.webSearch,
+        {
+          sessionId,
+          userMessageId: userMsg.id,
+          assistantMessageId: assistantMsg.id
+        }
+      )
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return
@@ -338,8 +367,12 @@ export const useChatStore = defineStore('chat', () => {
       setMessageLoading(assistantMsg.id, false, sessionId)
       setSessionLoading(sessionId, false)
       requestIds.delete(sessionId)
-      saveSessions()
+      await refreshSessions()
     }
+  }
+
+  const sendMessage = async (content: string, images: string[] = []) => {
+    await sendMessageStream(content, images)
   }
 
   /**
@@ -351,6 +384,13 @@ export const useChatStore = defineStore('chat', () => {
     if (requestId) {
       apiService.abort(requestId)
     }
+  }
+
+  const reset = () => {
+    sessions.value = []
+    messageCache.value = {}
+    currentSessionId.value = ''
+    requestIds.clear()
   }
 
   const setTheme = (theme: ThemeType) => {
@@ -366,15 +406,6 @@ export const useChatStore = defineStore('chat', () => {
       }
     } catch {
       // 忽略读取失败
-    }
-  }
-
-  const updateSessionTitle = (sessionId: string, title: string) => {
-    const session = sessions.value.find((s) => s.id === sessionId)
-    if (session) {
-      session.title = title
-      session.updatedAt = Date.now()
-      saveSessions()
     }
   }
 
@@ -394,6 +425,9 @@ export const useChatStore = defineStore('chat', () => {
     messages,
     availableThemes,
     // 方法
+    init,
+    refreshSessions,
+    selectSession,
     createNewSession,
     deleteSession,
     togglePin,
@@ -407,11 +441,10 @@ export const useChatStore = defineStore('chat', () => {
     abortCurrentRequest,
     setModel,
     setWebSearch,
+    updateSessionTitle,
     setTheme,
     loadTheme,
-    loadSessions,
     loadModels,
-    saveSessions,
-    updateSessionTitle
+    reset
   }
 })

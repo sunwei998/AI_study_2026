@@ -1,4 +1,4 @@
-import type { MessageRole, ModelInfo } from '@/types/chat'
+import type { MessageRole, ModelInfo, ChatSession, SessionPatch, ChatStreamMeta, Message } from '@/types/chat'
 import { i18n } from '@/locales'
 import { clearToken, getToken } from './token'
 import { notifyUnauthorized } from './unauthorized'
@@ -17,6 +17,14 @@ export interface ChatSuggestion {
 interface StreamChunk {
   choices?: Array<{ delta?: { content?: string } }>
   error?: string
+  meta?: ChatStreamMeta
+}
+
+export interface ChatStreamOptions {
+  sessionId?: string
+  userMessageId?: string
+  assistantMessageId?: string
+  onMeta?: (meta: ChatStreamMeta) => void
 }
 
 const STREAM_TIMEOUT = 90_000
@@ -39,7 +47,7 @@ function authHeaders(): Record<string, string> {
  * 解析单个 SSE 行（后端透传 OpenAI 兼容格式：data: {json}）
  * 返回 null 表示无可解析内容；content 表示增量文本；error 表示错误事件
  */
-function parseStreamLine(line: string): { content: string; error?: string } | null {
+function parseStreamLine(line: string): { content: string; error?: string; meta?: ChatStreamMeta } | null {
   const text = line.trim()
   if (!text || !text.startsWith('data:')) return null
   const data = text.slice(5).trim()
@@ -48,6 +56,9 @@ function parseStreamLine(line: string): { content: string; error?: string } | nu
     const json = JSON.parse(data) as StreamChunk
     if (typeof json.error === 'string' && json.error) {
       return { content: '', error: json.error }
+    }
+    if (json.meta && typeof json.meta.assistant_id === 'string') {
+      return { content: '', meta: json.meta }
     }
     const delta = json.choices?.[0]?.delta?.content
     return typeof delta === 'string' && delta ? { content: delta } : null
@@ -68,6 +79,104 @@ export async function fetchModels(): Promise<ModelInfo[]> {
   return data
 }
 
+async function handleJson(resp: Response): Promise<unknown> {
+  if (!resp.ok) {
+    if (resp.status === 401) {
+      clearToken()
+      notifyUnauthorized()
+      throw new Error(i18n.global.t('auth.expired'))
+    }
+    let detail = ''
+    try {
+      const err = await resp.json()
+      detail = err?.detail || ''
+    } catch {
+      // ignore
+    }
+    throw new Error(detail || i18n.global.t('api.requestFailed', { status: resp.status }))
+  }
+  return resp.json()
+}
+
+function mapSession(raw: Record<string, unknown>): ChatSession {
+  return {
+    id: String(raw.id),
+    title: (raw.title as string) ?? '',
+    model: (raw.model as string) ?? '',
+    webSearch: !!raw.web_search,
+    pinned: !!raw.pinned,
+    pinnedAt: (raw.pinned_at as number | null) ?? null,
+    createdAt: raw.created_at as number,
+    updatedAt: raw.updated_at as number,
+    messageCount: (raw.message_count as number) ?? 0,
+    lastPreview: (raw.last_preview as string) ?? ''
+  }
+}
+
+function mapSessionList(raw: unknown): ChatSession[] {
+  return Array.isArray(raw) ? raw.map((r) => mapSession(r as Record<string, unknown>)) : []
+}
+
+export async function fetchSessions(): Promise<ChatSession[]> {
+  return mapSessionList(await handleJson(await fetch(`${API_BASE}/sessions`, { headers: authHeaders() })))
+}
+
+export async function createSession(): Promise<ChatSession[]> {
+  return mapSessionList(
+    await handleJson(
+      await fetch(`${API_BASE}/sessions`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({}) })
+    )
+  )
+}
+
+export async function patchSession(sessionId: string, patch: SessionPatch): Promise<ChatSession[]> {
+  return mapSessionList(
+    await handleJson(
+      await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify(patch)
+      })
+    )
+  )
+}
+
+export async function deleteSession(sessionId: string): Promise<ChatSession[]> {
+  return mapSessionList(
+    await handleJson(
+      await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE', headers: authHeaders() })
+    )
+  )
+}
+
+export async function clearSessionMessages(sessionId: string): Promise<ChatSession[]> {
+  return mapSessionList(
+    await handleJson(
+      await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/messages`, {
+        method: 'DELETE',
+        headers: authHeaders()
+      })
+    )
+  )
+}
+
+export async function deleteMessage(sessionId: string, messageId: string): Promise<ChatSession[]> {
+  return mapSessionList(
+    await handleJson(
+      await fetch(
+        `${API_BASE}/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}`,
+        { method: 'DELETE', headers: authHeaders() }
+      )
+    )
+  )
+}
+
+export async function fetchSessionMessages(sessionId: string): Promise<Message[]> {
+  return (await handleJson(
+    await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/messages`, { headers: authHeaders() })
+  )) as Message[]
+}
+
 /**
  * 首页推荐热词（后端可配置，取前 6 条）
  */
@@ -84,13 +193,15 @@ export async function fetchSuggestions(): Promise<ChatSuggestion[]> {
  * 流式调用后端 /api/chat（SSE 逐字输出）
  * @param model - 模型 ID（每个会话独立）
  * @param requestId - 请求唯一标识，用于取消
+ * @param options - 会话持久化相关（session_id 与消息 id，由后端落库）
  */
 async function chatStream(
   messages: ChatHistoryItem[],
   onChunk: (chunk: string) => void,
   requestId: string,
   model: string,
-  webSearch = false
+  webSearch = false,
+  options: ChatStreamOptions = {}
 ): Promise<void> {
   const controller = new AbortController()
   abortControllers.set(requestId, controller)
@@ -98,7 +209,14 @@ async function chatStream(
     const response = await fetch(`${API_BASE}/chat`, {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ model, messages, web_search: webSearch }),
+      body: JSON.stringify({
+        model,
+        messages,
+        web_search: webSearch,
+        session_id: options.sessionId,
+        user_message_id: options.userMessageId,
+        assistant_message_id: options.assistantMessageId
+      }),
       signal: controller.signal
     })
     if (!response.ok) {
@@ -139,6 +257,9 @@ async function chatStream(
           if (parsed?.error) {
             throw new Error(parsed.error)
           }
+          if (parsed?.meta) {
+            options.onMeta?.(parsed.meta)
+          }
           if (parsed?.content) {
             onChunk(parsed.content)
           }
@@ -165,10 +286,11 @@ async function chat(
   messages: ChatHistoryItem[],
   requestId: string,
   model: string,
-  webSearch = false
+  webSearch = false,
+  options: ChatStreamOptions = {}
 ): Promise<string> {
   let full = ''
-  await chatStream(messages, (chunk) => (full += chunk), requestId, model, webSearch)
+  await chatStream(messages, (chunk) => (full += chunk), requestId, model, webSearch, options)
   return full
 }
 
@@ -183,5 +305,12 @@ export default {
   chatStream,
   abort: abortRequest,
   fetchModels,
-  fetchSuggestions
+  fetchSuggestions,
+  fetchSessions,
+  createSession,
+  patchSession,
+  deleteSession,
+  clearSessionMessages,
+  deleteMessage,
+  fetchSessionMessages
 }

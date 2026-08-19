@@ -46,7 +46,7 @@
         </span>
         <ModelSelector />
         <button
-          v-if="currentSession && currentSession.messages.length > 0"
+          v-if="currentSession && (currentSession.messageCount ?? 0) > 0"
           class="header-btn"
           @click="askClearSession"
           :title="$t('common.clearSession')"
@@ -127,7 +127,7 @@
             <div class="session-content">
               <div class="session-title">{{ session.title }}</div>
               <div class="session-meta">
-                {{ $t('chat.messageCount', { count: session.messages.length }) }}
+                {{ $t('chat.messageCount', { count: session.messageCount }) }}
               </div>
             </div>
             <button
@@ -243,7 +243,7 @@ const messages = computed(() => store.messages)
 const isLoading = computed(() => store.isLoading)
 
 const canCreateNew = computed(
-  () => !currentSession.value || currentSession.value.messages.length > 0
+  () => !currentSession.value || (currentSession.value.messageCount ?? 0) > 0
 )
 
 const searchTerm = ref('')
@@ -332,8 +332,8 @@ const toggleCollapsed = () => {
 }
 
 onMounted(() => {
-  // 加载本地数据
-  store.loadSessions()
+  // 会话/消息从后端加载（按账号隔离）
+  store.init()
   store.loadTheme()
   store.loadModels()
   applyTheme(store.currentTheme)
@@ -342,17 +342,17 @@ onMounted(() => {
   }
 })
 
-const createNew = () => {
-  store.createNewSession()
+const createNew = async () => {
+  await store.createNewSession()
 }
 
-const selectSession = (sessionId: string) => {
-  store.currentSessionId = sessionId
+const selectSession = async (sessionId: string) => {
+  await store.selectSession(sessionId)
   closeSidebar()
 }
 
-const deleteSession = (sessionId: string) => {
-  store.deleteSession(sessionId)
+const deleteSession = async (sessionId: string) => {
+  await store.deleteSession(sessionId)
   closeSidebar()
 }
 
@@ -360,7 +360,7 @@ const togglePin = async (sessionId: string) => {
   if (pinningId.value) return
   pinningId.value = sessionId
   await sleep(300)
-  store.togglePin(sessionId)
+  await store.togglePin(sessionId)
   pinningId.value = null
 }
 
@@ -431,6 +431,7 @@ const askLogout = () => {
     message: t('auth.logoutConfirm'),
     confirmText: t('auth.logoutConfirmBtn'),
     onConfirm: () => {
+      store.reset()
       auth.logout()
       router.replace('/login')
     }
@@ -462,8 +463,8 @@ const handleRegenerate = async (message: Message) => {
 
   if (userContent || userImages.length) {
     // 删除该助手消息及对应的用户消息，再重新发送
-    store.deleteMessage(message.id)
-    if (userId) store.deleteMessage(userId)
+    await store.deleteMessage(message.id)
+    if (userId) await store.deleteMessage(userId)
     await store.sendMessage(userContent, userImages)
   }
 }

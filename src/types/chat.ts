@@ -27,12 +27,30 @@ export interface SendPayload {
 export interface ChatSession {
   id: string
   title: string
-  messages: Message[]
+  model: string
+  webSearch: boolean
+  pinned: boolean
+  pinnedAt: number | null
   createdAt: number
   updatedAt: number
-  pinned?: boolean
+  messageCount: number
+  lastPreview: string
+}
+
+export interface SessionPatch {
+  title?: string
   model?: string
-  webSearch?: boolean
+  web_search?: boolean
+  pinned?: boolean
+}
+
+export interface ChatStreamMeta {
+  assistant_id: string
+  usage?: {
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  }
 }
 
 export interface ThemeConfig {
