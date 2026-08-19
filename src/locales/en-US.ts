@@ -148,7 +148,9 @@ export default {
     saveFailed: 'Save failed: {msg}',
     avatarNotImage: 'Please choose an image file',
     avatarTooLarge: 'Image must be under 8MB',
-    avatarReadFailed: 'Failed to read image'
+    avatarReadFailed: 'Failed to read image',
+    cropTitle: 'Crop Avatar',
+    cropConfirm: 'Confirm'
   },
   console: {
     title: 'Admin Console',

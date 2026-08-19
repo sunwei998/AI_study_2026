@@ -584,14 +584,15 @@ function buildUserLabelOption(
   if (m.labelTier === 1) {
     return {
       ...base,
-      formatter: `{a| }${m.username}`,
+      formatter: `{a|}${m.username}`,
       rich: {
         a: {
           backgroundColor: { image: avatarSrc(m.avatar) },
           width: 16,
           height: 16,
           borderRadius: 8,
-          align: 'center'
+          align: 'center',
+          padding: [0, 5, 0, 0]
         }
       }
     }
@@ -719,7 +720,7 @@ function buildMapOption(
         coordinateSystem: 'geo',
         zlevel: 2,
         rippleEffect: { brushType: 'stroke', scale: 4.5, period: 3 },
-        symbolSize: (val: [number, number, number]) => 8 + (val[2] ?? 1) * 6,
+        symbolSize: 10,
         label: {
           show: false,
           position: 'right',
@@ -748,7 +749,7 @@ function buildMapOption(
         coordinateSystem: 'geo',
         zlevel: 3,
         rippleEffect: { brushType: 'stroke', scale: 2.5, period: 3 },
-        symbolSize: 6,
+        symbolSize: 10,
         label: {
           show: true,
           position: 'right',

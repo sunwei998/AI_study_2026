@@ -42,11 +42,6 @@
           </div>
 
           <div class="sheet-section">
-            <button class="sheet-action" @click="editProfile">
-              <AppIcon name="lucide:user-pen" :size="16" />
-              <span>{{ $t('profile.title') }}</span>
-            </button>
-
             <div class="sheet-row">
               <span class="sheet-row-label">
                 <AppIcon name="lucide:languages" :size="16" />
@@ -76,6 +71,10 @@
             <button v-if="auth.isAdmin" class="sheet-action" @click="goAdmin">
               <AppIcon name="lucide:settings-2" :size="16" />
               <span>{{ $t('console.title') }}</span>
+            </button>
+            <button class="sheet-action" @click="editProfile">
+              <AppIcon name="lucide:user-pen" :size="16" />
+              <span>{{ $t('profile.title') }}</span>
             </button>
             <button class="sheet-action sheet-action--danger" @click="requestLogout">
               <AppIcon name="lucide:log-out" :size="16" />

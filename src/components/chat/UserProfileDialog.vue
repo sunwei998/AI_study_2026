@@ -15,6 +15,7 @@
           aria-modal="true"
           :aria-label="$t('profile.title')"
         >
+          <span class="profile-accent"></span>
           <div v-if="device.isMobile" class="profile-grab" @pointerdown="onGrabDown" @pointermove="onGrabMove" @pointerup="onGrabUp" @pointercancel="onGrabUp">
             <span class="profile-handle"></span>
           </div>
@@ -117,6 +118,8 @@
       </div>
     </Transition>
   </Teleport>
+
+  <AvatarCropDialog v-model:visible="cropVisible" :image="cropImage" @confirm="onCropConfirm" />
 </template>
 
 <script setup lang="ts">
@@ -126,8 +129,9 @@ import { useAuthStore } from '@/stores/authStore'
 import { useDevice } from '@/composables/useDevice'
 import { useToast } from '@/composables/useToast'
 import { checkUsername } from '@/services/authService'
-import { fileToAvatarDataUrl } from '@/utils/image'
+import { readFileAsDataUrl } from '@/utils/image'
 import RegionSelect, { type RegionValue } from '@/components/common/RegionSelect.vue'
+import AvatarCropDialog from '@/components/chat/AvatarCropDialog.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 
@@ -140,7 +144,7 @@ const device = useDevice()
 const { showToast } = useToast()
 
 const username = ref('')
-const age = ref<string>('')
+const age = ref<string | number>('')
 const gender = ref('')
 const region = ref<RegionValue>({ province: '', city: '', district: '' })
 const avatar = ref('')
@@ -152,6 +156,8 @@ const usernameAvailable = ref<boolean | null>(null)
 let usernameTimer: ReturnType<typeof setTimeout> | null = null
 
 const fileInput = ref<HTMLInputElement | null>(null)
+const cropVisible = ref(false)
+const cropImage = ref('')
 
 const usernameLocked = computed(() => (auth.user?.username_changes_left ?? 3) <= 0)
 
@@ -254,13 +260,19 @@ const onFileChange = async () => {
   const file = fileInput.value?.files?.[0]
   if (!file) return
   try {
-    avatar.value = await fileToAvatarDataUrl(file)
+    cropImage.value = await readFileAsDataUrl(file)
+    cropVisible.value = true
   } catch (err) {
     const msg = err instanceof Error ? t(`profile.${err.message}`) : t('profile.avatarReadFailed')
     showToast(msg, 'error')
   } finally {
     if (fileInput.value) fileInput.value.value = ''
   }
+}
+
+const onCropConfirm = (dataUrl: string) => {
+  avatar.value = dataUrl
+  cropVisible.value = false
 }
 
 const removeAvatar = () => {
@@ -282,7 +294,8 @@ const save = async () => {
     error.value = t('auth.usernameChecking')
     return
   }
-  const ageVal = age.value.trim()
+  const ageRaw = age.value
+  const ageVal = typeof ageRaw === 'number' ? (Number.isNaN(ageRaw) ? '' : String(ageRaw)) : ageRaw.trim()
   if (ageVal !== '') {
     const n = Number(ageVal)
     if (!Number.isInteger(n) || n < 1 || n > 120) {
@@ -419,9 +432,20 @@ const onKeydown = (e: KeyboardEvent) => {
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), 0 0 40px var(--color-glow);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
   overflow: hidden;
   transition: transform 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.profile-accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .profile-panel--mobile {
@@ -698,6 +722,7 @@ const onKeydown = (e: KeyboardEvent) => {
 }
 
 .profile-btn {
+  flex: 1;
   height: 44px;
   border-radius: 12px;
   font-family: var(--font-display);
@@ -717,7 +742,6 @@ const onKeydown = (e: KeyboardEvent) => {
 }
 
 .profile-btn--save {
-  flex: 1.6;
   border: none;
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
   color: #fff;

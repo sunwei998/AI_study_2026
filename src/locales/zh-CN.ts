@@ -143,7 +143,9 @@ export default {
     saveFailed: '保存失败：{msg}',
     avatarNotImage: '请选择图片文件',
     avatarTooLarge: '图片不能超过 8MB',
-    avatarReadFailed: '图片读取失败'
+    avatarReadFailed: '图片读取失败',
+    cropTitle: '裁剪头像',
+    cropConfirm: '确认'
   },
   console: {
     title: '管理控制台',

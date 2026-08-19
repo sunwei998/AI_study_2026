@@ -32,10 +32,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const login = async (username: string, password: string) => {
-    const { token, user: u } = await apiLogin(username, password)
+    const { token } = await apiLogin(username, password)
     setToken(token)
-    user.value = u
-    return u
+    user.value = await fetchMe()
+    return user.value
   }
 
   const register = async (
@@ -45,10 +45,10 @@ export const useAuthStore = defineStore('auth', () => {
     age?: number,
     gender?: string
   ) => {
-    const { token, user: u } = await apiRegister(username, password, region, age, gender)
+    const { token } = await apiRegister(username, password, region, age, gender)
     setToken(token)
-    user.value = u
-    return u
+    user.value = await fetchMe()
+    return user.value
   }
 
   const logout = () => {

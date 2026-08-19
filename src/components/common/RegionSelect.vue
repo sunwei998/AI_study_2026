@@ -98,6 +98,7 @@ const onDistrict = (e: Event) => {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+  min-width: 0;
 }
 
 .region-select--vertical {
@@ -105,6 +106,8 @@ const onDistrict = (e: Event) => {
 }
 
 .region-select-item {
+  min-width: 0;
+  width: 100%;
   height: 44px;
   padding: 0 30px 0 10px;
   border-radius: var(--radius-md);
@@ -122,6 +125,9 @@ const onDistrict = (e: Event) => {
   background-position: calc(100% - 16px) 19px, calc(100% - 11px) 19px;
   background-size: 5px 5px;
   background-repeat: no-repeat;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .region-select-item.filled {
