@@ -32,11 +32,30 @@
           <span class="map-stars" :style="{ boxShadow: stars1 }"></span>
           <span class="map-stars map-stars--accent" :style="{ boxShadow: stars2 }"></span>
           <div class="map-box" ref="mapRef"></div>
+          <button
+            v-if="currentProvince"
+            class="map-back"
+            :title="$t('console.mapBack')"
+            @click="backToNational"
+          >
+            <AppIcon name="lucide:arrow-left" :size="15" />
+            <span>{{ $t('console.mapBack') }}</span>
+          </button>
+          <div v-if="cityLoading" class="map-loading-overlay">
+            <AppLoading :size="22" glow />
+          </div>
+          <div v-else-if="currentProvince" class="map-focus-chip">
+            {{ $t('console.mapCityTitle', { name: currentProvince }) }}
+          </div>
+          <div v-else-if="hotProvince" class="map-focus-chip">
+            {{ $t('console.mapHotProvince', { name: hotProvince }) }}
+          </div>
           <span class="map-corner map-corner--tl"></span>
           <span class="map-corner map-corner--tr"></span>
           <span class="map-corner map-corner--bl"></span>
           <span class="map-corner map-corner--br"></span>
         </div>
+        <p v-if="cityError" class="page-error">{{ cityError }}</p>
       </section>
 
       <section class="region-card">
@@ -76,6 +95,7 @@ import type { RegionStat, RegionTopUser } from '@/types/admin'
 import { fetchRegionStats } from '@/services/adminService'
 import { useChatStore } from '@/stores/chatStore'
 import AppLoading from '@/components/common/AppLoading.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
 import chinaGeo from '@/assets/maps/china.json'
 import cityCoords from '@/assets/maps/city-coords.json'
 
@@ -90,6 +110,25 @@ echarts.use([
 
 type CityCoords = Record<string, { lng: number; lat: number }>
 
+interface GeoFeature {
+  type: string
+  properties: {
+    name: string
+    level?: string
+    adcode?: number
+    centroid?: [number, number]
+    center?: [number, number]
+  }
+  geometry: { type: string; coordinates: unknown }
+}
+
+interface GeoJson {
+  type: string
+  features: GeoFeature[]
+}
+
+type BBox = [[number, number], [number, number]]
+
 const { t } = useI18n()
 const chat = useChatStore()
 
@@ -97,6 +136,26 @@ const stats = ref<RegionStat[]>([])
 const loading = ref(true)
 const error = ref('')
 const mapRef = ref<HTMLDivElement | null>(null)
+
+const provinceFeatures = (chinaGeo.features as unknown as GeoFeature[]).filter(
+  (f) => (f.properties.level ?? 'province') === 'province'
+)
+const provinceCentroid = new Map<string, [number, number]>()
+const provinceByAdcode = new Map<number, GeoFeature>()
+for (const f of provinceFeatures) {
+  if (f.properties.centroid) provinceCentroid.set(f.properties.name, f.properties.centroid)
+  if (f.properties.adcode) provinceByAdcode.set(f.properties.adcode, f)
+}
+
+const MUNICIPALITIES = new Set(['北京市', '天津市', '上海市', '重庆市'])
+
+const currentProvince = ref<string | null>(null)
+const cityLoading = ref(false)
+const cityError = ref('')
+const cityGeoCache = new Map<number, GeoJson>()
+const bboxCache = new Map<string, BBox>()
+const nationalView = ref<{ center?: [number, number]; zoom?: number }>({})
+const provinceView = ref<{ center?: [number, number]; zoom?: number }>({})
 
 let chart: echarts.ECharts | null = null
 
@@ -111,32 +170,10 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
 }
 
-function contrastFromPrimary(hex: string): string {
-  const m = hex.replace('#', '')
-  const full = m.length === 3 ? m.split('').map((c) => c + c).join('') : m
-  const n = parseInt(full, 16)
-  const r = ((n >> 16) & 255) / 255
-  const g = ((n >> 8) & 255) / 255
-  const b = (n & 255) / 255
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  let h = 0
-  let s = 0
-  const l = (max + min) / 2
-  if (max !== min) {
-    const d = max - min
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-    if (max === r) h = (g - b) / d + (g < b ? 6 : 0)
-    else if (max === g) h = (b - r) / d + 2
-    else h = (r - g) / d + 4
-    h *= 60
-  }
-  h = (h + 150) % 360
-  s = Math.max(s, 0.88)
-  const l2 = 0.62
-  const c = (1 - Math.abs(2 * l2 - 1)) * s
+function hslToHex(h: number, s: number, l: number): string {
+  const c = (1 - Math.abs(2 * l - 1)) * s
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
-  const mh = l2 - c / 2
+  const mh = l - c / 2
   let rp = 0
   let gp = 0
   let bp = 0
@@ -164,6 +201,101 @@ function contrastFromPrimary(hex: string): string {
       .toString(16)
       .padStart(2, '0')
   return `#${to(rp)}${to(gp)}${to(bp)}`
+}
+
+function hueOf(hex: string): number {
+  const m = hex.replace('#', '')
+  const full = m.length === 3 ? m.split('').map((c) => c + c).join('') : m
+  const n = parseInt(full, 16)
+  const r = ((n >> 16) & 255) / 255
+  const g = ((n >> 8) & 255) / 255
+  const b = (n & 255) / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  if (max === min) return 0
+  const d = max - min
+  let h = 0
+  if (max === r) h = (g - b) / d + (g < b ? 6 : 0)
+  else if (max === g) h = (b - r) / d + 2
+  else h = (r - g) / d + 4
+  return h * 60
+}
+
+function contrastFromPrimary(hex: string): string {
+  const h = hueOf(hex)
+  const COOL_START = 130
+  const COOL_END = 310
+  if (h >= COOL_START && h <= COOL_END) {
+    return hslToHex(8, 0.92, 0.62)
+  }
+  return hslToHex((h + 150) % 360, Math.max(0.88, 0.75), 0.62)
+}
+
+function computeBBox(features: GeoFeature[]): BBox {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  const walk = (coords: unknown): void => {
+    if (typeof coords === 'number') return
+    const arr = coords as unknown[]
+    if (arr.length === 2 && typeof arr[0] === 'number' && typeof arr[1] === 'number') {
+      const x = arr[0] as number
+      const y = arr[1] as number
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+      return
+    }
+    for (const c of arr) walk(c)
+  }
+  for (const f of features) walk(f.geometry.coordinates)
+  return [
+    [minX, minY],
+    [maxX, maxY]
+  ]
+}
+
+function provinceBBox(name: string): BBox | null {
+  if (bboxCache.has(name)) return bboxCache.get(name)!
+  const feat = provinceFeatures.find((f) => f.properties.name === name)
+  if (!feat) return null
+  const box = computeBBox([feat])
+  bboxCache.set(name, box)
+  return box
+}
+
+function registerMap(name: string, features: GeoFeature[]): void {
+  if (echarts.getMap(name)) return
+  echarts.registerMap(name, { type: 'FeatureCollection', features } as unknown as Parameters<typeof echarts.registerMap>[1])
+}
+
+function normalizeCity(city: string): string {
+  if (!city) return ''
+  return city
+    .replace(/市$/, '')
+    .replace(/地区$/, '')
+    .replace(/自治州$/, '')
+    .replace(/盟$/, '')
+}
+
+async function loadCityGeo(adcode: number): Promise<GeoJson | null> {
+  if (cityGeoCache.has(adcode)) return cityGeoCache.get(adcode)!
+  cityLoading.value = true
+  cityError.value = ''
+  try {
+    const res = await fetch(`https://geo.datav.aliyun.com/areas_v3/bound/${adcode}_full.json`)
+    if (!res.ok) throw new Error('fetch failed')
+    const gj = (await res.json()) as GeoJson
+    cityGeoCache.set(adcode, gj)
+    return gj
+  } catch {
+    cityError.value = t('console.mapCityLoadFailed')
+    return null
+  } finally {
+    cityLoading.value = false
+  }
 }
 
 function mapPalette() {
@@ -215,28 +347,8 @@ function dotColor(count: number): string {
   return colors[Math.min(count - 1, colors.length - 1)] ?? colors[0]
 }
 
-function normalizeCity(city: string): string {
-  if (!city) return ''
-  return city
-    .replace(/市$/, '')
-    .replace(/地区$/, '')
-    .replace(/自治州$/, '')
-    .replace(/盟$/, '')
-}
-
 function registerChinaMap(): void {
-  if (echarts.getMap('china')) return
-  const provinceFeatures = {
-    type: 'FeatureCollection' as const,
-    features: (chinaGeo.features as {
-      type: string
-      properties: { level?: string }
-      geometry: unknown
-    }[]).filter(
-      (f) => (f.properties.level ?? 'province') === 'province'
-    )
-  }
-  echarts.registerMap('china', provinceFeatures as unknown as Parameters<typeof echarts.registerMap>[1])
+  registerMap('china', provinceFeatures)
 }
 
 function fmtTokens(n: number): string {
@@ -299,61 +411,36 @@ function buildTipHtml(
   </div>`
 }
 
-function render(): void {
-  if (!mapRef.value) return
-  const pal = mapPalette()
-  const contrast = contrastFromPrimary(pal.primary)
-
-  registerChinaMap()
-
-  const provinceInfo = new Map<string, { count: number; topUsers: RegionTopUser[] }>()
-  const points: {
-    name: string
-    value: [number, number, number]
-    topUsers: RegionTopUser[]
-  }[] = []
-
-  const provinceCentroid = new Map<string, [number, number]>()
-  for (const f of chinaGeo.features as {
-    properties: { name: string; centroid?: [number, number] }
-  }[]) {
-    if (f.properties.centroid) {
-      provinceCentroid.set(f.properties.name, f.properties.centroid)
-    }
-  }
-  const coords = cityCoords as unknown as CityCoords
-
+const hotProvince = computed(() => {
+  let best = ''
+  let max = 0
   for (const r of stats.value) {
-    if (r.province) {
-      const cur = provinceInfo.get(r.province) ?? { count: 0, topUsers: [] as RegionTopUser[] }
-      cur.count += r.count
-      cur.topUsers.push(...r.top_users)
-      provinceInfo.set(r.province, cur)
-    }
-    const name = [r.province, r.city, r.district].filter(Boolean).join(' ')
-    let coord: [number, number] | undefined
-    if (r.city) {
-      const p = coords[normalizeCity(r.city)]
-      if (p) coord = [p.lng, p.lat]
-    }
-    if (!coord && r.province) {
-      coord = provinceCentroid.get(r.province)
-    }
-    if (coord) {
-      points.push({ name, value: [coord[0], coord[1], r.count], topUsers: r.top_users })
+    if (r.province && r.count > max) {
+      max = r.count
+      best = r.province
     }
   }
+  return best || ''
+})
 
-  for (const info of provinceInfo.values()) {
-    info.topUsers.sort((a, b) => b.requests - a.requests || b.total_tokens - a.total_tokens)
-    info.topUsers = info.topUsers.slice(0, 3)
-  }
+interface MapPoint {
+  name: string
+  value: [number, number, number]
+  topUsers: RegionTopUser[]
+  province: string
+}
 
-  const maxCount = Math.max(1, ...[...provinceInfo.values()].map((v) => v.count))
-  const heat = [...provinceInfo.entries()].map(([name, info]) => ({ name, value: info.count }))
-
-  chart = echarts.init(mapRef.value)
-  chart.setOption({
+function buildMapOption(
+  pal: ReturnType<typeof mapPalette>,
+  contrast: string,
+  mapName: string,
+  lookup: (name: string) => { count: number; topUsers: RegionTopUser[] },
+  maxCount: number,
+  heat: { name: string; value: number }[],
+  points: MapPoint[],
+  geoView: { center?: [number, number]; zoom?: number } | { boundingCoords?: BBox }
+): echarts.EChartsCoreOption {
+  return {
     tooltip: {
       trigger: 'item',
       enterable: true,
@@ -374,7 +461,7 @@ function render(): void {
         let count = 0
         let top: RegionTopUser[] = []
         if (p.seriesType === 'map') {
-          const info = provinceInfo.get(p.name)
+          const info = lookup(p.name)
           if (info) {
             count = info.count
             top = info.topUsers
@@ -407,11 +494,11 @@ function render(): void {
       }
     },
     geo: {
-      map: 'china',
+      map: mapName,
       roam: true,
-      zoom: 1.05,
-      scaleLimit: { min: 0.8, max: 6 },
+      scaleLimit: { min: 0.8, max: 8 },
       label: { show: false, color: hexToRgba(pal.text, 0.7), fontSize: 10 },
+      ...geoView,
       itemStyle: {
         areaColor: {
           type: 'radial',
@@ -467,10 +554,162 @@ function render(): void {
           shadowBlur: 18,
           shadowOffsetY: 4
         },
-        data: points.map((p) => ({ name: p.name, value: p.value, topUsers: p.topUsers }))
+        data: points.map((p) => ({
+          name: p.name,
+          value: p.value,
+          topUsers: p.topUsers,
+          province: p.province
+        }))
       }
     ]
+  }
+}
+
+function sortTop(list: RegionTopUser[]): RegionTopUser[] {
+  return [...list]
+    .sort((a, b) => b.requests - a.requests || b.total_tokens - a.total_tokens)
+    .slice(0, 3)
+}
+
+async function render(): Promise<void> {
+  if (!mapRef.value) return
+  const pal = mapPalette()
+  const contrast = contrastFromPrimary(pal.primary)
+  chart?.dispose()
+  chart = null
+
+  if (currentProvince.value) {
+    const provFeature = provinceFeatures.find((f) => f.properties.name === currentProvince.value)
+    const adcode = provFeature?.properties.adcode
+    if (!provFeature || !adcode) {
+      currentProvince.value = null
+      return render()
+    }
+    const gj = await loadCityGeo(adcode)
+    if (!gj) {
+      currentProvince.value = null
+      return render()
+    }
+    const cityName = `prov_${adcode}`
+    registerMap(cityName, gj.features)
+    const isMuni = MUNICIPALITIES.has(currentProvince.value)
+    const regionInfo = new Map<string, { count: number; topUsers: RegionTopUser[] }>()
+    const points: MapPoint[] = []
+    for (const r of stats.value) {
+      if (r.province !== currentProvince.value) continue
+      const key = isMuni ? r.district || r.city : r.city || r.province
+      if (!key) continue
+      const cur = regionInfo.get(key) ?? { count: 0, topUsers: [] as RegionTopUser[] }
+      cur.count += r.count
+      cur.topUsers.push(...r.top_users)
+      regionInfo.set(key, cur)
+      const feat = gj.features.find((f) => f.properties.name === key)
+      let coord: [number, number] | undefined
+      if (feat?.properties.centroid) coord = feat.properties.centroid
+      else if (feat?.properties.center) coord = feat.properties.center
+      if (!coord && !isMuni) {
+        const p = (cityCoords as unknown as CityCoords)[normalizeCity(r.city)]
+        if (p) coord = [p.lng, p.lat]
+      }
+      if (!coord) coord = provinceCentroid.get(r.province)
+      if (coord) {
+        points.push({
+          name: [r.province, r.city, r.district].filter(Boolean).join(' '),
+          value: [coord[0], coord[1], r.count],
+          topUsers: r.top_users,
+          province: r.province
+        })
+      }
+    }
+    for (const info of regionInfo.values()) info.topUsers = sortTop(info.topUsers)
+    const maxCount = Math.max(1, ...[...regionInfo.values()].map((v) => v.count))
+    const heat = [...regionInfo.entries()].map(([name, info]) => ({ name, value: info.count }))
+    const geoView = provinceView.value.center
+      ? { center: provinceView.value.center, zoom: provinceView.value.zoom }
+      : { boundingCoords: computeBBox(gj.features) }
+    chart = echarts.init(mapRef.value)
+    chart.setOption(
+      buildMapOption(pal, contrast, cityName, (n) => regionInfo.get(n) ?? { count: 0, topUsers: [] }, maxCount, heat, points, geoView)
+    )
+    bindEvents()
+    return
+  }
+
+  registerChinaMap()
+  const provinceInfo = new Map<string, { count: number; topUsers: RegionTopUser[] }>()
+  const points: MapPoint[] = []
+  const coords = cityCoords as unknown as CityCoords
+
+  for (const r of stats.value) {
+    if (r.province) {
+      const cur = provinceInfo.get(r.province) ?? { count: 0, topUsers: [] as RegionTopUser[] }
+      cur.count += r.count
+      cur.topUsers.push(...r.top_users)
+      provinceInfo.set(r.province, cur)
+    }
+    const name = [r.province, r.city, r.district].filter(Boolean).join(' ')
+    let coord: [number, number] | undefined
+    if (r.city) {
+      const p = coords[normalizeCity(r.city)]
+      if (p) coord = [p.lng, p.lat]
+    }
+    if (!coord && r.province) {
+      coord = provinceCentroid.get(r.province)
+    }
+    if (coord) {
+      points.push({ name, value: [coord[0], coord[1], r.count], topUsers: r.top_users, province: r.province })
+    }
+  }
+
+  for (const info of provinceInfo.values()) info.topUsers = sortTop(info.topUsers)
+
+  const maxCount = Math.max(1, ...[...provinceInfo.values()].map((v) => v.count))
+  const heat = [...provinceInfo.entries()].map(([name, info]) => ({ name, value: info.count }))
+
+  const geoView = nationalView.value.center
+    ? { center: nationalView.value.center, zoom: nationalView.value.zoom }
+    : hotProvince.value
+      ? { boundingCoords: provinceBBox(hotProvince.value) ?? undefined }
+      : {}
+
+  chart = echarts.init(mapRef.value)
+  chart.setOption(
+    buildMapOption(pal, contrast, 'china', (n) => provinceInfo.get(n) ?? { count: 0, topUsers: [] }, maxCount, heat, points, geoView)
+  )
+  bindEvents()
+}
+
+function bindEvents(): void {
+  chart?.off('click')
+  chart?.off('georoam')
+  chart?.on('click', (params: unknown) => {
+    if (currentProvince.value || cityLoading.value) return
+    const p = params as { seriesType?: string; name?: string; data?: { province?: string } }
+    let provName = ''
+    if (p.seriesType === 'map') provName = p.name ?? ''
+    else if (p.seriesType === 'effectScatter') provName = p.data?.province ?? ''
+    if (!provName) return
+    const feat = provinceFeatures.find((f) => f.properties.name === provName)
+    if (!feat) return
+    drillTo(provName)
   })
+  chart?.on('georoam', (params: unknown) => {
+    const p = params as { center?: [number, number]; zoom?: number }
+    if (!p.center || p.zoom == null) return
+    if (currentProvince.value) provinceView.value = { center: p.center, zoom: p.zoom }
+    else nationalView.value = { center: p.center, zoom: p.zoom }
+  })
+}
+
+async function drillTo(name: string): Promise<void> {
+  currentProvince.value = name
+  provinceView.value = {}
+  await render()
+}
+
+async function backToNational(): Promise<void> {
+  currentProvince.value = null
+  await render()
 }
 
 function onResize(): void {
@@ -771,6 +1010,67 @@ watch(
 .map-box :deep(canvas) {
   position: relative;
   z-index: 2;
+}
+
+.map-back {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px 0 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+.map-back:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 12px var(--color-glow);
+  transform: translateX(-2px);
+}
+
+.map-focus-chip {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  box-shadow: 0 0 12px var(--color-glow);
+  pointer-events: none;
+}
+
+.map-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 6, 16, 0.4);
+  backdrop-filter: blur(2px);
+  border-radius: inherit;
 }
 
 .map-corner {

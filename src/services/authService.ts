@@ -37,7 +37,9 @@ export async function login(username: string, password: string): Promise<{ token
 export async function register(
   username: string,
   password: string,
-  region?: { province: string; city: string; district: string }
+  region?: { province: string; city: string; district: string },
+  age?: number,
+  gender?: string
 ): Promise<{ token: string; user: AuthUser }> {
   const resp = await fetch(`${API_BASE}/auth/register`, {
     method: 'POST',
@@ -45,6 +47,8 @@ export async function register(
     body: JSON.stringify({
       username,
       password,
+      age,
+      gender,
       province: region?.province ?? '',
       city: region?.city ?? '',
       district: region?.district ?? ''
@@ -54,6 +58,15 @@ export async function register(
     throw new Error(await parseError(resp))
   }
   return resp.json()
+}
+
+export async function checkUsername(username: string): Promise<boolean> {
+  const resp = await fetch(`${API_BASE}/auth/check-username?username=${encodeURIComponent(username)}`)
+  if (!resp.ok) {
+    throw new Error(await parseError(resp))
+  }
+  const data = await resp.json()
+  return data.available as boolean
 }
 
 export async function fetchMe(): Promise<AuthUser> {

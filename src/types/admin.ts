@@ -1,4 +1,5 @@
 export type UserRole = 'admin' | 'user'
+export type Gender = 'male' | 'female' | 'other'
 
 export interface AuthUser {
   id: number
@@ -7,6 +8,8 @@ export interface AuthUser {
   province?: string
   city?: string
   district?: string
+  age?: number | null
+  gender?: string
 }
 
 export interface AdminModel {
@@ -42,6 +45,8 @@ export interface AdminUser {
   province: string
   city: string
   district: string
+  age: number | null
+  gender: string
 }
 
 export interface ModelPayload {
@@ -60,6 +65,8 @@ export interface UserUpdatePayload {
   province?: string
   city?: string
   district?: string
+  age?: number
+  gender?: string
 }
 
 export interface UsageByUser {
@@ -84,10 +91,17 @@ export interface UsageDaily {
   total: number
 }
 
+export interface UsageDistItem {
+  key: string
+  count: number
+}
+
 export interface AdminUsage {
   by_user: UsageByUser[]
   by_model: UsageByModel[]
   daily: UsageDaily[]
+  age_dist: UsageDistItem[]
+  gender_dist: UsageDistItem[]
 }
 
 export interface SettingItem {

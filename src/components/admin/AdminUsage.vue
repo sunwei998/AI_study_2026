@@ -19,6 +19,16 @@
           <div ref="userRef" class="chart-box"></div>
         </section>
       </div>
+      <div class="chart-grid">
+        <section class="chart-card">
+          <h3 class="chart-title">{{ $t('console.byAge') }}</h3>
+          <div ref="ageRef" class="chart-box"></div>
+        </section>
+        <section class="chart-card">
+          <h3 class="chart-title">{{ $t('console.byGender') }}</h3>
+          <div ref="genderRef" class="chart-box"></div>
+        </section>
+      </div>
     </template>
   </div>
 </template>
@@ -26,7 +36,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import * as echarts from 'echarts/core'
-import { BarChart, LineChart } from 'echarts/charts'
+import { BarChart, LineChart, PieChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { useI18n } from 'vue-i18n'
@@ -34,7 +44,7 @@ import type { AdminUsage } from '@/types/admin'
 import { fetchUsage } from '@/services/adminService'
 import AppLoading from '@/components/common/AppLoading.vue'
 
-echarts.use([BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
+echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 
 const { t } = useI18n()
 
@@ -45,6 +55,8 @@ const error = ref('')
 const dailyRef = ref<HTMLDivElement | null>(null)
 const modelRef = ref<HTMLDivElement | null>(null)
 const userRef = ref<HTMLDivElement | null>(null)
+const ageRef = ref<HTMLDivElement | null>(null)
+const genderRef = ref<HTMLDivElement | null>(null)
 
 let charts: echarts.ECharts[] = []
 
@@ -83,8 +95,8 @@ function render() {
     chart.setOption({
       color: [c.primary, c.accent],
       tooltip: { trigger: 'axis', backgroundColor: 'rgba(10, 10, 20, 0.9)', borderColor: c.line, textStyle: { color: '#fff' } },
-      legend: { textStyle: baseTextStyle },
-      grid: { left: 50, right: 24, top: 40, bottom: 30 },
+      legend: { bottom: 8, left: 'center', itemWidth: 16, itemHeight: 10, textStyle: baseTextStyle },
+      grid: { left: 50, right: 24, top: 40, bottom: 64 },
       xAxis: {
         type: 'category',
         data: daily.map((d) => dayToLabel(d.day)),
@@ -164,6 +176,79 @@ function render() {
     })
     charts.push(chart)
   }
+
+  if (ageRef.value) {
+    const chart = echarts.init(ageRef.value)
+    chart.setOption({
+      color: pieColors,
+      tooltip: { trigger: 'item', backgroundColor: 'rgba(10, 10, 20, 0.9)', borderColor: c.line, textStyle: { color: '#fff' } },
+      legend: { bottom: 0, left: 'center', itemWidth: 12, itemHeight: 8, textStyle: baseTextStyle },
+      series: [
+        {
+          type: 'pie',
+          radius: ['42%', '68%'],
+          center: ['50%', '44%'],
+          data: usage.value.age_dist.map((d) => ({ name: ageLabel(d.key), value: d.count })),
+          label: { color: c.text, fontSize: 10 },
+          itemStyle: { borderColor: 'rgba(8, 8, 18, 0.6)', borderWidth: 1 }
+        }
+      ]
+    })
+    charts.push(chart)
+  }
+
+  if (genderRef.value) {
+    const chart = echarts.init(genderRef.value)
+    chart.setOption({
+      color: pieColors,
+      tooltip: { trigger: 'item', backgroundColor: 'rgba(10, 10, 20, 0.9)', borderColor: c.line, textStyle: { color: '#fff' } },
+      legend: { bottom: 0, left: 'center', itemWidth: 12, itemHeight: 8, textStyle: baseTextStyle },
+      series: [
+        {
+          type: 'pie',
+          radius: ['42%', '68%'],
+          center: ['50%', '44%'],
+          data: usage.value.gender_dist.map((d) => ({ name: genderLabel(d.key), value: d.count })),
+          label: { color: c.text, fontSize: 10 },
+          itemStyle: { borderColor: 'rgba(8, 8, 18, 0.6)', borderWidth: 1 }
+        }
+      ]
+    })
+    charts.push(chart)
+  }
+}
+
+const pieColors = [
+  cssVar('--color-primary', '#00e5ff'),
+  cssVar('--color-accent', '#7c5cff'),
+  '#ffb74d',
+  '#ff5b6a',
+  '#34d399',
+  '#60a5fa',
+  '#e879f9',
+  '#94a3b8'
+]
+
+const ageBuckets: Record<string, string> = {
+  '0-17': 'age0_17',
+  '18-24': 'age18_24',
+  '25-34': 'age25_34',
+  '35-44': 'age35_44',
+  '45-54': 'age45_54',
+  '55-64': 'age55_64',
+  '65+': 'age65'
+}
+
+function ageLabel(key: string): string {
+  const k = ageBuckets[key]
+  return k ? t(`console.${k}`) : t('console.unknown')
+}
+
+function genderLabel(key: string): string {
+  if (key === 'male') return t('auth.genderMale')
+  if (key === 'female') return t('auth.genderFemale')
+  if (key === 'other') return t('auth.genderOther')
+  return t('console.unknown')
 }
 
 function onResize() {

@@ -34,7 +34,7 @@
           </span>
           <LanguageSwitcher :size="32" />
           <ThemeSwitcher :size="32" />
-          <button class="console-logout" :title="$t('console.logout')" @click="logout">
+          <button class="console-logout" :title="$t('console.logout')" @click="confirmLogout">
             <AppIcon name="lucide:log-out" :size="16" />
           </button>
         </div>
@@ -50,6 +50,17 @@
         <AdminSettings v-else />
       </main>
     </div>
+
+    <ConfirmModal
+      v-model:visible="logoutVisible"
+      :title="$t('auth.logout')"
+      :message="$t('auth.logoutConfirm')"
+      :confirm-text="$t('auth.logoutConfirmBtn')"
+      :cancel-text="$t('confirm.cancel')"
+      danger
+      @confirm="logout"
+      @cancel="logoutVisible = false"
+    />
   </div>
 </template>
 
@@ -67,6 +78,7 @@ import AdminSettings from './AdminSettings.vue'
 import ThemeSwitcher from '@/components/chat/ThemeSwitcher.vue'
 import LanguageSwitcher from '@/components/chat/LanguageSwitcher.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -86,7 +98,15 @@ const tabs = computed(() => [
 const activeTab = ref<TabKey>('overview')
 
 const closeConsole = () => auth.closeConsole()
-const logout = () => auth.logout()
+
+const logoutVisible = ref(false)
+const confirmLogout = () => {
+  logoutVisible.value = true
+}
+const logout = () => {
+  logoutVisible.value = false
+  auth.logout()
+}
 </script>
 
 <style scoped>

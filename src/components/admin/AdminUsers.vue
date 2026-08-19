@@ -12,6 +12,8 @@
           <tr>
             <th>{{ $t('console.username') }}</th>
             <th>{{ $t('console.role') }}</th>
+            <th>{{ $t('console.age') }}</th>
+            <th>{{ $t('console.gender') }}</th>
             <th>{{ $t('console.enabled') }}</th>
             <th>{{ $t('console.region') }}</th>
             <th>{{ $t('console.logins') }}</th>
@@ -32,6 +34,8 @@
                 {{ u.role }}
               </span>
             </td>
+            <td class="cell-num">{{ u.age ?? '-' }}</td>
+            <td>{{ genderLabel(u.gender) }}</td>
             <td>
               <button
                 class="toggle"
@@ -58,10 +62,10 @@
                 </button>
                 <button
                   class="row-btn"
-                  :title="$t('console.editRegion')"
+                  :title="$t('console.editProfile')"
                   @click="openEditRegion(u)"
                 >
-                  <AppIcon name="lucide:map-pin" :size="15" />
+                  <AppIcon name="lucide:pencil" :size="15" />
                 </button>
                 <button
                   class="row-btn"
@@ -74,7 +78,7 @@
             </td>
           </tr>
           <tr v-if="users.length === 0">
-            <td colspan="9" class="cell-empty">{{ $t('console.noUsers') }}</td>
+            <td colspan="11" class="cell-empty">{{ $t('console.noUsers') }}</td>
           </tr>
         </tbody>
       </table>
@@ -85,9 +89,37 @@
         <div v-if="regionVisible" class="form-overlay" @click.self="regionVisible = false">
           <div class="form-modal" role="dialog" aria-modal="true">
             <span class="form-accent-line"></span>
-            <h3 class="form-title">{{ $t('console.editRegion') }} — {{ regionUser?.username }}</h3>
+            <h3 class="form-title">{{ $t('console.editProfile') }} — {{ regionUser?.username }}</h3>
 
             <div class="form-body">
+              <div class="form-grid">
+                <div class="form-field">
+                  <span class="form-label">{{ $t('console.age') }}</span>
+                  <input
+                    v-model.number="editAge"
+                    type="number"
+                    class="form-input"
+                    min="1"
+                    max="120"
+                    :placeholder="$t('console.age')"
+                  />
+                </div>
+                <div class="form-field">
+                  <span class="form-label">{{ $t('console.gender') }}</span>
+                  <div class="form-gender">
+                    <button
+                      v-for="g in genderOptions"
+                      :key="g.value"
+                      type="button"
+                      class="form-gender-option"
+                      :class="{ active: editGender === g.value }"
+                      @click="editGender = g.value"
+                    >
+                      {{ g.label }}
+                    </button>
+                  </div>
+                </div>
+              </div>
               <div class="region-preview" v-if="regionPreview">{{ regionPreview }}</div>
               <RegionSelect v-model="regionValue" vertical />
               <p v-if="regionError" class="form-error">{{ regionError }}</p>
@@ -157,7 +189,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { AdminUser, UserRole } from '@/types/admin'
+import type { AdminUser, UserRole, UserUpdatePayload } from '@/types/admin'
 import { fetchAdminUsers, resetUserPassword, updateAdminUser } from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
@@ -202,6 +234,18 @@ function formatNum(n: number): string {
 function formatRegion(u: AdminUser): string {
   const parts = [u.province, u.city, u.district].filter(Boolean)
   return parts.length ? parts.join('') : '-'
+}
+
+const genderOptions = [
+  { value: 'male', label: t('auth.genderMale') },
+  { value: 'female', label: t('auth.genderFemale') },
+  { value: 'other', label: t('auth.genderOther') }
+]
+
+function genderLabel(gender: string): string {
+  if (!gender) return '-'
+  const opt = genderOptions.find((o) => o.value === gender)
+  return opt ? opt.label : gender
 }
 
 const confirmVisible = ref(false)
@@ -294,6 +338,8 @@ const regionSubmitting = ref(false)
 const regionError = ref('')
 const regionUser = ref<AdminUser | null>(null)
 const regionValue = ref<RegionValue>({ province: '', city: '', district: '' })
+const editAge = ref<number | '' | null>(null)
+const editGender = ref('')
 
 const regionPreview = computed(() => {
   const v = regionValue.value
@@ -308,6 +354,8 @@ const openEditRegion = (u: AdminUser) => {
     city: u.city || '',
     district: u.district || ''
   }
+  editAge.value = u.age ?? null
+  editGender.value = u.gender || ''
   regionError.value = ''
   regionVisible.value = true
 }
@@ -319,17 +367,27 @@ const submitRegion = async () => {
     regionError.value = t('auth.regionRequired')
     return
   }
+  const ageVal = editAge.value
+  if (ageVal !== null && ageVal !== '' && (!Number.isFinite(ageVal) || ageVal < 1 || ageVal > 120)) {
+    regionError.value = t('auth.ageInvalid')
+    return
+  }
   regionSubmitting.value = true
   try {
-    await updateAdminUser(regionUser.value.id, {
+    const payload: UserUpdatePayload = {
       province: regionValue.value.province,
       city: regionValue.value.city,
-      district: regionValue.value.district
-    })
+      district: regionValue.value.district,
+      gender: editGender.value || undefined
+    }
+    if (ageVal !== null && ageVal !== '') payload.age = Number(ageVal)
+    await updateAdminUser(regionUser.value.id, payload)
     const u = regionUser.value
     u.province = regionValue.value.province
     u.city = regionValue.value.city
     u.district = regionValue.value.district
+    u.age = ageVal === null || ageVal === '' ? u.age : Number(ageVal)
+    u.gender = editGender.value
     regionVisible.value = false
   } catch (err) {
     regionError.value = err instanceof Error ? err.message : t('common.errorOccurred')
@@ -601,6 +659,41 @@ const submitRegion = async () => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.form-gender {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.form-gender-option {
+  height: 38px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.form-gender-option:hover {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.form-gender-option.active {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  border-color: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 4px 10px var(--color-glow);
 }
 
 .form-label {
