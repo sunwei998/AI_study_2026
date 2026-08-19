@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-window">
+  <div class="chat-window" :class="{ 'is-mobile': device.isMobile }">
     <!-- 顶部栏 -->
     <header class="chat-header">
       <div class="header-left">
@@ -13,12 +13,12 @@
         <h1 class="title">{{ $t('app.name') }}</h1>
       </div>
       <div class="header-right">
-        <span v-if="auth.user?.username" class="header-user">
+        <span v-if="auth.user?.username" v-show="!device.isMobile" class="header-user">
           <AppIcon name="lucide:user" :size="15" />
           {{ auth.user.username }}
         </span>
         <button
-          v-if="auth.isAdmin"
+          v-if="auth.isAdmin && !device.isMobile"
           class="admin-btn"
           :title="$t('console.title')"
           @click="router.push('/admin')"
@@ -26,14 +26,17 @@
           <AppIcon name="lucide:settings-2" :size="18" theme-fill />
         </button>
         <button
+          v-show="!device.isMobile"
           class="header-btn"
           :title="$t('auth.logout')"
           @click="askLogout"
         >
           <AppIcon name="lucide:log-out" :size="18" />
         </button>
-        <LanguageSwitcher />
-        <ThemeSwitcher />
+        <span v-show="!device.isMobile" class="desktop-controls">
+          <LanguageSwitcher />
+          <ThemeSwitcher />
+        </span>
         <ModelSelector />
         <button
           v-if="currentSession && currentSession.messages.length > 0"
@@ -46,6 +49,7 @@
         <button class="header-btn header-new" @click="createNew" :title="$t('common.newSession')">
           ➕
         </button>
+        <UserMenu v-if="device.isMobile" @logout="askLogout" />
       </div>
     </header>
 
@@ -202,10 +206,13 @@ import LanguageSwitcher from './LanguageSwitcher.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import UserMenu from './UserMenu.vue'
 import { useAuthStore } from '@/stores/authStore'
+import { useDevice } from '@/composables/useDevice'
 
 const { t } = useI18n()
 const router = useRouter()
+const device = useDevice()
 
 const store = useChatStore()
 const auth = useAuthStore()
@@ -306,6 +313,9 @@ onMounted(() => {
   store.loadTheme()
   store.loadModels()
   applyTheme(store.currentTheme)
+  if (device.isMobile) {
+    closeSidebar()
+  }
 })
 
 const createNew = () => {
@@ -494,6 +504,12 @@ const handleRegenerate = async (message: Message) => {
 
 .header-right {
   display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.desktop-controls {
+  display: inline-flex;
   gap: 8px;
   align-items: center;
 }
@@ -862,7 +878,7 @@ const handleRegenerate = async (message: Message) => {
 }
 
 /* 桌面端：可折叠面板 */
-@media (min-width: 769px) {
+.chat-window:not(.is-mobile) {
   .sidebar {
     position: relative;
     min-width: 0;
@@ -940,7 +956,7 @@ const handleRegenerate = async (message: Message) => {
   }
 }
 
-@media (max-width: 768px) {
+.chat-window.is-mobile {
   .chat-header {
     padding: calc(var(--safe-top, 0px) + 10px) 10px 10px;
   }

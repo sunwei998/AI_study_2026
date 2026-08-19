@@ -8,6 +8,7 @@ import router from './router'
 import { setUnauthorizedHandler } from './services/unauthorized'
 import { useAuthStore } from './stores/authStore'
 import { showToast } from './composables/useToast'
+import './composables/useDevice'
 import './styles/global.css'
 
 const app = createApp(App)

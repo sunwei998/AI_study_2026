@@ -41,13 +41,20 @@
             <AppIcon name="lucide:arrow-left" :size="15" />
             <span>{{ $t('console.mapBack') }}</span>
           </button>
+          <button
+            class="map-reset"
+            :title="$t('console.mapFull')"
+            @click="showFullMap"
+          >
+            <AppIcon name="lucide:maximize-2" :size="14" />
+          </button>
           <div v-if="cityLoading" class="map-loading-overlay">
             <AppLoading :size="22" glow />
           </div>
           <div v-else-if="currentProvince" class="map-focus-chip">
             {{ $t('console.mapCityTitle', { name: currentProvince }) }}
           </div>
-          <div v-else-if="hotProvince" class="map-focus-chip">
+          <div v-else-if="hotProvince && !forceFullView" class="map-focus-chip">
             {{ $t('console.mapHotProvince', { name: hotProvince }) }}
           </div>
           <span class="map-corner map-corner--tl"></span>
@@ -156,6 +163,7 @@ const cityGeoCache = new Map<number, GeoJson>()
 const bboxCache = new Map<string, BBox>()
 const nationalView = ref<{ center?: [number, number]; zoom?: number }>({})
 const provinceView = ref<{ center?: [number, number]; zoom?: number }>({})
+const forceFullView = ref(false)
 
 let chart: echarts.ECharts | null = null
 
@@ -496,7 +504,7 @@ function buildMapOption(
     geo: {
       map: mapName,
       roam: true,
-      scaleLimit: { min: 0.8, max: 8 },
+      scaleLimit: { min: 0.02, max: 8 },
       label: { show: false, color: hexToRgba(pal.text, 0.7), fontSize: 10 },
       ...geoView,
       itemStyle: {
@@ -668,9 +676,11 @@ async function render(): Promise<void> {
 
   const geoView = nationalView.value.center
     ? { center: nationalView.value.center, zoom: nationalView.value.zoom }
-    : hotProvince.value
-      ? { boundingCoords: provinceBBox(hotProvince.value) ?? undefined }
-      : {}
+    : forceFullView.value
+      ? { boundingCoords: computeBBox(provinceFeatures) }
+      : hotProvince.value
+        ? { boundingCoords: provinceBBox(hotProvince.value) ?? undefined }
+        : {}
 
   chart = echarts.init(mapRef.value)
   chart.setOption(
@@ -697,8 +707,19 @@ function bindEvents(): void {
     const p = params as { center?: [number, number]; zoom?: number }
     if (!p.center || p.zoom == null) return
     if (currentProvince.value) provinceView.value = { center: p.center, zoom: p.zoom }
-    else nationalView.value = { center: p.center, zoom: p.zoom }
+    else {
+      nationalView.value = { center: p.center, zoom: p.zoom }
+      forceFullView.value = false
+    }
   })
+}
+
+async function showFullMap(): Promise<void> {
+  if (currentProvince.value) currentProvince.value = null
+  provinceView.value = {}
+  nationalView.value = {}
+  forceFullView.value = true
+  await render()
 }
 
 async function drillTo(name: string): Promise<void> {
@@ -1040,6 +1061,32 @@ watch(
   border-color: var(--color-primary);
   box-shadow: 0 0 12px var(--color-glow);
   transform: translateX(-2px);
+}
+
+.map-reset {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  color: var(--color-text);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+.map-reset:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 12px var(--color-glow);
 }
 
 .map-focus-chip {
