@@ -441,7 +441,12 @@ const submitRegion = async () => {
   overflow: auto;
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(20px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(20px) saturate(var(--glass-saturate));
+  box-shadow: inset 0 1px 0 var(--glass-edge), inset 0 -1px 0 rgba(0, 0, 0, 0.08);
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--color-primary) 40%, transparent) transparent;
 }

@@ -8,7 +8,7 @@
         @click.self="onCancel"
       >
         <div
-          class="profile-panel"
+          class="profile-panel liquid-edge"
           :class="{ 'profile-panel--mobile': device.isMobile, dragging: drag }"
           :style="sheetStyle"
           role="dialog"
@@ -427,12 +427,16 @@ const onKeydown = (e: KeyboardEvent) => {
   max-height: 86vh;
   display: flex;
   flex-direction: column;
-  background: var(--color-glass);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(30px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(30px) saturate(var(--glass-saturate));
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 var(--glass-edge);
   overflow: hidden;
   transition: transform 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
 }

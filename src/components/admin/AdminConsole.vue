@@ -118,10 +118,13 @@ const logout = () => {
   display: flex;
   flex-direction: column;
   padding: 20px 12px;
-  background: var(--color-glass);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
   border-right: 1px solid var(--color-border);
+  box-shadow: inset 0 1px 0 var(--glass-edge);
 }
 
 .console-brand {
@@ -187,10 +190,13 @@ const logout = () => {
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px;
-  background: var(--color-glass);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
   border-bottom: 1px solid var(--color-border);
+  box-shadow: inset 0 1px 0 var(--glass-edge);
 }
 
 .console-header-left {

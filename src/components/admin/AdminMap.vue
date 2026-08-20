@@ -1124,9 +1124,13 @@ watch(
 .region-card {
   padding: 16px;
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(20px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(20px) saturate(var(--glass-saturate));
   border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 var(--glass-edge);
 }
 
 .map-card-head {

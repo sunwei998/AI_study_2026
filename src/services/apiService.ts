@@ -14,6 +14,11 @@ export interface ChatSuggestion {
   title_en: string
 }
 
+export interface SessionMessagePage {
+  messages: Message[]
+  hasMore: boolean
+}
+
 interface StreamChunk {
   choices?: Array<{ delta?: { content?: string } }>
   error?: string
@@ -171,10 +176,22 @@ export async function deleteMessage(sessionId: string, messageId: string): Promi
   )
 }
 
-export async function fetchSessionMessages(sessionId: string): Promise<Message[]> {
-  return (await handleJson(
-    await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/messages`, { headers: authHeaders() })
-  )) as Message[]
+export async function fetchSessionMessages(
+  sessionId: string,
+  opts: { beforeId?: string } = {}
+): Promise<SessionMessagePage> {
+  const params = new URLSearchParams()
+  if (opts.beforeId) params.set('before_id', opts.beforeId)
+  const qs = params.toString()
+  const raw = (await handleJson(
+    await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/messages${qs ? `?${qs}` : ''}`, {
+      headers: authHeaders()
+    })
+  )) as { messages: unknown[]; has_more: boolean }
+  return {
+    messages: (raw.messages || []) as Message[],
+    hasMore: !!raw.has_more
+  }
 }
 
 /**

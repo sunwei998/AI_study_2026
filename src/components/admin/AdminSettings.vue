@@ -20,6 +20,8 @@
             <tr>
               <th>{{ $t('console.key') }}</th>
               <th>{{ $t('console.value') }}</th>
+              <th>{{ $t('console.remark') }}</th>
+              <th>{{ $t('console.status') }}</th>
               <th>{{ $t('console.actions') }}</th>
             </tr>
           </thead>
@@ -35,6 +37,26 @@
                   @keydown.enter="save(s)"
                 />
               </td>
+              <td class="cell-remark">
+                <input
+                  v-model="s.remark"
+                  type="text"
+                  class="value-input"
+                  :placeholder="$t('console.remarkPlaceholder')"
+                  @keydown.enter="save(s)"
+                />
+              </td>
+              <td class="cell-status">
+                <button
+                  class="switch"
+                  :class="{ on: s.enabled }"
+                  :aria-pressed="s.enabled"
+                  :title="s.enabled ? $t('console.enabled') : $t('console.disabled')"
+                  @click="toggle(s)"
+                >
+                  <span class="switch-knob"></span>
+                </button>
+              </td>
               <td>
                 <div class="row-actions">
                   <button class="row-btn" :title="$t('console.save')" @click="save(s)">
@@ -44,7 +66,7 @@
               </td>
             </tr>
             <tr v-if="settings.length === 0">
-              <td colspan="3" class="cell-empty">{{ $t('console.noSettings') }}</td>
+              <td colspan="5" class="cell-empty">{{ $t('console.noSettings') }}</td>
             </tr>
           </tbody>
         </table>
@@ -66,6 +88,10 @@
               <label class="form-field">
                 <span class="form-label">{{ $t('console.value') }}</span>
                 <input v-model="newValue" type="text" class="form-input" />
+              </label>
+              <label class="form-field">
+                <span class="form-label">{{ $t('console.remark') }}</span>
+                <input v-model="newRemark" type="text" class="form-input" />
               </label>
 
               <p v-if="addError" class="form-error">{{ addError }}</p>
@@ -121,11 +147,22 @@ const save = async (s: SettingItem) => {
   savingKey.value = s.key
   error.value = ''
   try {
-    await updateSetting(s.key, s.value)
+    await updateSetting(s.key, { value: s.value, remark: s.remark })
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
     savingKey.value = ''
+  }
+}
+
+const toggle = async (s: SettingItem) => {
+  const next = !s.enabled
+  s.enabled = next
+  try {
+    await updateSetting(s.key, { enabled: next })
+  } catch (err) {
+    s.enabled = !next
+    error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   }
 }
 
@@ -134,10 +171,12 @@ const addSubmitting = ref(false)
 const addError = ref('')
 const newKey = ref('')
 const newValue = ref('')
+const newRemark = ref('')
 
 const openAdd = () => {
   newKey.value = ''
   newValue.value = ''
+  newRemark.value = ''
   addError.value = ''
   addVisible.value = true
 }
@@ -152,12 +191,14 @@ const submitAdd = async () => {
   }
   addSubmitting.value = true
   try {
-    await updateSetting(key, newValue.value)
+    await updateSetting(key, { value: newValue.value, remark: newRemark.value })
     const existing = settings.value.find((s) => s.key === key)
     if (existing) {
       existing.value = newValue.value
+      existing.remark = newRemark.value
+      existing.enabled = true
     } else {
-      settings.value.push({ key, value: newValue.value })
+      settings.value.push({ key, value: newValue.value, remark: newRemark.value, enabled: true })
     }
     addVisible.value = false
   } catch (err) {
@@ -234,7 +275,12 @@ const submitAdd = async () => {
   overflow: auto;
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(20px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(20px) saturate(var(--glass-saturate));
+  box-shadow: inset 0 1px 0 var(--glass-edge);
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--color-primary) 40%, transparent) transparent;
 }
@@ -296,6 +342,50 @@ const submitAdd = async () => {
 .value-input:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 8px var(--color-glow);
+}
+
+.cell-remark .value-input,
+.cell-value .value-input {
+  min-width: 160px;
+}
+
+.cell-status {
+  text-align: center;
+}
+
+.switch {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: var(--transition-normal);
+  flex-shrink: 0;
+}
+
+.switch .switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-text-secondary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background var(--transition-fast);
+}
+
+.switch.on {
+  border-color: var(--color-primary);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  box-shadow: 0 0 10px var(--color-glow);
+}
+
+.switch.on .switch-knob {
+  transform: translateX(20px);
+  background: #fff;
 }
 
 .row-actions {

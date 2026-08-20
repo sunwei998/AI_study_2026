@@ -48,6 +48,7 @@ export default {
     assistant: 'AI Assistant',
     thinking: 'Thinking...',
     sessionTitle: 'Chat {time}',
+    loadingOlder: 'Loading earlier messages…',
     error: '❌ Error: {msg}',
     imageTooLarge: 'Image exceeds the {size}MB limit, skipped',
     maxImages: 'Up to {count} images allowed'
@@ -252,6 +253,10 @@ export default {
     age65: '65+',
     requests: 'Requests',
     addSetting: 'Add Setting',
+    remark: 'Remark',
+    remarkPlaceholder: 'What this key controls',
+    status: 'Status',
+    disabled: 'Disabled',
     key: 'Key',
     value: 'Value',
     save: 'Save',

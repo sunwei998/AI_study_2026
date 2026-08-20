@@ -1,7 +1,7 @@
 <template>
   <div class="chat-window" :class="{ 'is-mobile': device.isMobile }">
     <!-- 顶部栏 -->
-    <header class="chat-header">
+    <header class="chat-header liquid-glass liquid-edge">
       <div class="header-left">
         <button
           class="header-btn menu-btn"
@@ -73,7 +73,7 @@
         @click="closeSidebar()"
       ></div>
       <aside
-        class="sidebar"
+        class="sidebar liquid-glass"
         :class="{ open: sidebarOpen, collapsed: sidebarCollapsed }"
         @click="onSidebarClick"
       >
@@ -125,7 +125,7 @@
             @touchcancel="onSessionPressEnd"
           >
             <div class="session-content">
-              <div class="session-title">{{ session.title }}</div>
+              <div class="session-title">{{ sessionTitle(session) }}</div>
               <div class="session-meta">
                 {{ $t('chat.messageCount', { count: session.messageCount }) }}
               </div>
@@ -265,6 +265,11 @@ const filteredSessions = computed(() => {
   if (!kw) return base
   return base.filter((s) => s.title.toLowerCase().includes(kw))
 })
+
+const sessionTitle = (session: { title: string; updatedAt: number }): string => {
+  if (session.title) return session.title
+  return t('chat.sessionTitle', { time: new Date(session.updatedAt).toLocaleString() })
+}
 
 const sidebarOpen = ref(false)
 const closeSidebar = () => {
@@ -488,11 +493,7 @@ const handleRegenerate = async (message: Message) => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background: var(--color-glass);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
   border-bottom: 1px solid var(--color-border);
-  box-shadow: var(--shadow-md);
 }
 
 .header-left {
@@ -645,9 +646,6 @@ const handleRegenerate = async (message: Message) => {
 
 .sidebar {
   width: 280px;
-  background: var(--color-glass);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
@@ -804,21 +802,27 @@ const handleRegenerate = async (message: Message) => {
 
 .session-item:hover {
   border-color: var(--color-primary);
-  background: var(--color-glass);
-  box-shadow: 0 0 12px var(--color-glow);
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 55%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(12px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(12px) saturate(var(--glass-saturate));
+  box-shadow: 0 0 12px var(--color-glow), inset 0 1px 0 var(--glass-edge);
   transform: translateX(2px);
 }
 
 .session-item.deleting {
   border-color: var(--color-primary);
-  background: var(--color-glass);
-  box-shadow: 0 0 14px var(--color-glow);
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 55%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  box-shadow: 0 0 14px var(--color-glow), inset 0 1px 0 var(--glass-edge);
 }
 
 .session-item.active {
   border-color: var(--color-primary);
   background: linear-gradient(135deg, var(--color-glow), transparent 60%);
-  box-shadow: var(--shadow-sm), inset 0 0 18px var(--color-glow);
+  box-shadow: var(--shadow-sm), inset 0 0 18px var(--color-glow), inset 0 1px 0 var(--glass-edge);
 }
 
 .session-item.active::before {

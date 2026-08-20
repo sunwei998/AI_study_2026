@@ -1,6 +1,6 @@
 <template>
   <div class="auth-page">
-    <div class="auth-card">
+    <div class="auth-card liquid-edge">
       <div class="auth-head">
         <AppIcon name="lucide:sparkles" :size="34" themeFill />
         <h1 class="auth-brand">{{ $t('app.name') }}</h1>
@@ -315,13 +315,16 @@ const submit = async () => {
   width: min(400px, 100%);
   padding: 38px 32px 30px;
   border-radius: var(--radius-lg);
-  background: var(--color-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(30px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(30px) saturate(var(--glass-saturate));
   border: 1px solid var(--color-border);
   box-shadow:
     0 24px 60px rgba(0, 0, 0, 0.45),
-    0 0 40px var(--color-glow);
+    0 0 40px var(--color-glow),
+    inset 0 1px 0 var(--glass-edge);
   animation: fadeIn 0.5s ease-out;
 }
 

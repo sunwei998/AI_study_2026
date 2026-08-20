@@ -14,7 +14,9 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     glass: 'rgba(14, 20, 48, 0.62)',
     overlay: 'rgba(7, 10, 26, 0.45)',
     grid: 'rgba(0, 229, 255, 0.07)',
-    glow: 'rgba(0, 229, 255, 0.4)'
+    glow: 'rgba(0, 229, 255, 0.4)',
+    glassEdge: 'rgba(255, 255, 255, 0.18)',
+    glassSheen: 'rgba(0, 229, 255, 0.05)'
   },
   light: {
     name: 'light',
@@ -29,7 +31,9 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     glass: 'rgba(255, 255, 255, 0.72)',
     overlay: 'rgba(243, 246, 255, 0.55)',
     grid: 'rgba(0, 102, 255, 0.06)',
-    glow: 'rgba(0, 102, 255, 0.28)'
+    glow: 'rgba(0, 102, 255, 0.28)',
+    glassEdge: 'rgba(255, 255, 255, 0.95)',
+    glassSheen: 'rgba(255, 255, 255, 0.5)'
   },
   neon: {
     name: 'neon',
@@ -44,7 +48,9 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     glass: 'rgba(23, 21, 54, 0.6)',
     overlay: 'rgba(10, 9, 24, 0.45)',
     grid: 'rgba(0, 255, 136, 0.07)',
-    glow: 'rgba(0, 255, 136, 0.4)'
+    glow: 'rgba(0, 255, 136, 0.4)',
+    glassEdge: 'rgba(255, 255, 255, 0.16)',
+    glassSheen: 'rgba(0, 255, 136, 0.06)'
   },
   ocean: {
     name: 'ocean',
@@ -59,7 +65,9 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     glass: 'rgba(11, 29, 51, 0.6)',
     overlay: 'rgba(5, 13, 26, 0.45)',
     grid: 'rgba(34, 211, 238, 0.07)',
-    glow: 'rgba(34, 211, 238, 0.4)'
+    glow: 'rgba(34, 211, 238, 0.4)',
+    glassEdge: 'rgba(255, 255, 255, 0.16)',
+    glassSheen: 'rgba(34, 211, 238, 0.06)'
   },
   midnight: {
     name: 'midnight',
@@ -74,7 +82,9 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     glass: 'rgba(25, 18, 56, 0.62)',
     overlay: 'rgba(10, 7, 20, 0.45)',
     grid: 'rgba(179, 136, 255, 0.08)',
-    glow: 'rgba(179, 136, 255, 0.42)'
+    glow: 'rgba(179, 136, 255, 0.42)',
+    glassEdge: 'rgba(255, 255, 255, 0.16)',
+    glassSheen: 'rgba(179, 136, 255, 0.07)'
   },
   amber: {
     name: 'amber',
@@ -89,7 +99,9 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     glass: 'rgba(36, 26, 10, 0.6)',
     overlay: 'rgba(20, 13, 4, 0.45)',
     grid: 'rgba(255, 183, 77, 0.08)',
-    glow: 'rgba(255, 183, 77, 0.4)'
+    glow: 'rgba(255, 183, 77, 0.4)',
+    glassEdge: 'rgba(255, 255, 255, 0.15)',
+    glassSheen: 'rgba(255, 183, 77, 0.06)'
   },
   mint: {
     name: 'mint',
@@ -104,7 +116,9 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     glass: 'rgba(255, 255, 255, 0.72)',
     overlay: 'rgba(238, 246, 238, 0.55)',
     grid: 'rgba(67, 160, 71, 0.06)',
-    glow: 'rgba(67, 160, 71, 0.28)'
+    glow: 'rgba(67, 160, 71, 0.28)',
+    glassEdge: 'rgba(255, 255, 255, 0.95)',
+    glassSheen: 'rgba(255, 255, 255, 0.5)'
   },
   sand: {
     name: 'sand',
@@ -119,7 +133,9 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     glass: 'rgba(255, 255, 255, 0.72)',
     overlay: 'rgba(250, 244, 232, 0.55)',
     grid: 'rgba(176, 120, 56, 0.06)',
-    glow: 'rgba(176, 120, 56, 0.28)'
+    glow: 'rgba(176, 120, 56, 0.28)',
+    glassEdge: 'rgba(255, 255, 255, 0.95)',
+    glassSheen: 'rgba(255, 255, 255, 0.5)'
   }
 }
 
@@ -139,4 +155,6 @@ export function applyTheme(theme: ThemeType): void {
   root.style.setProperty('--color-overlay', config.overlay)
   root.style.setProperty('--color-grid', config.grid)
   root.style.setProperty('--color-glow', config.glow)
+  root.style.setProperty('--glass-edge', config.glassEdge)
+  root.style.setProperty('--glass-sheen', config.glassSheen)
 }

@@ -88,12 +88,18 @@ export function fetchRegionStats(period: HeatPeriod = 'month'): Promise<RegionSt
   return request(`/region-stats?period=${period}`)
 }
 
+export interface SettingPatch {
+  value?: string
+  remark?: string
+  enabled?: boolean
+}
+
 export function fetchSettings(): Promise<SettingItem[]> {
   return request('/settings')
 }
 
-export function updateSetting(key: string, value: string): Promise<{ ok: boolean }> {
-  return request(`/settings/${encodeURIComponent(key)}`, { method: 'PATCH', body: JSON.stringify({ value }) })
+export function updateSetting(key: string, patch: SettingPatch): Promise<{ ok: boolean }> {
+  return request(`/settings/${encodeURIComponent(key)}`, { method: 'PATCH', body: JSON.stringify(patch) })
 }
 
 export function fetchAdminSuggestions(): Promise<SuggestionItem[]> {

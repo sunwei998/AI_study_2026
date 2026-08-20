@@ -67,6 +67,8 @@ export interface ThemeConfig {
   overlay: string
   grid: string
   glow: string
+  glassEdge: string
+  glassSheen: string
 }
 
 export interface ApiConfig {

@@ -50,11 +50,13 @@ const { toasts } = useToast()
   gap: 8px;
   padding: 10px 18px;
   border-radius: var(--radius-lg);
-  background: var(--color-glass);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
   border: 1px solid var(--color-border);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 var(--glass-edge);
   color: var(--color-text);
   font-family: var(--font-mono);
   font-size: 13px;

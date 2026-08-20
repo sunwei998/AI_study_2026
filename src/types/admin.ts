@@ -121,6 +121,8 @@ export interface AdminUsage {
 export interface SettingItem {
   key: string
   value: string
+  remark: string
+  enabled: boolean
 }
 
 export interface SuggestionItem {

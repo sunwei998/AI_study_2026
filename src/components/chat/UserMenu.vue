@@ -268,12 +268,14 @@ import type { ThemeType } from '@/types/chat'
   bottom: 0;
   z-index: 1201;
   border-radius: 18px 18px 0 0;
-  background: var(--color-glass);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
   border: 1px solid var(--color-border);
   border-bottom: none;
-  box-shadow: var(--shadow-lg), inset 0 0 18px var(--color-glow);
+  box-shadow: var(--shadow-lg), inset 0 0 18px var(--color-glow), inset 0 1px 0 var(--glass-edge);
   padding: 0 16px calc(16px + var(--safe-bottom, 0px));
   max-height: 80vh;
   overflow-y: auto;

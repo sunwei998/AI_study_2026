@@ -17,6 +17,8 @@ export const useChatStore = defineStore('chat', () => {
   // 状态
   const sessions = ref<ChatSession[]>([])
   const messageCache = ref<Record<string, Message[]>>({})
+  const hasMoreMap = ref<Record<string, boolean>>({})
+  const loadingOlder = ref<Record<string, boolean>>({})
   const currentSessionId = ref<string>('')
   const currentTheme = ref<ThemeType>('dark')
   const loadingSessions = ref<Record<string, boolean>>({})
@@ -115,11 +117,46 @@ export const useChatStore = defineStore('chat', () => {
     if (messageCache.value[sessionId] || loadingSessions.value[sessionId]) return
     setSessionLoading(sessionId, true)
     try {
-      messageCache.value[sessionId] = await apiService.fetchSessionMessages(sessionId)
+      const page = await apiService.fetchSessionMessages(sessionId)
+      messageCache.value[sessionId] = page.messages
+      hasMoreMap.value[sessionId] = page.hasMore
     } catch {
       messageCache.value[sessionId] = []
+      hasMoreMap.value[sessionId] = false
     } finally {
       setSessionLoading(sessionId, false)
+    }
+  }
+
+  const hasOlderMessages = (sessionId?: string): boolean => {
+    const id = sessionId || currentSessionId.value
+    return !!hasMoreMap.value[id]
+  }
+
+  const isLoadingOlder = (sessionId?: string): boolean => {
+    const id = sessionId || currentSessionId.value
+    return !!loadingOlder.value[id]
+  }
+
+  const loadOlderMessages = async (sessionId?: string) => {
+    const id = sessionId || currentSessionId.value
+    if (!id) return
+    const list = messageCache.value[id]
+    if (!list || list.length === 0) return
+    if (!hasMoreMap.value[id] || loadingOlder.value[id]) return
+    loadingOlder.value[id] = true
+    try {
+      const page = await apiService.fetchSessionMessages(id, {
+        beforeId: list[0].id
+      })
+      if (page.messages.length) {
+        messageCache.value[id] = [...page.messages, ...list]
+      }
+      hasMoreMap.value[id] = page.hasMore
+    } catch {
+      // 保持现状，下次滚动再试
+    } finally {
+      loadingOlder.value[id] = false
     }
   }
 
@@ -175,6 +212,8 @@ export const useChatStore = defineStore('chat', () => {
       setSessionLoading(sessionId, false)
     }
     delete messageCache.value[sessionId]
+    delete hasMoreMap.value[sessionId]
+    delete loadingOlder.value[sessionId]
     try {
       applyList(await apiService.deleteSession(sessionId))
     } catch {
@@ -295,6 +334,8 @@ export const useChatStore = defineStore('chat', () => {
     const id = currentSessionId.value
     if (!id) return
     messageCache.value[id] = []
+    hasMoreMap.value[id] = false
+    loadingOlder.value[id] = false
     const session = getSession(id)
     if (session) {
       session.messageCount = 0
@@ -389,6 +430,8 @@ export const useChatStore = defineStore('chat', () => {
   const reset = () => {
     sessions.value = []
     messageCache.value = {}
+    hasMoreMap.value = {}
+    loadingOlder.value = {}
     currentSessionId.value = ''
     requestIds.clear()
   }
@@ -431,6 +474,9 @@ export const useChatStore = defineStore('chat', () => {
     createNewSession,
     deleteSession,
     togglePin,
+    hasOlderMessages,
+    isLoadingOlder,
+    loadOlderMessages,
     addMessage,
     updateMessage,
     setMessageLoading,

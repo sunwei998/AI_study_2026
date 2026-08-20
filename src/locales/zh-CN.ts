@@ -43,6 +43,7 @@ export default {
     assistant: 'AI助手',
     thinking: '正在思考中...',
     sessionTitle: '聊天 {time}',
+    loadingOlder: '正在加载更早消息…',
     error: '❌ 错误: {msg}',
     imageTooLarge: '图片超过 {size}MB 上限，已跳过',
     maxImages: '最多支持 {count} 张图片'
@@ -247,6 +248,10 @@ export default {
     age65: '65岁及以上',
     requests: '请求数',
     addSetting: '新增设置',
+    remark: '备注',
+    remarkPlaceholder: '该键的作用说明',
+    status: '状态',
+    disabled: '已禁用',
     key: '键',
     value: '值',
     save: '保存',

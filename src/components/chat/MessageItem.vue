@@ -278,11 +278,13 @@ const openImage = (url: string) => {
 .message-bubble {
   padding: 12px 16px;
   border-radius: var(--radius-lg);
-  background: var(--color-glass);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
   border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 var(--glass-edge);
   transition: var(--transition-normal);
   word-wrap: break-word;
   position: relative;
@@ -291,6 +293,7 @@ const openImage = (url: string) => {
 .message-item.user .message-bubble {
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.25), rgba(118, 75, 162, 0.25));
   border-color: rgba(124, 92, 255, 0.4);
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .user-text {
@@ -303,7 +306,7 @@ const openImage = (url: string) => {
 
 .message-bubble:hover {
   border-color: var(--color-primary);
-  box-shadow: var(--shadow-md), inset 0 0 14px var(--color-glow);
+  box-shadow: var(--shadow-md), inset 0 0 14px var(--color-glow), inset 0 1px 0 var(--glass-edge);
 }
 
 .message-images {

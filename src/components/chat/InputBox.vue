@@ -180,9 +180,12 @@ const handleSubmit = (event: KeyboardEvent) => {
   gap: 8px;
   padding: 16px;
   border-top: 1px solid var(--color-border);
-  background: var(--color-glass);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
+  box-shadow: inset 0 1px 0 var(--glass-edge);
   animation: slideInUp 0.3s ease-out;
 }
 
@@ -192,14 +195,17 @@ const handleSubmit = (event: KeyboardEvent) => {
   position: relative;
   padding: 6px;
   border-radius: var(--radius-lg);
-  background: var(--color-glass);
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 50%, var(--glass-sheen) 100%),
+    var(--color-glass);
   border: 1px solid var(--color-border);
+  box-shadow: inset 0 1px 0 var(--glass-edge), inset 0 -1px 0 rgba(0, 0, 0, 0.08);
   transition: var(--transition-normal);
 }
 
 .input-wrapper:focus-within {
   border-color: var(--color-primary);
-  box-shadow: 0 0 16px var(--color-glow), inset 0 0 14px var(--color-glow);
+  box-shadow: 0 0 16px var(--color-glow), inset 0 0 14px var(--color-glow), inset 0 1px 0 var(--glass-edge);
 }
 
 .input-field {

@@ -191,16 +191,19 @@ onBeforeUnmount(() => {
   position: relative;
   width: min(360px, 100%);
   padding: 28px 26px 24px;
-  background: var(--color-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(30px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(30px) saturate(var(--glass-saturate));
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   text-align: center;
   overflow: hidden;
   box-shadow:
     0 24px 60px rgba(0, 0, 0, 0.45),
-    0 0 40px var(--color-glow);
+    0 0 40px var(--color-glow),
+    inset 0 1px 0 var(--glass-edge);
 }
 
 .confirm-corner {

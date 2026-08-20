@@ -16,6 +16,11 @@
       </div>
     </div>
     <div v-else ref="listRef" class="messages-container" @scroll="onScroll">
+      <div ref="topSentinel" class="top-sentinel"></div>
+      <div v-if="loadingOlder" class="top-loading">
+        <AppLoading :size="14" />
+        <span>{{ $t('chat.loadingOlder') }}</span>
+      </div>
       <MessageItem
         v-for="message in messages"
         :key="message.id"
@@ -40,14 +45,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, nextTick, onMounted } from 'vue'
+import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Message, SendPayload } from '@/types/chat'
 import MessageItem from './MessageItem.vue'
+import AppLoading from '@/components/common/AppLoading.vue'
+import { useChatStore } from '@/stores/chatStore'
 import apiService from '@/services/apiService'
 import { i18n } from '@/locales'
 
 const { tm } = useI18n()
+const store = useChatStore()
 
 const props = defineProps<{
   messages: Message[]
@@ -60,9 +68,64 @@ const emit = defineEmits<{
 }>()
 
 const listRef = ref<HTMLElement>()
+const topSentinel = ref<HTMLElement>()
 const showTopBtn = ref(false)
+const smoothScrolling = ref(false)
+let scrollTimer: ReturnType<typeof setTimeout> | null = null
+
+const loadingOlder = computed(() => store.isLoadingOlder())
+
+// “回到顶部”停在当前已加载内容顶部再下方一点的间距，让滚动条不贴顶，
+// 提示用户上方还有更早消息；手动继续上滑到该间距以内才触发加载。
+const AT_TOP_GAP = 48
+const TRIGGER_ZONE = 24
+
+// 向上懒加载：哨兵进入视口（靠近顶部）时加载更早消息，并保持滚动位置
+let observer: IntersectionObserver | null = null
+
+const setupObserver = () => {
+  const el = listRef.value
+  const sentinel = topSentinel.value
+  observer?.disconnect()
+  observer = null
+  if (!el || !sentinel) return
+  observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(async (entry) => {
+        if (!entry.isIntersecting) return
+        if (!store.hasOlderMessages() || store.isLoadingOlder()) return
+        const el = listRef.value
+        if (!el) return
+        const startTop = el.scrollTop
+        const prevHeight = el.scrollHeight
+        await store.loadOlderMessages()
+        await nextTick()
+        // “回到顶部”的平滑滚动进行中或滚动位置在此期间发生较大变化时，
+        // 跳过位置补偿，避免与平滑动画竞争导致闪回到底部。
+        if (smoothScrolling.value || Math.abs(el.scrollTop - startTop) > 30) return
+        // 已在最顶部时不补偿，让更早消息自然出现在上方。
+        if (el.scrollTop <= 2) return
+        el.scrollTop += el.scrollHeight - prevHeight
+      })
+    },
+    // 仅在用户手动上滑越过间距、真正接近已加载内容顶部时才触发加载
+    { root: el, rootMargin: `${TRIGGER_ZONE}px 0px 0px 0px` }
+  )
+  observer.observe(sentinel)
+}
+
+watch(
+  () => [store.currentSessionId, props.messages.length] as const,
+  () => nextTick(setupObserver)
+)
 
 const onScroll = () => {
+  const el = listRef.value
+  showTopBtn.value = !!el && el.scrollTop > 200
+}
+
+const finishScroll = () => {
+  smoothScrolling.value = false
   const el = listRef.value
   showTopBtn.value = !!el && el.scrollTop > 200
 }
@@ -71,8 +134,16 @@ const scrollToTop = () => {
   if (props.isLoading) return
   const el = listRef.value
   if (!el) return
+  // 上方还有未加载消息时，停在已加载内容的顶部稍下方（差一点到顶），
+  // 让滚动条不贴顶、提示还有更早消息；已全部加载则直接滑到最顶。
+  const target = store.hasOlderMessages() ? AT_TOP_GAP : 0
+  smoothScrolling.value = true
+  if (scrollTimer) clearTimeout(scrollTimer)
   if ('scrollBehavior' in document.documentElement.style) {
-    el.scrollTo({ top: 0, behavior: 'smooth' })
+    el.scrollTo({ top: target, behavior: 'smooth' })
+    // 平滑滚动结束时同步按钮状态（scrollend 不派发时由超时兜底）
+    el.addEventListener('scrollend', finishScroll, { once: true })
+    scrollTimer = setTimeout(finishScroll, 1500)
     return
   }
   const start = el.scrollTop
@@ -81,8 +152,9 @@ const scrollToTop = () => {
   const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
   const step = (now: number) => {
     const t = Math.min((now - startTime) / duration, 1)
-    el.scrollTop = Math.round(start * (1 - easeOutCubic(t)))
+    el.scrollTop = Math.round(start + (target - start) * easeOutCubic(t))
     if (t < 1) requestAnimationFrame(step)
+    else finishScroll()
   }
   requestAnimationFrame(step)
 }
@@ -111,6 +183,15 @@ onMounted(async () => {
   } finally {
     configLoaded.value = true
   }
+  await nextTick()
+  setupObserver()
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
+  smoothScrolling.value = false
+  if (scrollTimer) clearTimeout(scrollTimer)
 })
 
 const handleRegenerate = (message: Message) => {
@@ -128,7 +209,7 @@ let lastUserMsgId = ''
 
 watch(
   () => props.messages,
-  (msgs) => {
+  (msgs, oldMsgs) => {
     // 检测到「新出现的用户消息」（发送消息）时强制滚动到最新对话
     const lastUser = [...msgs].reverse().find((m) => m.role === 'user')
     if (lastUser && lastUser.id !== lastUserMsgId) {
@@ -136,6 +217,10 @@ watch(
       nextTick(() => {
         listRef.value?.scrollTo({ top: listRef.value.scrollHeight, behavior: 'auto' })
       })
+      return
+    }
+    // 向上懒加载前插了更早消息：不跟随底部，滚动位置由 IntersectionObserver 保持
+    if (oldMsgs?.length && msgs.length > oldMsgs.length && msgs[0]?.id !== oldMsgs[0]?.id) {
       return
     }
     if (isNearBottom()) {
@@ -314,6 +399,33 @@ watch(
   flex-direction: column;
   flex: 1;
   overflow-y: auto;
+}
+
+.top-sentinel {
+  height: 1px;
+  flex-shrink: 0;
+}
+
+.top-loading {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  align-self: center;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--color-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 14px var(--color-glow);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  animation: fadeIn 0.2s ease-out;
 }
 
 @media (max-width: 768px) {
