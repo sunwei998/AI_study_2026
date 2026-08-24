@@ -1,5 +1,6 @@
 import type {
   AdminModel,
+  AdminOverview,
   AdminStats,
   AdminUsage,
   AdminUser,
@@ -50,6 +51,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export function fetchStats(): Promise<AdminStats> {
   return request('/stats')
+}
+
+export function fetchOverview(): Promise<AdminOverview> {
+  return request('/overview')
 }
 
 export function fetchAdminModels(): Promise<AdminModel[]> {

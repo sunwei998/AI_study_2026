@@ -68,15 +68,11 @@
                 </label>
 
                 <label class="profile-field">
-                  <span class="profile-label">{{ $t('profile.age') }}</span>
-                  <input
-                    v-model="age"
-                    class="profile-input"
-                    type="number"
-                    min="1"
-                    max="120"
-                    inputmode="numeric"
-                    :placeholder="String(120)"
+                  <span class="profile-label">{{ $t('profile.birthday') }}</span>
+                  <DatePicker
+                    v-model="birthday"
+                    :max="maxBirthday"
+                    :placeholder="$t('profile.birthdayPlaceholder')"
                   />
                 </label>
 
@@ -131,6 +127,7 @@ import { useToast } from '@/composables/useToast'
 import { checkUsername } from '@/services/authService'
 import { readFileAsDataUrl } from '@/utils/image'
 import RegionSelect, { type RegionValue } from '@/components/common/RegionSelect.vue'
+import DatePicker from '@/components/common/DatePicker.vue'
 import AvatarCropDialog from '@/components/chat/AvatarCropDialog.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
@@ -144,7 +141,7 @@ const device = useDevice()
 const { showToast } = useToast()
 
 const username = ref('')
-const age = ref<string | number>('')
+const birthday = ref('')
 const gender = ref('')
 const region = ref<RegionValue>({ province: '', city: '', district: '' })
 const avatar = ref('')
@@ -161,6 +158,12 @@ const cropImage = ref('')
 
 const usernameLocked = computed(() => (auth.user?.username_changes_left ?? 3) <= 0)
 
+const maxBirthday = computed(() => {
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+})
+
 const avatarChar = computed(() =>
   (username.value || auth.user?.username || '?').charAt(0).toUpperCase()
 )
@@ -174,7 +177,7 @@ const genderOptions = computed(() => [
 const initForm = () => {
   const u = auth.user
   username.value = u?.username ?? ''
-  age.value = u?.age != null ? String(u.age) : ''
+  birthday.value = u?.birthday ?? ''
   gender.value = u?.gender ?? ''
   region.value = { province: u?.province ?? '', city: u?.city ?? '', district: u?.district ?? '' }
   avatar.value = u?.avatar ?? ''
@@ -294,12 +297,15 @@ const save = async () => {
     error.value = t('auth.usernameChecking')
     return
   }
-  const ageRaw = age.value
-  const ageVal = typeof ageRaw === 'number' ? (Number.isNaN(ageRaw) ? '' : String(ageRaw)) : ageRaw.trim()
-  if (ageVal !== '') {
-    const n = Number(ageVal)
-    if (!Number.isInteger(n) || n < 1 || n > 120) {
-      error.value = t('auth.ageInvalid')
+  if (birthday.value) {
+    const bd = birthday.value
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(bd)) {
+      error.value = t('profile.birthdayInvalid')
+      return
+    }
+    const date = new Date(bd)
+    if (Number.isNaN(date.getTime())) {
+      error.value = t('profile.birthdayInvalid')
       return
     }
   }
@@ -326,7 +332,7 @@ const save = async () => {
     await auth.updateProfile({
       username: finalName,
       avatar: avatar.value,
-      age: ageVal === '' ? null : Number(ageVal),
+      birthday: birthday.value,
       gender: gender.value,
       province: region.value.province,
       city: region.value.city,

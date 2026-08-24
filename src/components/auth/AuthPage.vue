@@ -9,7 +9,7 @@
 
       <form class="auth-form" @submit.prevent="submit">
         <label class="auth-field">
-          <span class="auth-label">{{ $t('auth.username') }}<em class="auth-required">*</em></span>
+          <span class="auth-label">{{ $t('auth.username') }}<em v-if="mode === 'register'" class="auth-required">*</em></span>
           <input
             v-model="username"
             type="text"
@@ -34,7 +34,7 @@
           </span>
         </label>
         <label class="auth-field">
-          <span class="auth-label">{{ $t('auth.password') }}<em class="auth-required">*</em></span>
+          <span class="auth-label">{{ $t('auth.password') }}<em v-if="mode === 'register'" class="auth-required">*</em></span>
           <input
             v-model="password"
             type="password"
@@ -81,56 +81,6 @@
           />
         </label>
 
-        <div v-if="mode === 'register'" class="auth-field">
-          <span class="auth-label">
-            {{ $t('auth.age') }}
-            <em class="auth-required">*</em>
-            <span class="auth-notice">{{ $t('auth.ageNotice') }}</span>
-          </span>
-          <input
-            v-model.number="age"
-            type="number"
-            class="auth-input auth-input--age"
-            min="1"
-            max="120"
-            :placeholder="$t('auth.agePlaceholder')"
-            :disabled="submitting"
-          />
-          <span v-if="ageTouched && !ageValid" class="auth-hint auth-hint--error">
-            {{ ageError || $t('auth.ageRequired') }}
-          </span>
-        </div>
-
-        <div v-if="mode === 'register'" class="auth-field">
-          <span class="auth-label">
-            {{ $t('auth.gender') }}
-          </span>
-          <div class="auth-gender">
-            <button
-              v-for="g in genderOptions"
-              :key="g.value"
-              type="button"
-              class="auth-gender-option"
-              :class="{ active: gender === g.value }"
-              :disabled="submitting"
-              @click="gender = g.value"
-            >
-              {{ g.label }}
-            </button>
-          </div>
-        </div>
-
-        <label v-if="mode === 'register'" class="auth-field">
-          <span class="auth-label">
-            {{ $t('auth.region') }}
-            <em class="auth-required">*</em>
-          </span>
-          <RegionSelect v-model="region" :disabled="submitting" />
-          <span v-if="regionTouched && !regionComplete" class="auth-hint auth-hint--error">
-            {{ $t('auth.regionRequired') }}
-          </span>
-        </label>
-
         <p v-if="error" class="auth-error">{{ error }}</p>
 
         <button type="submit" class="auth-submit" :disabled="submitting">
@@ -160,14 +110,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
 import { checkUsername } from '@/services/authService'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
-import RegionSelect, { type RegionValue } from '@/components/common/RegionSelect.vue'
 
 const props = defineProps<{ mode?: 'login' | 'register' }>()
 
@@ -179,39 +128,23 @@ const auth = useAuthStore()
 const username = ref('')
 const password = ref('')
 const confirm = ref('')
-const region = ref<RegionValue>({ province: '', city: '', district: '' })
-const regionTouched = ref(false)
 const error = ref('')
 const submitting = ref(false)
-const age = ref<number | '' | null>(null)
-const gender = ref('')
-const ageTouched = ref(false)
 const pwTouched = ref(false)
 const usernameCheckState = ref<'checking' | 'taken' | 'available' | ''>('')
 
-const genderOptions = [
-  { value: 'male', label: t('auth.genderMale') },
-  { value: 'female', label: t('auth.genderFemale') },
-  { value: 'other', label: t('auth.genderOther') }
-]
-
-const regionComplete = computed(() =>
-  Boolean(region.value.province && region.value.city && region.value.district)
+// 登录页 ⇄ 注册页相互切换时清空表单，避免把已填写的信息带过去回显
+watch(
+  () => props.mode,
+  () => {
+    username.value = ''
+    password.value = ''
+    confirm.value = ''
+    error.value = ''
+    pwTouched.value = false
+    usernameCheckState.value = ''
+  }
 )
-
-const ageValid = computed(() => {
-  const v = age.value
-  if (v === '' || v === null || v === undefined) return false
-  const n = Number(v)
-  return Number.isFinite(n) && n >= 1 && n <= 120
-})
-
-const ageError = computed(() => {
-  const v = age.value
-  if (v === '' || v === null || v === undefined) return ''
-  const n = Number(v)
-  return Number.isFinite(n) && n >= 1 && n <= 120 ? '' : t('auth.ageInvalid')
-})
 
 const pwScore = computed(() => {
   const v = password.value
@@ -261,16 +194,6 @@ const submit = async () => {
       error.value = t('auth.passwordMismatch')
       return
     }
-    ageTouched.value = true
-    regionTouched.value = true
-    if (!ageValid.value) {
-      error.value = ageError.value || t('auth.ageRequired')
-      return
-    }
-    if (!regionComplete.value) {
-      error.value = t('auth.regionRequired')
-      return
-    }
     if (usernameCheckState.value === 'taken') {
       error.value = t('auth.usernameTaken')
       return
@@ -281,13 +204,7 @@ const submit = async () => {
     if (props.mode === 'login') {
       await auth.login(name, password.value)
     } else {
-      await auth.register(
-        name,
-        password.value,
-        region.value,
-        age.value === '' || age.value === null ? undefined : Number(age.value),
-        gender.value
-      )
+      await auth.register(name, password.value)
     }
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
     await router.replace(redirect && redirect.startsWith('/') ? redirect : '/chat')

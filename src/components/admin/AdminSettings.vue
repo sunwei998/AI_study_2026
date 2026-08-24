@@ -120,8 +120,10 @@ import type { SettingItem } from '@/types/admin'
 import { fetchSettings, updateSetting } from '@/services/adminService'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
+const { showToast } = useToast()
 
 const settings = ref<SettingItem[]>([])
 const loading = ref(true)
@@ -148,6 +150,7 @@ const save = async (s: SettingItem) => {
   error.value = ''
   try {
     await updateSetting(s.key, { value: s.value, remark: s.remark })
+    showToast(t('console.saved'), 'success')
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
@@ -160,6 +163,7 @@ const toggle = async (s: SettingItem) => {
   s.enabled = next
   try {
     await updateSetting(s.key, { enabled: next })
+    showToast(next ? t('console.enableSuccess') : t('console.disableSuccess'), 'success')
   } catch (err) {
     s.enabled = !next
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
@@ -201,6 +205,7 @@ const submitAdd = async () => {
       settings.value.push({ key, value: newValue.value, remark: newRemark.value, enabled: true })
     }
     addVisible.value = false
+    showToast(t('console.created'), 'success')
   } catch (err) {
     addError.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {

@@ -138,8 +138,10 @@ import {
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
+const { showToast } = useToast()
 
 const suggestions = ref<SuggestionItem[]>([])
 const loading = ref(true)
@@ -211,6 +213,7 @@ const submit = async () => {
     }
     formVisible.value = false
     await load()
+    showToast(editingId.value ? t('console.saved') : t('console.created'), 'success')
   } catch (err) {
     formError.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
@@ -227,6 +230,7 @@ const toggleEnabled = async (s: SuggestionItem) => {
       enabled: !s.enabled
     })
     s.enabled = !s.enabled
+    showToast(s.enabled ? t('console.enableSuccess') : t('console.disableSuccess'), 'success')
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   }
@@ -244,6 +248,7 @@ const askDelete = (s: SuggestionItem) => {
   confirmAction = async () => {
     await deleteAdminSuggestion(s.id)
     suggestions.value = suggestions.value.filter((x) => x.id !== s.id)
+    showToast(t('console.deleted'), 'success')
   }
   confirmVisible.value = true
 }

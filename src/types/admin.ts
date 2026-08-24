@@ -8,6 +8,7 @@ export interface AuthUser {
   province?: string
   city?: string
   district?: string
+  birthday?: string
   age?: number | null
   gender?: string
   avatar?: string
@@ -17,7 +18,7 @@ export interface AuthUser {
 export interface ProfileUpdatePayload {
   username?: string
   avatar?: string
-  age?: number | null
+  birthday?: string
   gender?: string
   province?: string
   city?: string
@@ -28,7 +29,7 @@ export interface AdminModel {
   id: number
   model_key: string
   name: string
-  provider: 'openai' | 'ollama'
+  provider: string
   free: boolean
   vision: boolean
   enabled: boolean
@@ -60,13 +61,14 @@ export interface AdminUser {
   city: string
   district: string
   age: number | null
+  birthday: string
   gender: string
 }
 
 export interface ModelPayload {
   model_key: string
   name: string
-  provider: 'openai' | 'ollama'
+  provider: string
   free: boolean
   vision: boolean
   enabled: boolean
@@ -79,7 +81,7 @@ export interface UserUpdatePayload {
   province?: string
   city?: string
   district?: string
-  age?: number
+  birthday?: string
   gender?: string
 }
 
@@ -170,4 +172,65 @@ export interface RegionStatsData {
   period: HeatPeriod
   provinces: ProvinceMetric[]
   regions: RegionStat[]
+}
+
+export interface OverviewDaily {
+  day: number
+  requests: number
+  total: number
+}
+
+export interface OverviewHourly {
+  hour: number
+  requests: number
+  total: number
+}
+
+export interface OverviewNewUsers {
+  day: number
+  n: number
+}
+
+export interface OverviewTopModel {
+  model_key: string
+  requests: number
+  total: number
+}
+
+export interface OverviewTopUser {
+  username: string
+  avatar: string
+  province: string
+  city: string
+  total: number
+  requests: number
+}
+
+export interface OverviewTopProvince {
+  province: string
+  active_users: number
+  requests: number
+  total_tokens: number
+}
+
+export interface OverviewRecentUser {
+  username: string
+  avatar: string
+  province: string
+  city: string
+  district: string
+  created_at: number
+}
+
+export interface AdminOverview {
+  stats: AdminStats
+  daily: OverviewDaily[]
+  hourly: OverviewHourly[]
+  new_users: OverviewNewUsers[]
+  by_model: OverviewTopModel[]
+  top_users: OverviewTopUser[]
+  top_provinces: OverviewTopProvince[]
+  recent_users: OverviewRecentUser[]
+  age_dist: UsageDistItem[]
+  gender_dist: UsageDistItem[]
 }

@@ -584,15 +584,14 @@ function buildUserLabelOption(
   if (m.labelTier === 1) {
     return {
       ...base,
-      formatter: `{a|}${m.username}`,
+      formatter: `{a|}\u3000${m.username}`,
       rich: {
         a: {
           backgroundColor: { image: avatarSrc(m.avatar) },
-          width: 16,
-          height: 16,
-          borderRadius: 8,
-          align: 'center',
-          padding: [0, 5, 0, 0]
+          width: 18,
+          height: 18,
+          borderRadius: 9,
+          align: 'center'
         }
       }
     }
@@ -963,7 +962,10 @@ async function render(): Promise<void> {
 
   for (const m of userMarkers) {
     if (m.labelTier === 1) {
-      m.avatar = await roundAvatarDataUrl(avatarSrc(m.avatar), 32)
+      m.avatar = await roundAvatarDataUrl(avatarSrc(m.avatar), 32, {
+        color: hexToRgba(pal.primary, 0.9),
+        width: 3
+      })
     }
   }
 

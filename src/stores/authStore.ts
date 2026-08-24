@@ -38,14 +38,8 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value
   }
 
-  const register = async (
-    username: string,
-    password: string,
-    region?: { province: string; city: string; district: string },
-    age?: number,
-    gender?: string
-  ) => {
-    const { token } = await apiRegister(username, password, region, age, gender)
+  const register = async (username: string, password: string) => {
+    const { token } = await apiRegister(username, password)
     setToken(token)
     user.value = await fetchMe()
     return user.value

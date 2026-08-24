@@ -49,7 +49,7 @@
             </td>
             <td class="cell-key">{{ m.model_key }}</td>
             <td>{{ m.name }}</td>
-            <td><span class="badge">{{ m.provider }}</span></td>
+            <td><span class="badge">{{ providerName(m.provider) }}</span></td>
             <td>
               <AppIcon
                 :name="m.free ? 'lucide:check-circle' : 'lucide:circle'"
@@ -103,8 +103,7 @@
                 <label class="form-field">
                   <span class="form-label">{{ $t('console.provider') }}</span>
                   <select v-model="form.provider" class="form-input">
-                    <option value="openai">openai</option>
-                    <option value="ollama">ollama</option>
+                    <option v-for="p in providers" :key="p.id" :value="p.id">{{ p.name }}</option>
                   </select>
                 </label>
                 <label class="form-field">
@@ -164,11 +163,13 @@ import {
   createAdminModel,
   deleteAdminModel,
   fetchAdminModels,
+  fetchSettings,
   updateAdminModel
 } from '@/services/adminService'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import { DEFAULT_PROVIDERS, type ModelProvider } from '@/config/models'
 
 const { t } = useI18n()
 
@@ -176,6 +177,9 @@ const models = ref<AdminModel[]>([])
 const loading = ref(true)
 const error = ref('')
 const search = ref('')
+
+// 模型提供方数据字典：默认取本地字典，若后台 settings.model_providers 已配置则覆盖
+const providers = ref<ModelProvider[]>(DEFAULT_PROVIDERS)
 
 const filtered = computed(() => {
   const kw = search.value.trim().toLowerCase()
@@ -189,7 +193,19 @@ const load = async () => {
   loading.value = true
   error.value = ''
   try {
-    models.value = await fetchAdminModels()
+    const [list, settings] = await Promise.all([fetchAdminModels(), fetchSettings()])
+    models.value = list
+    const row = settings.find((s) => s.key === 'model_providers')
+    if (row?.value) {
+      try {
+        const parsed = JSON.parse(row.value) as unknown
+        if (Array.isArray(parsed)) {
+          providers.value = parsed as ModelProvider[]
+        }
+      } catch {
+        // JSON 解析失败时保留默认字典
+      }
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
@@ -226,6 +242,11 @@ function emptyForm(): ModelPayload {
     enabled: true,
     sort_order: 100
   }
+}
+
+function providerName(id: string): string {
+  const p = providers.value.find((x) => x.id === id)
+  return p?.name ?? id
 }
 
 function toPayload(m: AdminModel): ModelPayload {

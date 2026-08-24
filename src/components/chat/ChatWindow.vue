@@ -227,15 +227,36 @@ import UserMenu from './UserMenu.vue'
 import UserProfileDialog from './UserProfileDialog.vue'
 import { useAuthStore } from '@/stores/authStore'
 import { useDevice } from '@/composables/useDevice'
+import { useToast } from '@/composables/useToast'
+import { watch } from 'vue'
 
 const { t } = useI18n()
 const router = useRouter()
 const device = useDevice()
+const { showToast } = useToast()
 
 const store = useChatStore()
 const auth = useAuthStore()
 
 const profileOpen = ref(false)
+let profileReminderAuto = false
+
+const profileReminderKey = () => (auth.user?.id != null ? `profileReminder_${auth.user.id}` : '')
+
+const profileIncomplete = (): boolean => {
+  const u = auth.user
+  if (!u) return false
+  return !u.birthday && !u.age && !u.gender && !u.province && !u.city && !u.district
+}
+
+watch(profileOpen, (v) => {
+  // 首次进入 chat 自动弹出的资料完善提醒：无论保存还是关闭，仅提醒一次
+  if (!v && profileReminderAuto) {
+    profileReminderAuto = false
+    const key = profileReminderKey()
+    if (key) localStorage.setItem(key, '1')
+  }
+})
 
 const currentSessionId = computed(() => store.currentSessionId)
 const currentSession = computed(() => store.currentSession)
@@ -336,14 +357,23 @@ const toggleCollapsed = () => {
   localStorage.setItem('chatSidebarCollapsed', sidebarCollapsed.value ? '1' : '0')
 }
 
-onMounted(() => {
+onMounted(async () => {
   // 会话/消息从后端加载（按账号隔离）
-  store.init()
+  await store.init()
   store.loadTheme()
   store.loadModels()
   applyTheme(store.currentTheme)
   if (device.isMobile) {
     closeSidebar()
+  }
+  // 新用户首次进入 chat：资料不完整时提醒完善（可关闭，仅一次）
+  const key = profileReminderKey()
+  if (key && !localStorage.getItem(key) && profileIncomplete()) {
+    profileReminderAuto = true
+    setTimeout(() => {
+      profileOpen.value = true
+      showToast(t('profile.remind'), 'info')
+    }, 500)
   }
 })
 

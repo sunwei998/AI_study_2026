@@ -12,7 +12,7 @@
           <tr>
             <th>{{ $t('console.username') }}</th>
             <th>{{ $t('console.role') }}</th>
-            <th>{{ $t('console.age') }}</th>
+            <th>{{ $t('console.birthday') }}</th>
             <th>{{ $t('console.gender') }}</th>
             <th>{{ $t('console.enabled') }}</th>
             <th>{{ $t('console.region') }}</th>
@@ -36,7 +36,7 @@
                 {{ u.role }}
               </span>
             </td>
-            <td class="cell-num">{{ u.age ?? '-' }}</td>
+            <td class="cell-num">{{ u.birthday || '-' }}</td>
             <td>{{ genderLabel(u.gender) }}</td>
             <td>
               <button
@@ -96,16 +96,13 @@
             <h3 class="form-title">{{ $t('console.editProfile') }} — {{ regionUser?.username }}</h3>
 
             <div class="form-body">
-              <div class="form-grid">
+              <div class="form-stack">
                 <div class="form-field">
-                  <span class="form-label">{{ $t('console.age') }}</span>
-                  <input
-                    v-model.number="editAge"
-                    type="number"
-                    class="form-input"
-                    min="1"
-                    max="120"
-                    :placeholder="$t('console.age')"
+                  <span class="form-label">{{ $t('console.birthday') }}</span>
+                  <DatePicker
+                    v-model="editBirthday"
+                    :max="maxBirthday"
+                    :placeholder="$t('profile.birthdayPlaceholder')"
                   />
                 </div>
                 <div class="form-field">
@@ -196,13 +193,16 @@ import { useI18n } from 'vue-i18n'
 import type { AdminUser, UserRole, UserUpdatePayload } from '@/types/admin'
 import { fetchAdminUsers, resetUserPassword, updateAdminUser } from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
+import { useToast } from '@/composables/useToast'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import RegionSelect, { type RegionValue } from '@/components/common/RegionSelect.vue'
+import DatePicker from '@/components/common/DatePicker.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
+const { showToast } = useToast()
 
 const users = ref<AdminUser[]>([])
 const loading = ref(true)
@@ -290,6 +290,7 @@ const askToggleActive = (u: AdminUser) => {
       await updateAdminUser(u.id, { is_active: target })
       u.is_active = target
       touchUpdated(u)
+      showToast(target ? t('console.enableSuccess') : t('console.disableSuccess'), 'success')
     }
   )
 }
@@ -308,6 +309,7 @@ const askToggleRole = (u: AdminUser) => {
       await updateAdminUser(u.id, { role: target })
       u.role = target
       touchUpdated(u)
+      showToast(t('console.roleUpdated'), 'success')
     },
     false
   )
@@ -337,6 +339,7 @@ const submitReset = async () => {
   try {
     await resetUserPassword(resetUser.value.id, newPassword.value)
     resetVisible.value = false
+    showToast(t('console.passwordUpdated'), 'success')
   } catch (err) {
     resetError.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
@@ -349,8 +352,14 @@ const regionSubmitting = ref(false)
 const regionError = ref('')
 const regionUser = ref<AdminUser | null>(null)
 const regionValue = ref<RegionValue>({ province: '', city: '', district: '' })
-const editAge = ref<number | '' | null>(null)
+const editBirthday = ref('')
 const editGender = ref('')
+
+const maxBirthday = computed(() => {
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+})
 
 const regionPreview = computed(() => {
   const v = regionValue.value
@@ -365,7 +374,7 @@ const openEditRegion = (u: AdminUser) => {
     city: u.city || '',
     district: u.district || ''
   }
-  editAge.value = u.age ?? null
+  editBirthday.value = u.birthday || ''
   editGender.value = u.gender || ''
   regionError.value = ''
   regionVisible.value = true
@@ -378,9 +387,9 @@ const submitRegion = async () => {
     regionError.value = t('auth.regionRequired')
     return
   }
-  const ageVal = editAge.value
-  if (ageVal !== null && ageVal !== '' && (!Number.isFinite(ageVal) || ageVal < 1 || ageVal > 120)) {
-    regionError.value = t('auth.ageInvalid')
+  const birthday = editBirthday.value
+  if (birthday && !/^\d{4}-\d{2}-\d{2}$/.test(birthday)) {
+    regionError.value = t('profile.birthdayInvalid')
     return
   }
   regionSubmitting.value = true
@@ -391,16 +400,17 @@ const submitRegion = async () => {
       district: regionValue.value.district,
       gender: editGender.value || undefined
     }
-    if (ageVal !== null && ageVal !== '') payload.age = Number(ageVal)
+    if (birthday) payload.birthday = birthday
     await updateAdminUser(regionUser.value.id, payload)
     const u = regionUser.value
     u.province = regionValue.value.province
     u.city = regionValue.value.city
     u.district = regionValue.value.district
-    u.age = ageVal === null || ageVal === '' ? u.age : Number(ageVal)
+    u.birthday = birthday || u.birthday
     u.gender = editGender.value
     touchUpdated(u)
     regionVisible.value = false
+    showToast(t('console.updated'), 'success')
   } catch (err) {
     regionError.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
@@ -676,6 +686,12 @@ const submitRegion = async () => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .form-grid {

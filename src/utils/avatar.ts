@@ -18,8 +18,13 @@ export function avatarSrc(avatar?: string | null): string {
 
 const roundCache = new Map<string, string>()
 
-export function roundAvatarDataUrl(src: string, size = 32): Promise<string> {
-  const key = `${src}|${size}`
+export interface RoundAvatarRing {
+  color: string
+  width: number
+}
+
+export function roundAvatarDataUrl(src: string, size = 32, ring?: RoundAvatarRing): Promise<string> {
+  const key = `${src}|${size}|${ring ? ring.color + ring.width : '0'}`
   const cached = roundCache.get(key)
   if (cached) return Promise.resolve(cached)
   return new Promise((resolve) => {
@@ -40,6 +45,13 @@ export function roundAvatarDataUrl(src: string, size = 32): Promise<string> {
         ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2)
         ctx.clip()
         ctx.drawImage(img, 0, 0, size, size)
+        if (ring) {
+          ctx.beginPath()
+          ctx.arc(size / 2, size / 2, size / 2 - ring.width / 2, 0, Math.PI * 2)
+          ctx.lineWidth = ring.width
+          ctx.strokeStyle = ring.color
+          ctx.stroke()
+        }
         ctx.restore()
         const out = canvas.toDataURL('image/png')
         roundCache.set(key, out)
