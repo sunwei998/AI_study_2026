@@ -12,6 +12,22 @@
       rel="stylesheet"
     >
     <title>AI Chat</title>
+    <script>
+      // 设备类型检测（区分移动端/PC 端）：通过 <html data-device> 参数标记，
+      // 样式层用 [data-device="..."] 选择器，不使用 CSS 媒体查询。
+      // 判定依据：移动端 UA / 触摸能力，或视口宽度过窄（如桌面窗口缩小预览时按移动端渲染）。
+      ;(function () {
+        var isMobileUA = /Mobi|Android|iPhone|iPad|iPod|IEMobile|Opera Mini|BlackBerry/i.test(navigator.userAgent)
+        var touchable = navigator.maxTouchPoints > 0 && 'ontouchstart' in window
+        function update() {
+          var isMobile = isMobileUA || touchable || window.innerWidth < 768
+          document.documentElement.setAttribute('data-device', isMobile ? 'mobile' : 'desktop')
+        }
+        update()
+        window.addEventListener('resize', update)
+        window.addEventListener('orientationchange', update)
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

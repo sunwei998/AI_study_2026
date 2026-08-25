@@ -15,6 +15,7 @@
     "@iconify/vue": "^5.0.1",
     "@tsparticles/slim": "^4.3.2",
     "@tsparticles/vue3": "^4.3.2",
+    "d3-cloud": "^1.2.9",
     "dompurify": "^3.4.13",
     "echarts": "^6.1.0",
     "marked": "^18.0.9",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@tsconfig/node22": "^22.0.0",
+    "@types/d3-cloud": "^1.2.9",
     "@types/node": "^22.9.3",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/eslint-config-typescript": "^14.1.3",

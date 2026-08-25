@@ -31,6 +31,7 @@
             <th>{{ $t('console.provider') }}</th>
             <th>{{ $t('console.free') }}</th>
             <th>{{ $t('console.vision') }}</th>
+            <th>{{ $t('console.supportsSearch') }}</th>
             <th>{{ $t('console.sortOrder') }}</th>
             <th>{{ $t('console.actions') }}</th>
           </tr>
@@ -64,6 +65,13 @@
                 :glow="m.vision"
               />
             </td>
+            <td>
+              <AppIcon
+                :name="m.supports_search ? 'lucide:check-circle' : 'lucide:circle'"
+                :size="16"
+                :glow="m.supports_search"
+              />
+            </td>
             <td class="cell-order">{{ m.sort_order }}</td>
             <td>
               <div class="row-actions">
@@ -77,7 +85,7 @@
             </td>
           </tr>
           <tr v-if="filtered.length === 0">
-            <td colspan="8" class="cell-empty">{{ $t('console.noModels') }}</td>
+            <td colspan="9" class="cell-empty">{{ $t('console.noModels') }}</td>
           </tr>
         </tbody>
       </table>
@@ -119,6 +127,10 @@
                 <label class="form-check">
                   <input v-model="form.vision" type="checkbox" />
                   <span>{{ $t('console.vision') }}</span>
+                </label>
+                <label class="form-check">
+                  <input v-model="form.supports_search" type="checkbox" />
+                  <span>{{ $t('console.supportsSearch') }}</span>
                 </label>
                 <label class="form-check">
                   <input v-model="form.enabled" type="checkbox" />
@@ -239,6 +251,7 @@ function emptyForm(): ModelPayload {
     provider: 'openai',
     free: false,
     vision: false,
+    supports_search: true,
     enabled: true,
     sort_order: 100
   }
@@ -256,6 +269,7 @@ function toPayload(m: AdminModel): ModelPayload {
     provider: m.provider,
     free: m.free,
     vision: m.vision,
+    supports_search: m.supports_search,
     enabled: m.enabled,
     sort_order: m.sort_order
   }

@@ -10,6 +10,22 @@ export type ThemeType =
   | 'sand'
 export type ApiProvider = 'ollama' | 'openai'
 
+export interface Citation {
+  title: string
+  link: string
+  source?: string
+}
+
+export interface SearchStatus {
+  status: 'started' | 'done' | 'no_results' | 'failed' | 'unsupported'
+  query?: string
+  count?: number
+  duration_ms?: number
+  sources?: string[]
+  error?: string
+  citations?: Citation[]
+}
+
 export interface Message {
   id: string
   content: string
@@ -17,6 +33,13 @@ export interface Message {
   timestamp: number
   loading?: boolean
   images?: string[]
+  isSearching?: boolean
+  searchingText?: string
+  searchStartTime?: number
+  searchStatus?: SearchStatus
+  citations?: Citation[]
+  /** 模型思考过程（DeepSeek 等 reasoning_content 流式拼接，仅当前会话内存展示） */
+  reasoning?: string
 }
 
 export interface SendPayload {
@@ -85,4 +108,6 @@ export interface ModelInfo {
   name: string
   free: boolean
   vision?: boolean
+  /** 是否支持联网搜索（后端 models.supports_search，默认 true） */
+  supportsSearch?: boolean
 }

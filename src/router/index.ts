@@ -61,14 +61,26 @@ const router = createRouter({
           component: () => import('@/components/admin/AdminUsage.vue')
         },
         {
-          path: 'suggestions',
-          name: 'admin-suggestions',
-          component: () => import('@/components/admin/AdminSuggestions.vue')
+          path: 'hot-words',
+          name: 'admin-hot-words',
+          component: () => import('@/components/admin/AdminHotWords.vue')
         },
         {
           path: 'settings',
-          name: 'admin-settings',
-          component: () => import('@/components/admin/AdminSettings.vue')
+          component: () => import('@/components/admin/AdminSettingsLayout.vue'),
+          children: [
+            { path: '', redirect: '/admin/settings/base' },
+            {
+              path: 'base',
+              name: 'admin-settings-base',
+              component: () => import('@/components/admin/AdminSettingsBase.vue')
+            },
+            {
+              path: 'search',
+              name: 'admin-settings-search',
+              component: () => import('@/components/admin/AdminSettingsSearch.vue')
+            }
+          ]
         }
       ]
     },

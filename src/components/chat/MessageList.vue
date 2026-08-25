@@ -52,7 +52,6 @@ import MessageItem from './MessageItem.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import { useChatStore } from '@/stores/chatStore'
 import apiService from '@/services/apiService'
-import { i18n } from '@/locales'
 
 const { tm } = useI18n()
 const store = useChatStore()
@@ -161,27 +160,21 @@ const scrollToTop = () => {
 
 const i18nFallback = computed<string[]>(() => tm('chat.suggestions') as unknown as string[])
 
-const configSuggestions = ref<{ title_zh: string; title_en: string }[]>([])
-const configLoaded = ref(false)
+// 推荐词 = 用户提问高频词 TOP4（不分中英文，语言切换不影响）；无数据时用 i18n 兜底
+const hotWords = ref<string[]>([])
 
-const suggestions = computed<string[]>(() => {
-  if (configLoaded.value && configSuggestions.value.length) {
-    const isEn = i18n.global.locale.value === 'en-US'
-    return configSuggestions.value.map((s) => (isEn ? s.title_en : s.title_zh)).slice(0, 6)
-  }
-  return i18nFallback.value.slice(0, 6)
-})
+const suggestions = computed<string[]>(() =>
+  hotWords.value.length ? hotWords.value.slice(0, 4) : i18nFallback.value.slice(0, 4)
+)
 
 onMounted(async () => {
   try {
-    const list = await apiService.fetchSuggestions()
+    const list = await apiService.fetchChatHotWords(4)
     if (Array.isArray(list)) {
-      configSuggestions.value = list
+      hotWords.value = list.map((w) => w.word).filter(Boolean)
     }
   } catch {
     // 后端不可用时使用 i18n 兜底
-  } finally {
-    configLoaded.value = true
   }
   await nextTick()
   setupObserver()
@@ -207,11 +200,12 @@ const isNearBottom = (): boolean => {
 
 let lastUserMsgId = ''
 
+// 1) 新消息/前插更早消息：仅关注消息条数变化（浅比较，避免逐 token 深遍历整个数组）
 watch(
-  () => props.messages,
-  (msgs, oldMsgs) => {
+  () => props.messages.length,
+  (len, oldLen) => {
     // 检测到「新出现的用户消息」（发送消息）时强制滚动到最新对话
-    const lastUser = [...msgs].reverse().find((m) => m.role === 'user')
+    const lastUser = [...props.messages].reverse().find((m) => m.role === 'user')
     if (lastUser && lastUser.id !== lastUserMsgId) {
       lastUserMsgId = lastUser.id
       nextTick(() => {
@@ -220,19 +214,24 @@ watch(
       return
     }
     // 向上懒加载前插了更早消息：不跟随底部，滚动位置由 IntersectionObserver 保持
-    if (oldMsgs?.length && msgs.length > oldMsgs.length && msgs[0]?.id !== oldMsgs[0]?.id) {
-      return
-    }
+    if (oldLen !== undefined && len > oldLen) return
+  }
+)
+
+// 2) 流式正文增长：最后一条消息内容变长时，若在底部则跟随滚动（合帧后最多 ~60/s）
+watch(
+  () => props.messages[props.messages.length - 1]?.content.length ?? 0,
+  () => {
+    if (!props.isLoading) return
     if (isNearBottom()) {
       nextTick(() => {
         listRef.value?.scrollTo({
           top: listRef.value.scrollHeight,
-          behavior: props.isLoading ? 'auto' : 'smooth'
+          behavior: 'auto'
         })
       })
     }
-  },
-  { deep: true }
+  }
 )
 </script>
 

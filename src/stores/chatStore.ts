@@ -184,7 +184,17 @@ export const useChatStore = defineStore('chat', () => {
 
   const createNewSession = async () => {
     try {
-      applyList(await apiService.createSession())
+      const oldIds = new Set(sessions.value.map((s) => s.id))
+      const list = await apiService.createSession()
+      // 新会话 = 新列表里原来没有的那条（有置顶会话时 list[0] 不一定是新会话）
+      const created = Array.isArray(list) ? list.find((s) => !oldIds.has(s.id)) : null
+      if (created?.id) {
+        // 本地前插 + 同帧切换 currentSessionId：避免整表替换导致列表重排、高亮闪烁
+        sessions.value = [created, ...sessions.value.filter((s) => s.id !== created.id)]
+        currentSessionId.value = created.id
+      } else {
+        applyList(list)
+      }
     } catch {
       const id = `session_${Date.now()}`
       sessions.value.unshift({
@@ -240,6 +250,17 @@ export const useChatStore = defineStore('chat', () => {
   const setModel = async (model: ModelInfo) => {
     const session = currentSession.value
     if (!session) return
+    // 切到不支持联网搜索的模型时自动关闭搜索开关
+    if (session.webSearch && model.supportsSearch === false) {
+      try {
+        applyList(await apiService.patchSession(session.id, { model: model.id, web_search: false }))
+        session.webSearch = false
+      } catch {
+        session.model = model.id
+        session.webSearch = false
+      }
+      return
+    }
     try {
       applyList(await apiService.patchSession(session.id, { model: model.id }))
     } catch {
@@ -305,6 +326,15 @@ export const useChatStore = defineStore('chat', () => {
         session.updatedAt = Date.now()
         session.lastPreview = content.slice(0, 50)
       }
+    }
+  }
+
+  // 仅更新消息正文，不触碰会话的 lastPreview/updatedAt —— 流式输出高频调用时避免侧栏整块重渲染
+  const updateMessageContent = (messageId: string, content: string, sessionId?: string) => {
+    const id = sessionId || currentSessionId.value
+    const message = getMessages(id).find((m) => m.id === messageId)
+    if (message) {
+      message.content = content
     }
   }
 
@@ -374,6 +404,13 @@ export const useChatStore = defineStore('chat', () => {
 
     const userMsg = addMessage(content, 'user', sessionId, images)
     const assistantMsg = addMessage('', 'assistant', sessionId)
+    // 初始化为搜索状态
+    const session = getSession(sessionId)
+    if (session?.webSearch) {
+      assistantMsg.isSearching = true
+      assistantMsg.searchingText = i18n.global.t('chat.searching')
+      assistantMsg.searchStartTime = Date.now()
+    }
     setMessageLoading(assistantMsg.id, true, sessionId)
     requestIds.set(sessionId, requestId)
     setSessionLoading(sessionId, true)
@@ -382,12 +419,28 @@ export const useChatStore = defineStore('chat', () => {
       const session = getSession(sessionId)
       if (!session) return
       const history = buildHistory(sessionId, assistantMsg.id)
+      let firstChunkReceived = false
+      // 流式正文：本地累积，rAF 合帧刷新到消息（避免每个 token 都触发整块重渲染）
+      let accContent = ''
+      let contentRafId = 0
+      const flushContent = () => {
+        contentRafId = 0
+        updateMessageContent(assistantMsg.id, accContent, sessionId)
+      }
       await apiService.chatStream(
         history,
         (chunk) => {
-          const currentContent =
-            getMessages(sessionId).find((m) => m.id === assistantMsg.id)?.content || ''
-          updateMessage(assistantMsg.id, currentContent + chunk, sessionId)
+          if (!firstChunkReceived) {
+            firstChunkReceived = true
+            // 收到第一个分片，切换到正常模式（搜索状态由 onSearch 终态事件负责清理）
+            const msg = getMessages(sessionId).find((m) => m.id === assistantMsg.id)
+            if (msg?.isSearching) {
+              msg.isSearching = false
+              msg.searchingText = ''
+            }
+          }
+          accContent += chunk
+          if (!contentRafId) contentRafId = requestAnimationFrame(flushContent)
         },
         requestId,
         resolveSessionModel(session),
@@ -395,9 +448,41 @@ export const useChatStore = defineStore('chat', () => {
         {
           sessionId,
           userMessageId: userMsg.id,
-          assistantMessageId: assistantMsg.id
+          assistantMessageId: assistantMsg.id,
+          onSearch: (search) => {
+            const msg = getMessages(sessionId).find((m) => m.id === assistantMsg.id)
+            if (!msg) return
+            if (search.status === 'done') {
+              msg.isSearching = false
+              msg.searchingText = ''
+              msg.searchStatus = search
+              msg.citations = search.citations || []
+            } else if (
+              search.status === 'no_results' ||
+              search.status === 'failed' ||
+              search.status === 'unsupported'
+            ) {
+              msg.isSearching = false
+              msg.searchingText = ''
+              msg.searchStatus = search
+            }
+            // started 保持 isSearching（本地已显示"联网搜索中..."）
+          },
+          onReasoning: (text) => {
+            const msg = getMessages(sessionId).find((m) => m.id === assistantMsg.id)
+            if (!msg) return
+            // 思考内容封顶 12K 字符：超长思考若无限拼接是 O(n²) 字符串操作，会把页面拖垮
+            const merged = (msg.reasoning || '') + text
+            msg.reasoning = merged.length > 12000 ? merged.slice(-12000) : merged
+          }
         }
       )
+      // 流结束：取消未落帧的刷新，做最终刷新
+      if (contentRafId) {
+        cancelAnimationFrame(contentRafId)
+        contentRafId = 0
+      }
+      updateMessageContent(assistantMsg.id, accContent, sessionId)
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return
@@ -405,6 +490,12 @@ export const useChatStore = defineStore('chat', () => {
       const errorMsg = error instanceof Error ? error.message : i18n.global.t('common.errorOccurred')
       updateMessage(assistantMsg.id, i18n.global.t('chat.error', { msg: errorMsg }), sessionId)
     } finally {
+      // 无论成功/失败/中断，都必须清除搜索状态，避免一直卡在"联网搜索中"
+      const msg = getMessages(sessionId).find((m) => m.id === assistantMsg.id)
+      if (msg?.isSearching) {
+        msg.isSearching = false
+        msg.searchingText = ''
+      }
       setMessageLoading(assistantMsg.id, false, sessionId)
       setSessionLoading(sessionId, false)
       requestIds.delete(sessionId)

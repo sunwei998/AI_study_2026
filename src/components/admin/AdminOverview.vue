@@ -1,5 +1,5 @@
 <template>
-  <div class="admin-overview">
+  <div class="admin-overview" ref="rootRef">
     <div v-if="error" class="ov-error">{{ error }}</div>
     <div v-if="loading" class="ov-loading">
       <AppLoading :size="28" glow />
@@ -51,13 +51,6 @@
         </section>
         <section class="ov-panel">
           <h3 class="ov-panel-title">
-            <AppIcon name="lucide:pie-chart" :size="16" />
-            {{ $t('console.byGender') }}
-          </h3>
-          <div ref="genderRef" class="ov-chart ov-chart--donut"></div>
-        </section>
-        <section class="ov-panel">
-          <h3 class="ov-panel-title">
             <AppIcon name="lucide:map-pin" :size="16" />
             {{ $t('console.ovTopProvinces') }}
           </h3>
@@ -79,20 +72,42 @@
             <li v-if="overview.top_users.length === 0" class="ov-empty">{{ $t('console.tipNoUsers') }}</li>
           </ul>
         </section>
-        <section class="ov-panel">
+
+        <section class="ov-panel ov-wordcloud-panel">
           <h3 class="ov-panel-title">
-            <AppIcon name="lucide:user-plus" :size="16" />
-            {{ $t('console.ovRecentUsers') }}
+            <AppIcon name="lucide:cloud" :size="16" />
+            {{ $t('console.ovHotWords') }}
+            <div class="ov-seg ov-seg--inline" style="--seg-count: 3">
+              <span class="ov-seg-track" :style="{ transform: `translateX(${wcPeriodIndex * 100}%)` }"></span>
+              <button
+                v-for="p in WC_PERIODS"
+                :key="p.key"
+                type="button"
+                class="ov-seg-btn"
+                :class="{ active: wcPeriod === p.key }"
+                @click="switchWcPeriod(p.key)"
+              >{{ t(p.labelKey) }}</button>
+            </div>
           </h3>
-          <ul class="ov-list">
-            <li v-for="u in overview.recent_users" :key="u.username" class="ov-list-item">
-              <img class="ov-avatar" :src="avatarSrc(u.avatar)" alt="" />
-              <span class="ov-name">{{ u.username }}</span>
-              <span class="ov-sub">{{ fmtRegion(u) }}</span>
-              <span class="ov-time">{{ fmtTime(u.created_at) }}</span>
-            </li>
-            <li v-if="overview.recent_users.length === 0" class="ov-empty">{{ $t('console.noUsers') }}</li>
-          </ul>
+
+          <div class="ov-wordcloud-wrap">
+            <div v-if="wcLoading" class="ov-wc-loading">
+              <AppLoading :size="22" glow />
+            </div>
+            <div v-else-if="hotWords.length === 0" class="ov-empty">{{ $t('console.ovHotWordsEmpty') }}</div>
+            <div v-else class="ov-wordcloud-stage">
+              <div v-if="wcBusy" class="ov-wc-busy"><AppLoading :size="18" glow /></div>
+              <div ref="wcBoxRef" class="ov-wordcloud">
+                <span
+                  v-for="w in placedWords"
+                  :key="w.text"
+                  class="ov-wc-word"
+                  :style="{ left: w.x + 'px', top: w.y + 'px', fontSize: w.size + 'px', color: w.color }"
+                  :title="`${w.text} · ${w.value}`"
+                >{{ w.text }}</span>
+              </div>
+            </div>
+          </div>
         </section>
       </div>
     </template>
@@ -100,31 +115,50 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts/core'
 import { BarChart, LineChart, PieChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import { GridComponent, LegendComponent, LegendScrollComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import type { AdminOverview } from '@/types/admin'
-import { fetchOverview } from '@/services/adminService'
+import type { AdminOverview, HeatPeriod, HotWordItem } from '@/types/admin'
+import { fetchOverview, fetchHotWords } from '@/services/adminService'
+import { HEAT_PERIODS } from '@/utils/provinceHeat'
+import { useChatStore } from '@/stores/chatStore'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import { avatarSrc } from '@/utils/avatar'
+import { createDebounced, createRafCoalescer } from '@/utils/resize'
+import cloud from 'd3-cloud'
 
-echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
+echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, LegendComponent, LegendScrollComponent, CanvasRenderer])
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const chatStore = useChatStore()
 
 const overview = ref<AdminOverview | null>(null)
 const loading = ref(true)
 const error = ref('')
+const hotWords = ref<HotWordItem[]>([])
+const wcLoading = ref(true)
+const wcBusy = ref(false)
+const wcBoxRef = ref<HTMLDivElement | null>(null)
+const rootRef = ref<HTMLDivElement | null>(null)
+const placedWords = ref<{ text: string; value: number; x: number; y: number; size: number; color: string }[]>([])
+
+// 高频词云面板的「统计周期」控制（借鉴热点页面，科技液态玻璃风），条数固定取 Top 50
+// 概览词云仅提供 日/周/月，去掉「年」选项（不影响热点地图页面的完整周期）
+const WC_PERIODS = HEAT_PERIODS.filter((p) => p.key !== 'year')
+const wcPeriod = ref<HeatPeriod>('month')
+let wcFirstLoad = true
+
+// 滑动指示条索引（同热点地图右上角周期组件）
+const wcPeriodIndex = computed(() => Math.max(0, WC_PERIODS.findIndex((p) => p.key === wcPeriod.value)))
 
 const trendRef = ref<HTMLDivElement | null>(null)
 const hourRef = ref<HTMLDivElement | null>(null)
 const modelRef = ref<HTMLDivElement | null>(null)
 const ageRef = ref<HTMLDivElement | null>(null)
-const genderRef = ref<HTMLDivElement | null>(null)
 const provRef = ref<HTMLDivElement | null>(null)
 
 let charts: echarts.ECharts[] = []
@@ -146,20 +180,136 @@ function axisColors() {
   }
 }
 
-function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return String(n)
+// 与用户用量页 formatTokens 统一：千=K、万=W、百万=M、亿(>=1e8)兜底
+function fmtTokens(n: number | string): string {
+  const v = Number(n)
+  if (!isFinite(v)) return String(n)
+  if (v >= 1e8) return (v / 1e8).toFixed(1).replace(/\.0$/, '') + '亿'
+  if (v >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'
+  if (v >= 1e4) return (v / 1e4).toFixed(1).replace(/\.0$/, '') + 'W'
+  if (v >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'K'
+  return String(v)
 }
 
-function fmtTime(ms: number): string {
-  const d = new Date(ms)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+// 高频词词云：刻意避开品牌主色（青 #00e5ff / 紫 #7c5cff），选用更柔和、明亮但不刺眼的
+// 色调，在深色玻璃面板上既醒目又不会与主题强调色“撞色”。
+const WORD_COLORS: string[] = [
+  '#5eead4', // teal
+  '#93c5fd', // blue
+  '#fde68a', // amber
+  '#fca5a5', // rose
+  '#a7f3d0', // emerald
+  '#f9a8d4', // pink
+  '#7dd3fc', // sky
+  '#fdba74', // orange
+  '#bef264'  // lime
+]
+
+// 字号按词频平方根映射，避免头部几个词过大而长尾过小，区间 14px~54px。
+function cloudSize(count: number): number {
+  const list = hotWords.value
+  if (list.length === 0) return 16
+  const counts = list.map((w) => w.count)
+  const min = Math.min(...counts)
+  const max = Math.max(...counts)
+  if (max === min) return 30
+  const t = (Math.sqrt(count) - Math.sqrt(min)) / (Math.sqrt(max) - Math.sqrt(min))
+  return 14 + t * 40
 }
 
-function fmtRegion(u: { province: string; city: string; district: string }): string {
-  return [u.province, u.city, u.district].filter(Boolean).join(' ') || '-'
+// 径向词云：d3-cloud 按传入顺序从中心螺旋向外排布，且大词优先——
+// 因此把词按词频降序传入，最大的词自然落在最中心，越往外越小。
+interface CloudWord {
+  text: string
+  value: number
+  size: number
+  color: string
+  x?: number
+  y?: number
+  rotate?: number
+}
+
+let wcToken = 0
+let wcObserver: ResizeObserver | null = null
+let pageObserver: ResizeObserver | null = null
+
+function renderCloud(): void {
+  const box = wcBoxRef.value
+  if (!box) return
+  const width = box.clientWidth
+  const height = box.clientHeight
+  if (width <= 0 || height <= 0) return
+  const list = hotWords.value
+  if (list.length === 0) {
+    placedWords.value = []
+    return
+  }
+  const myToken = ++wcToken
+  const data: CloudWord[] = list
+    .slice()
+    .sort((a, b) => b.count - a.count)
+    .map((w, i) => ({
+      text: w.word,
+      value: w.count,
+      size: cloudSize(w.count),
+      color: WORD_COLORS[i % WORD_COLORS.length]
+    }))
+  cloud()
+    .size([width, height])
+    .words(data as any)
+    .padding(3)
+    .rotate(() => 0)
+    .font(getComputedStyle(box).fontFamily)
+    .fontWeight(600)
+    .fontSize((d: any) => (d as unknown as CloudWord).size)
+    .on('end', (placed: any) => {
+      if (myToken !== wcToken) return // 丢弃过期布局，避免闪烁
+      placedWords.value = (placed as unknown as CloudWord[]).map((d) => ({
+        text: d.text,
+        value: d.value,
+        size: d.size,
+        color: d.color,
+        x: width / 2 + (d.x ?? 0),
+        y: height / 2 + (d.y ?? 0)
+      }))
+    })
+    .start()
+}
+
+function setupCloudObserver(): void {
+  const box = wcBoxRef.value
+  if (!box || typeof ResizeObserver === 'undefined') return
+  // 词云容器可能在「无数据 / 有数据」间切换而被卸载重建，先断开旧观察器再挂新的
+  if (wcObserver) {
+    wcObserver.disconnect()
+    wcObserver = null
+  }
+  wcObserver = new ResizeObserver(() => scheduleCloud())
+  wcObserver.observe(box)
+}
+
+// 拉取高频词：首次加载走 loading，之后切换周期只显示轻量遮罩，避免容器卸载导致观察器失效
+function loadHotWords(): void {
+  if (wcFirstLoad) wcLoading.value = true
+  else wcBusy.value = true
+  fetchHotWords(wcPeriod.value, 50)
+    .then((list) => { hotWords.value = list })
+    .catch(() => { /* 静默：词云为空时显示占位文案 */ })
+    .finally(async () => {
+      wcLoading.value = false
+      wcBusy.value = false
+      wcFirstLoad = false
+      placedWords.value = [] // 切换时先清掉旧布局，避免闪烁
+      await nextTick() // 等词云容器挂载后再布局
+      setupCloudObserver()
+      renderCloud()
+    })
+}
+
+function switchWcPeriod(p: HeatPeriod): void {
+  if (p === wcPeriod.value) return
+  wcPeriod.value = p
+  loadHotWords()
 }
 
 function dayToLabel(day: number): string {
@@ -181,16 +331,18 @@ const cards = computed(() => {
   ]
 })
 
-const pieColors = [
-  cssVar('--color-primary', '#00e5ff'),
-  cssVar('--color-accent', '#7c5cff'),
-  '#ffb74d',
-  '#ff5b6a',
-  '#34d399',
-  '#60a5fa',
-  '#e879f9',
-  '#94a3b8'
-]
+function pieColors(): string[] {
+  return [
+    cssVar('--color-primary', '#00e5ff'),
+    cssVar('--color-accent', '#7c5cff'),
+    '#ffb74d',
+    '#ff5b6a',
+    '#34d399',
+    '#60a5fa',
+    '#e879f9',
+    '#94a3b8'
+  ]
+}
 
 const ageBuckets: Record<string, string> = {
   '0-17': 'age0_17',
@@ -205,13 +357,6 @@ const ageBuckets: Record<string, string> = {
 function ageLabel(key: string): string {
   const k = ageBuckets[key]
   return k ? t(`console.${k}`) : t('console.unknown')
-}
-
-function genderLabel(key: string): string {
-  if (key === 'male') return t('auth.genderMale')
-  if (key === 'female') return t('auth.genderFemale')
-  if (key === 'other') return t('auth.genderOther')
-  return t('console.unknown')
 }
 
 function baseTooltip(borderColor: string): Record<string, unknown> {
@@ -276,9 +421,9 @@ function renderTrend(): void {
   const chart = echarts.init(trendRef.value)
   chart.setOption({
     color: [c.primary, c.accent],
-    tooltip: { ...baseTooltip(c.line), trigger: 'axis' },
+    tooltip: { ...baseTooltip(c.line), trigger: 'axis', valueFormatter: (val: number | string) => fmtTokens(val) },
     legend: { bottom: 4, left: 'center', itemWidth: 14, itemHeight: 8, textStyle: { color: c.text } },
-    grid: { left: 46, right: 50, top: 28, bottom: 48 },
+    grid: { left: 64, right: 60, top: 28, bottom: 48 },
     xAxis: {
       type: 'category',
       data: daily.map((x) => dayToLabel(x.day)),
@@ -286,8 +431,8 @@ function renderTrend(): void {
       axisLine: { lineStyle: { color: c.line } }
     },
     yAxis: [
-      { type: 'value', name: t('console.requests'), nameTextStyle: { color: c.text }, axisLabel: { color: c.text }, splitLine: { lineStyle: { color: c.line, opacity: 0.3 } } },
-      { type: 'value', name: 'Tokens', nameTextStyle: { color: c.text }, axisLabel: { color: c.text }, splitLine: { show: false } }
+      { type: 'value', name: t('console.requests'), nameTextStyle: { color: c.text }, axisLabel: { color: c.text, formatter: (v: number) => fmtTokens(v) }, splitLine: { lineStyle: { color: c.line, opacity: 0.3 } } },
+      { type: 'value', name: 'Tokens', nameTextStyle: { color: c.text }, axisLabel: { color: c.text, formatter: (v: number) => fmtTokens(v) }, splitLine: { show: false } }
     ],
     series: [
       { name: t('console.requests'), type: 'line', smooth: true, symbol: 'circle', symbolSize: 4, data: daily.map((x) => x.requests), areaStyle: { opacity: 0.14 } },
@@ -307,15 +452,15 @@ function renderHourly(): void {
   const max = Math.max(1, ...data)
   const chart = echarts.init(hourRef.value)
   chart.setOption({
-    tooltip: { ...baseTooltip(c.line), trigger: 'axis' },
-    grid: { left: 36, right: 8, top: 20, bottom: 22 },
+    tooltip: { ...baseTooltip(c.line), trigger: 'axis', valueFormatter: (val: number | string) => fmtTokens(val) },
+    grid: { left: 44, right: 8, top: 20, bottom: 22 },
     xAxis: {
       type: 'category',
       data: Array.from({ length: 24 }, (_, i) => i),
       axisLabel: { color: c.text, interval: 3, formatter: (v: number) => `${v}h` },
       axisLine: { lineStyle: { color: c.line } }
     },
-    yAxis: { type: 'value', axisLabel: { color: c.text }, splitLine: { lineStyle: { color: c.line, opacity: 0.3 } } },
+    yAxis: { type: 'value', axisLabel: { color: c.text, formatter: (v: number) => fmtTokens(v) }, splitLine: { lineStyle: { color: c.line, opacity: 0.3 } } },
     series: [
       {
         type: 'bar',
@@ -377,14 +522,23 @@ function renderTopModels(): void {
   charts.push(chart)
 }
 
-function renderDonut(ref: HTMLDivElement | null, data: { key: string; count: number }[], label: (k: string) => string): void {
+function renderDonut(ref: HTMLDivElement | null, data: { key: string; count: number }[], label: (k: string) => string, scrollLegend = false): void {
   if (!ref) return
   const c = axisColors()
   const chart = echarts.init(ref)
   chart.setOption({
-    color: pieColors,
+    color: pieColors(),
     tooltip: { ...baseTooltip(c.line), trigger: 'item' },
-    legend: { bottom: 0, left: 'center', itemWidth: 12, itemHeight: 8, textStyle: { color: c.text } },
+    legend: {
+      type: scrollLegend ? ('scroll' as const) : ('plain' as const),
+      orient: 'horizontal',
+      bottom: 0,
+      left: 'center',
+      itemWidth: 12,
+      itemHeight: 8,
+      ...(scrollLegend ? { pageIconSize: 12, pageIconColor: c.text, pageIconInactiveColor: c.line } : {}),
+      textStyle: { color: c.text }
+    },
     series: [
       {
         type: 'pie',
@@ -405,9 +559,9 @@ function renderTopProvinces(): void {
   const rows = overview.value!.top_provinces.slice(0, 8).reverse()
   const chart = echarts.init(provRef.value)
   chart.setOption({
-    tooltip: { ...baseTooltip(c.line), trigger: 'axis', axisPointer: { type: 'shadow' } },
-    grid: { left: 12, right: 40, top: 8, bottom: 8 },
-    xAxis: { type: 'value', axisLabel: { color: c.text }, splitLine: { lineStyle: { color: c.line, opacity: 0.3 } } },
+    tooltip: { ...baseTooltip(c.line), trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: (val: number | string) => fmtTokens(val) },
+    grid: { left: 12, right: 44, top: 8, bottom: 8 },
+    xAxis: { type: 'value', axisLabel: { color: c.text, formatter: (v: number) => fmtTokens(v) }, splitLine: { lineStyle: { color: c.line, opacity: 0.3 } } },
     yAxis: {
       type: 'category',
       data: rows.map((p) => p.province),
@@ -445,14 +599,21 @@ function renderAll(): void {
   renderTrend()
   renderHourly()
   renderTopModels()
-  renderDonut(ageRef.value, overview.value!.age_dist, ageLabel)
-  renderDonut(genderRef.value, overview.value!.gender_dist, genderLabel)
+  renderDonut(ageRef.value, overview.value!.age_dist, ageLabel, true)
   renderTopProvinces()
 }
 
+// window resize 与容器 ResizeObserver 会在窗口缩放时同时触发，经 rAF 合并后同帧只执行一次
+const scheduleLayout = createRafCoalescer()
+// 词云是 d3 布局、较昂贵：等尺寸变化稳定后再重排，避免拖拽窗口时逐帧卡顿
+const scheduleCloud = createDebounced(renderCloud, 120)
+
 function onResize(): void {
   charts.forEach((ch) => ch.resize())
+  scheduleCloud()
 }
+
+const onWindowResize = () => scheduleLayout(onResize)
 
 onMounted(async () => {
   try {
@@ -462,15 +623,46 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  // 高频词词云：独立获取，失败/为空不影响概览其余内容
+  loadHotWords()
   await nextTick()
   if (overview.value) {
     renderAll()
-    window.addEventListener('resize', onResize)
+    window.addEventListener('resize', onWindowResize)
+  }
+  // 容器尺寸变化只重绘 ECharts 图表：侧边栏收起/展开改变内容区宽度但不触发
+  // window resize；词云由 wcObserver 自行处理（防抖），避免重复重排
+  if (rootRef.value) {
+    pageObserver = new ResizeObserver(() => scheduleLayout(onResize))
+    pageObserver.observe(rootRef.value)
   }
 })
 
+// 语言切换时重绘所有图表：ECharts 画布不响应 t() 的响应式变化，
+// 不重绘则年龄/性别环形图的图例与图上 label 会停留在切换前的语言。
+watch(
+  () => locale.value,
+  () => {
+    if (overview.value) renderAll()
+  }
+)
+
+// 主题切换时重绘所有图表：图表颜色取自 CSS 变量（--color-primary/--color-accent/
+// --color-text-secondary/--color-border 等），切主题只改 CSS 变量、不会触发 ECharts
+// 重绘，需手动重绘才能套用新主题色（与语言切换同理）。
+watch(
+  () => chatStore.currentTheme,
+  () => {
+    if (overview.value) renderAll()
+  }
+)
+
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', onResize)
+  window.removeEventListener('resize', onWindowResize)
+  wcObserver?.disconnect()
+  wcObserver = null
+  pageObserver?.disconnect()
+  pageObserver = null
   charts.forEach((ch) => ch.dispose())
   charts = []
 })
@@ -720,10 +912,142 @@ onBeforeUnmount(() => {
   color: var(--color-text-secondary);
 }
 
+/* 高频词词云：占两张图表卡片宽度，置于概览末尾 */
+.ov-wordcloud-panel {
+  grid-column: span 2;
+}
+
+/* —— 科技风 / 液态玻璃 控制条 —— */
+
+/* 液态玻璃药丸容器：跟随主题变量（玻璃底 + 主题辉光），同热点地图右上角周期组件 */
+.ov-seg {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35), inset 0 0 14px var(--color-glow);
+}
+
+/* 标题行内联的切换器：右对齐到标题行最右侧 */
+.ov-seg--inline {
+  margin-left: auto;
+}
+
+/* 滑动指示条：青→紫霓虹渐变，跟随主题强调色 */
+.ov-seg-track {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / var(--seg-count, 4));
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  box-shadow: 0 0 12px var(--color-glow), inset 0 0 8px rgba(255, 255, 255, 0.25);
+  transition: transform 0.38s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.ov-seg-btn {
+  position: relative;
+  z-index: 1;
+  min-width: 38px;
+  height: 22px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: color 0.3s ease, text-shadow 0.3s ease;
+}
+
+.ov-seg-btn:hover {
+  color: var(--color-text);
+}
+
+.ov-seg-btn.active {
+  color: #fff;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.7);
+}
+
+.ov-wordcloud-wrap {
+  width: 100%;
+  min-height: 260px;
+}
+
+.ov-wordcloud-stage {
+  position: relative;
+  width: 100%;
+}
+
+.ov-wc-busy {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 3;
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: rgba(10, 14, 26, 0.55);
+  border: 1px solid var(--color-border);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.ov-wc-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+}
+
+.ov-wordcloud {
+  position: relative;
+  width: 100%;
+  height: 300px;
+  min-height: 260px;
+}
+
+.ov-wc-word {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  opacity: 0.92;
+  user-select: none;
+  transition: transform 0.18s ease, text-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.ov-wc-word:hover {
+  transform: translate(-50%, -50%) scale(1.16);
+  text-shadow: 0 0 16px currentColor;
+  opacity: 1;
+  z-index: 2;
+}
+
 @media (max-width: 1100px) {
   .ov-grid--2,
   .ov-grid--3 {
     grid-template-columns: 1fr;
+  }
+
+  .ov-wordcloud-panel {
+    grid-column: 1 / -1;
+  }
+
+  .ov-wordcloud,
+  .ov-wordcloud-wrap {
+    height: 240px;
+    min-height: 220px;
   }
 }
 </style>

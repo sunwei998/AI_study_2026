@@ -5,11 +5,10 @@ import type {
   AdminUsage,
   AdminUser,
   HeatPeriod,
+  HotWordItem,
   ModelPayload,
   RegionStatsData,
   SettingItem,
-  SuggestionItem,
-  SuggestionPayload,
   UserRole,
   UserUpdatePayload
 } from '@/types/admin'
@@ -107,23 +106,8 @@ export function updateSetting(key: string, patch: SettingPatch): Promise<{ ok: b
   return request(`/settings/${encodeURIComponent(key)}`, { method: 'PATCH', body: JSON.stringify(patch) })
 }
 
-export function fetchAdminSuggestions(): Promise<SuggestionItem[]> {
-  return request('/suggestions')
-}
-
-export function createAdminSuggestion(payload: SuggestionPayload): Promise<{ ok: boolean }> {
-  return request('/suggestions', { method: 'POST', body: JSON.stringify(payload) })
-}
-
-export function updateAdminSuggestion(
-  suggestionId: number,
-  payload: SuggestionPayload
-): Promise<{ ok: boolean }> {
-  return request(`/suggestions/${suggestionId}`, { method: 'PUT', body: JSON.stringify(payload) })
-}
-
-export function deleteAdminSuggestion(suggestionId: number): Promise<{ ok: boolean }> {
-  return request(`/suggestions/${suggestionId}`, { method: 'DELETE' })
+export function fetchHotWords(period: HeatPeriod = 'month', limit = 20): Promise<HotWordItem[]> {
+  return request(`/hot-words?period=${period}&limit=${limit}`)
 }
 
 export type { UserRole }

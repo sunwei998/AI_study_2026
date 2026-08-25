@@ -4,9 +4,9 @@
       <button
         class="search-btn"
         :class="{ active: webSearch }"
-        :disabled="isLoading"
+        :disabled="isLoading || !searchSupported"
         @click="toggleSearch"
-        :title="webSearch ? $t('input.webSearchOn') : $t('input.webSearch')"
+        :title="!searchSupported ? $t('input.searchUnsupported') : (webSearch ? $t('input.webSearchOn') : $t('input.webSearch'))"
       >
         <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="10" />
@@ -115,10 +115,13 @@ const fileInput = ref<HTMLInputElement>()
 
 const placeholder = computed(() => t('input.placeholder'))
 const visionSupported = computed(() => Boolean(store.currentModelInfo?.vision))
+// 联网搜索能力位：仅显式 false 才视为不支持（旧数据缺省视为支持）
+const searchSupported = computed(() => store.currentModelInfo?.supportsSearch !== false)
 const canSend = computed(() => inputText.value.trim() !== '' || images.value.length > 0)
 const webSearch = computed(() => store.currentSession?.webSearch ?? false)
 
 const toggleSearch = () => {
+  if (!searchSupported.value) return
   store.setWebSearch(!webSearch.value)
 }
 

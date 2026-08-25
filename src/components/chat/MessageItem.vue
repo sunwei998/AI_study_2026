@@ -32,8 +32,18 @@
             @click="openImage(img)"
           />
         </div>
-        <div v-if="message.content && message.role === 'assistant'" class="markdown-body" v-html="renderedContent" @click="onMarkdownClick"></div>
+        <div v-if="message.content && message.role === 'assistant' && !message.loading" class="markdown-body" v-html="renderedContent" @click="onMarkdownClick"></div>
+        <div v-else-if="message.content && message.role === 'assistant'" class="markdown-body streaming-text">{{ message.content }}</div>
         <div v-else-if="message.content && message.role === 'user'" class="user-text">{{ message.content }}</div>
+        <div v-if="message.isSearching" class="message-searching">
+          <div class="searching-animation">
+            <AppIcon name="lucide:search" :size="18" class="spinning" />
+          </div>
+          <span class="searching-text">{{ message.searchingText || '联网搜索中...' }}</span>
+          <span v-if="message.searchStartTime" class="search-duration">
+            {{ ((Date.now() - message.searchStartTime) / 1000).toFixed(1) }}s
+          </span>
+        </div>
         <span v-if="message.loading && message.content" class="streaming-cursor"></span>
         <div v-if="message.loading && !message.content" class="loading-dots">
           <span></span>
@@ -41,6 +51,46 @@
           <span></span>
         </div>
         <div v-if="message.loading && !message.content" class="loading-text">{{ $t('chat.thinking') }}</div>
+      </div>
+      <div v-if="message.role === 'assistant' && message.reasoning" class="message-reasoning">
+        <button type="button" class="reasoning-toggle" @click="reasoningOpen = !reasoningOpen">
+          <span class="reasoning-icon">💭</span>
+          <span>{{ $t('chat.reasoning') }}</span>
+          <span class="reasoning-caret">{{ reasoningOpen ? '▾' : '▸' }}</span>
+        </button>
+        <div v-if="reasoningOpen" class="reasoning-body">{{ message.reasoning }}</div>
+      </div>
+      <div
+        v-if="message.role === 'assistant' && message.searchStatus && message.searchStatus.status !== 'started'"
+        class="message-search-meta"
+      >
+        <span v-if="message.searchStatus.status === 'done'" class="search-meta-done">
+          🔍 {{ $t('chat.searchDone', { count: message.searchStatus.count ?? 0, duration: ((message.searchStatus.duration_ms ?? 0) / 1000).toFixed(1) }) }}
+        </span>
+        <span v-else-if="message.searchStatus.status === 'no_results'" class="search-meta-warn">
+          ⚠️ {{ $t('chat.searchNoResults') }}
+        </span>
+        <span v-else-if="message.searchStatus.status === 'unsupported'" class="search-meta-warn">
+          ⚠️ {{ $t('chat.searchUnsupported') }}
+        </span>
+        <span v-else class="search-meta-warn">
+          ⚠️ {{ $t('chat.searchFailed') }}
+        </span>
+      </div>
+      <div v-if="message.citations && message.citations.length" class="message-citations">
+        <span class="citations-label">{{ $t('chat.sources') }}:</span>
+        <a
+          v-for="(c, i) in message.citations"
+          :key="i"
+          class="citation-link"
+          :href="c.link"
+          target="_blank"
+          rel="noopener noreferrer"
+          :title="c.link"
+        >
+          <AppIcon name="lucide:link-2" :size="11" />
+          {{ c.title }}
+        </a>
       </div>
       <div v-if="message.role === 'assistant'" class="message-actions">
         <button
@@ -66,6 +116,7 @@ import DOMPurify from 'dompurify'
 import type { Message } from '@/types/chat'
 import { useAuthStore } from '@/stores/authStore'
 import { avatarSrc } from '@/utils/avatar'
+import AppIcon from '@/components/common/AppIcon.vue'
 
 const props = defineProps<{
   message: Message
@@ -77,6 +128,7 @@ const emit = defineEmits<{
 
 const auth = useAuthStore()
 const copied = ref(false)
+const reasoningOpen = ref(false)
 
 marked.use({
   gfm: true,
@@ -100,7 +152,8 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 })
 
 const renderedContent = computed(() => {
-  if (!props.message.content) return ''
+  // 流式输出期间不解析 Markdown（纯文本渲染），结束后再一次性解析，避免每个 token 都 O(n²) 重渲染
+  if (!props.message.content || props.message.loading) return ''
   return DOMPurify.sanitize(marked.parse(props.message.content) as string)
 })
 
@@ -304,6 +357,15 @@ const openImage = (url: string) => {
   line-height: 1.65;
 }
 
+/* 流式输出期间的纯文本（避免每个 token 重解析 Markdown） */
+.streaming-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
 .message-bubble:hover {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-md), inset 0 0 14px var(--color-glow), inset 0 1px 0 var(--glass-edge);
@@ -441,5 +503,168 @@ const openImage = (url: string) => {
     padding: 10px 12px;
     font-size: 13px;
   }
+}
+
+.message-searching {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  font-style: italic;
+}
+
+.searching-animation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.searching-animation .spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.searching-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-duration {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  opacity: 0.8;
+}
+
+/* 搜索状态徽标：成功/无结果/失败 */
+.message-search-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  opacity: 0.85;
+}
+
+.search-meta-done {
+  color: var(--color-primary);
+  text-shadow: 0 0 8px var(--color-glow);
+}
+
+.search-meta-warn {
+  color: #ffb74d;
+}
+
+/* 来源引用列表 */
+.message-citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 6px 12px;
+}
+
+.citations-label {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  opacity: 0.8;
+}
+
+.citation-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 220px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-glass);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: var(--transition-fast);
+}
+
+.citation-link:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 10px var(--color-glow);
+}
+
+@media (max-width: 768px) {
+  .message-searching {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+}
+
+/* 思考过程（DeepSeek 等 reasoning_content）：默认折叠，点击展开 */
+.message-reasoning {
+  padding: 2px 12px 0;
+}
+
+.reasoning-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-glass);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.reasoning-toggle:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.reasoning-icon {
+  opacity: 0.8;
+}
+
+.reasoning-caret {
+  margin-left: 2px;
+}
+
+.reasoning-body {
+  margin-top: 6px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-style: italic;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
 }
 </style>

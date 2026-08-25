@@ -394,8 +394,10 @@ function registerChinaMap(): void {
 }
 
 function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  if (n >= 1e8) return `${(n / 1e8).toFixed(1)}亿`
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`
+  if (n >= 1e4) return `${(n / 1e4).toFixed(1)}W`
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`
   return String(n)
 }
 
@@ -660,7 +662,7 @@ function buildMapOption(
       max: maxCount,
       left: 16,
       bottom: 20,
-      text: [String(maxCount), '0'],
+      text: [fmtTokens(maxCount), '0'],
       textStyle: { color: pal.textSec, fontSize: 11, fontFamily: 'var(--font-mono)' },
       calculable: true,
       seriesIndex: 0,

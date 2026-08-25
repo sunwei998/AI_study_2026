@@ -32,6 +32,7 @@ export interface AdminModel {
   provider: string
   free: boolean
   vision: boolean
+  supports_search: boolean
   enabled: boolean
   sort_order: number
   created_at: number
@@ -71,6 +72,7 @@ export interface ModelPayload {
   provider: string
   free: boolean
   vision: boolean
+  supports_search: boolean
   enabled: boolean
   sort_order: number
 }
@@ -127,20 +129,9 @@ export interface SettingItem {
   enabled: boolean
 }
 
-export interface SuggestionItem {
-  id: number
-  title_zh: string
-  title_en: string
-  sort_order: number
-  enabled: boolean
-  created_at: number
-}
-
-export interface SuggestionPayload {
-  title_zh: string
-  title_en: string
-  sort_order: number
-  enabled: boolean
+export interface HotWordItem {
+  word: string
+  count: number
 }
 
 export interface RegionTopUser {
@@ -159,6 +150,12 @@ export interface RegionStat {
 }
 
 export type HeatPeriod = 'day' | 'week' | 'month' | 'year'
+
+export interface SearchProvider {
+  id: string
+  label: string
+  enabled: boolean
+}
 
 export interface ProvinceMetric {
   province: string

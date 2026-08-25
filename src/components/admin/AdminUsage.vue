@@ -1,5 +1,5 @@
 <template>
-  <div class="admin-usage">
+  <div class="admin-usage" ref="rootRef">
     <div v-if="error" class="page-error">{{ error }}</div>
     <div v-if="loading" class="page-loading">
       <AppLoading :size="28" glow />
@@ -34,19 +34,22 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts/core'
 import { BarChart, LineChart, PieChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import { GridComponent, LegendComponent, LegendScrollComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { useI18n } from 'vue-i18n'
 import type { AdminUsage } from '@/types/admin'
 import { fetchUsage } from '@/services/adminService'
+import { useChatStore } from '@/stores/chatStore'
+import { createRafCoalescer } from '@/utils/resize'
 import AppLoading from '@/components/common/AppLoading.vue'
 
-echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
+echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, LegendComponent, LegendScrollComponent, CanvasRenderer])
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const chatStore = useChatStore()
 
 const usage = ref<AdminUsage | null>(null)
 const loading = ref(true)
@@ -57,8 +60,10 @@ const modelRef = ref<HTMLDivElement | null>(null)
 const userRef = ref<HTMLDivElement | null>(null)
 const ageRef = ref<HTMLDivElement | null>(null)
 const genderRef = ref<HTMLDivElement | null>(null)
+const rootRef = ref<HTMLDivElement | null>(null)
 
 let charts: echarts.ECharts[] = []
+let pageObserver: ResizeObserver | null = null
 
 function cssVar(name: string, fallback: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
@@ -94,9 +99,9 @@ function render() {
     const chart = echarts.init(dailyRef.value)
     chart.setOption({
       color: [c.primary, c.accent],
-      tooltip: { trigger: 'axis', backgroundColor: 'rgba(10, 10, 20, 0.9)', borderColor: c.line, textStyle: { color: '#fff' } },
+      tooltip: { trigger: 'axis', backgroundColor: 'rgba(10, 10, 20, 0.9)', borderColor: c.line, textStyle: { color: '#fff' }, valueFormatter: (val: number | string) => formatTokens(val) },
       legend: { bottom: 8, left: 'center', itemWidth: 16, itemHeight: 10, textStyle: baseTextStyle },
-      grid: { left: 50, right: 24, top: 40, bottom: 64 },
+      grid: { left: 64, right: 24, top: 40, bottom: 64 },
       xAxis: {
         type: 'category',
         data: daily.map((d) => dayToLabel(d.day)),
@@ -104,8 +109,8 @@ function render() {
         axisLine
       },
       yAxis: [
-        { type: 'value', name: t('console.requests'), nameTextStyle: baseTextStyle, axisLabel: baseTextStyle, splitLine },
-        { type: 'value', name: 'Tokens', nameTextStyle: baseTextStyle, axisLabel: baseTextStyle, splitLine }
+        { type: 'value', name: t('console.requests'), nameTextStyle: baseTextStyle, axisLabel: { ...baseTextStyle, formatter: formatTokens }, splitLine },
+        { type: 'value', name: 'Tokens', nameTextStyle: baseTextStyle, axisLabel: { ...baseTextStyle, formatter: formatTokens }, splitLine }
       ],
       series: [
         { name: t('console.requests'), type: 'line', smooth: true, data: daily.map((d) => d.requests), areaStyle: { opacity: 0.15 } },
@@ -124,7 +129,7 @@ function render() {
       grid: { left: 10, right: 40, top: 20, bottom: 60 },
       xAxis: {
         type: 'value',
-        axisLabel: baseTextStyle,
+        axisLabel: { ...baseTextStyle, formatter: formatTokens },
         splitLine
       },
       yAxis: {
@@ -141,7 +146,7 @@ function render() {
           barMaxWidth: 16,
           data: byModel.map((m) => m.total),
           itemStyle: { borderRadius: [0, 4, 4, 0] },
-          label: { show: true, position: 'right', color: c.text, fontSize: 10 }
+          label: { show: true, position: 'right', color: c.text, fontSize: 10, formatter: (p: { value: number }) => formatTokens(p.value) }
         }
       ]
     })
@@ -155,7 +160,7 @@ function render() {
       color: [c.accent],
       tooltip: { trigger: 'axis', backgroundColor: 'rgba(10, 10, 20, 0.9)', borderColor: c.line, textStyle: { color: '#fff' } },
       grid: { left: 10, right: 40, top: 20, bottom: 60 },
-      xAxis: { type: 'value', axisLabel: baseTextStyle, splitLine },
+      xAxis: { type: 'value', axisLabel: { ...baseTextStyle, formatter: formatTokens }, splitLine },
       yAxis: {
         type: 'category',
         inverse: true,
@@ -170,7 +175,7 @@ function render() {
           barMaxWidth: 16,
           data: byUser.map((u) => u.total),
           itemStyle: { borderRadius: [0, 4, 4, 0] },
-          label: { show: true, position: 'right', color: c.text, fontSize: 10 }
+          label: { show: true, position: 'right', color: c.text, fontSize: 10, formatter: (p: { value: number }) => formatTokens(p.value) }
         }
       ]
     })
@@ -180,9 +185,20 @@ function render() {
   if (ageRef.value) {
     const chart = echarts.init(ageRef.value)
     chart.setOption({
-      color: pieColors,
+      color: pieColors(),
       tooltip: { trigger: 'item', backgroundColor: 'rgba(10, 10, 20, 0.9)', borderColor: c.line, textStyle: { color: '#fff' } },
-      legend: { bottom: 0, left: 'center', itemWidth: 12, itemHeight: 8, textStyle: baseTextStyle },
+      legend: {
+        type: 'scroll',
+        orient: 'horizontal',
+        bottom: 0,
+        left: 'center',
+        itemWidth: 12,
+        itemHeight: 8,
+        pageIconSize: 12,
+        pageIconColor: c.text,
+        pageIconInactiveColor: c.line,
+        textStyle: baseTextStyle
+      },
       series: [
         {
           type: 'pie',
@@ -200,7 +216,7 @@ function render() {
   if (genderRef.value) {
     const chart = echarts.init(genderRef.value)
     chart.setOption({
-      color: pieColors,
+      color: pieColors(),
       tooltip: { trigger: 'item', backgroundColor: 'rgba(10, 10, 20, 0.9)', borderColor: c.line, textStyle: { color: '#fff' } },
       legend: { bottom: 0, left: 'center', itemWidth: 12, itemHeight: 8, textStyle: baseTextStyle },
       series: [
@@ -218,16 +234,18 @@ function render() {
   }
 }
 
-const pieColors = [
-  cssVar('--color-primary', '#00e5ff'),
-  cssVar('--color-accent', '#7c5cff'),
-  '#ffb74d',
-  '#ff5b6a',
-  '#34d399',
-  '#60a5fa',
-  '#e879f9',
-  '#94a3b8'
-]
+function pieColors(): string[] {
+  return [
+    cssVar('--color-primary', '#00e5ff'),
+    cssVar('--color-accent', '#7c5cff'),
+    '#ffb74d',
+    '#ff5b6a',
+    '#34d399',
+    '#60a5fa',
+    '#e879f9',
+    '#94a3b8'
+  ]
+}
 
 const ageBuckets: Record<string, string> = {
   '0-17': 'age0_17',
@@ -251,9 +269,25 @@ function genderLabel(key: string): string {
   return t('console.unknown')
 }
 
+// 把大数值格式化为紧凑形式（横轴/柱标签/趋势图 y 轴通用），避免 token 长数字挤在一起
+// 单位约定：千=K、万=W、百万=M、亿(>=1e8)兜底
+function formatTokens(v: number | string): string {
+  const n = Number(v)
+  if (!isFinite(n)) return String(v)
+  if (n >= 1e8) return (n / 1e8).toFixed(1).replace(/\.0$/, '') + '亿'
+  if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'
+  if (n >= 1e4) return (n / 1e4).toFixed(1).replace(/\.0$/, '') + 'W'
+  if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K'
+  return String(n)
+}
+
 function onResize() {
   charts.forEach((ch) => ch.resize())
 }
+
+// window resize 与容器 ResizeObserver 会在窗口缩放时同时触发，经 rAF 合并后同帧只执行一次
+const scheduleLayout = createRafCoalescer()
+const onWindowResize = () => scheduleLayout(onResize)
 
 onMounted(async () => {
   try {
@@ -265,11 +299,36 @@ onMounted(async () => {
     await nextTick()
     render()
   }
-  window.addEventListener('resize', onResize)
+  window.addEventListener('resize', onWindowResize)
+  // 容器尺寸变化也重绘：侧边栏收起/展开等改变内容区宽度但不触发 window resize
+  if (rootRef.value) {
+    pageObserver = new ResizeObserver(() => scheduleLayout(onResize))
+    pageObserver.observe(rootRef.value)
+  }
 })
 
+// 语言切换时重绘所有图表：ECharts 画布不响应 t() 的响应式变化，
+// 不重绘则年龄/性别饼图的图例与图上 label 会停留在切换前的语言。
+watch(
+  () => locale.value,
+  () => {
+    if (usage.value) render()
+  }
+)
+
+// 主题切换时重绘所有图表：图表颜色取自 CSS 变量，切主题只改变量、
+// 不触发 ECharts 重绘，需手动重绘套用新主题色（与语言切换同理）。
+watch(
+  () => chatStore.currentTheme,
+  () => {
+    if (usage.value) render()
+  }
+)
+
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', onResize)
+  window.removeEventListener('resize', onWindowResize)
+  pageObserver?.disconnect()
+  pageObserver = null
   charts.forEach((ch) => ch.dispose())
   charts = []
 })
