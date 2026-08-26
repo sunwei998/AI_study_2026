@@ -81,21 +81,20 @@
         <div class="form-grid">
           <label class="form-field">
             <span class="form-label">{{ $t('console.searxngUrl') }}</span>
-            <input
+            <AppInput
               v-model="searxngUrl"
               type="url"
-              class="form-input"
+              clearable
               :placeholder="$t('console.searxngUrlPlaceholder')"
             />
           </label>
 
           <label class="form-field">
             <span class="form-label">{{ $t('console.searxngTimeout') }}</span>
-            <input
-              v-model.number="searxngTimeout"
+            <AppInput
+              v-model="searxngTimeout"
               type="number"
-              class="form-input"
-              min="5"
+              :min="5"
               :max="60"
               :placeholder="$t('console.searxngTimeoutPlaceholder')"
             />
@@ -138,23 +137,21 @@
         <div class="form-grid">
           <label class="form-field">
             <span class="form-label">{{ $t('console.maxResults') }}</span>
-            <input
-              v-model.number="maxResults"
+            <AppInput
+              v-model="maxResults"
               type="number"
-              class="form-input"
-              min="1"
-              max="20"
+              :min="1"
+              :max="20"
             />
           </label>
 
           <label class="form-field">
             <span class="form-label">{{ $t('console.maxPagesFetch') }}</span>
-            <input
-              v-model.number="maxPagesFetch"
+            <AppInput
+              v-model="maxPagesFetch"
               type="number"
-              class="form-input"
-              min="1"
-              max="10"
+              :min="1"
+              :max="10"
             />
           </label>
 
@@ -172,13 +169,12 @@
 
           <label class="form-field">
             <span class="form-label">{{ $t('console.maxContentLength') }}</span>
-            <input
-              v-model.number="maxContentLength"
+            <AppInput
+              v-model="maxContentLength"
               type="number"
-              class="form-input"
-              min="2000"
-              max="50000"
-              step="1000"
+              :min="2000"
+              :max="50000"
+              :step="1000"
             />
           </label>
         </div>
@@ -201,6 +197,7 @@ import { fetchSettings, updateSetting } from '@/services/adminService'
 import AppLoading from '@/components/common/AppLoading.vue'
 import ChartLoading from '@/components/common/ChartLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import AppInput from '@/components/common/AppInput.vue'
 import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()

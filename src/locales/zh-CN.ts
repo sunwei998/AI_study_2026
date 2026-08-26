@@ -5,6 +5,12 @@ export default {
   common: {
     send: '发送',
     clear: '清空',
+    reset: '重置',
+    all: '全部',
+    search: '搜索',
+    noData: '暂无数据',
+    showPassword: '显示密码',
+    hidePassword: '隐藏密码',
     stop: '停止生成',
     copy: '复制',
     copied: '已复制',

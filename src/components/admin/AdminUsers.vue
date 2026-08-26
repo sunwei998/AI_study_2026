@@ -128,7 +128,7 @@
                 </div>
               </div>
               <div class="region-preview" v-if="regionPreview">{{ regionPreview }}</div>
-              <RegionSelect v-model="regionValue" vertical />
+              <AppCascader v-model="regionValue" />
               <p v-if="regionError" class="form-error">{{ regionError }}</p>
 
               <div class="form-actions">
@@ -161,7 +161,7 @@
             <form class="form-body" @submit.prevent="submitReset">
               <label class="form-field">
                 <span class="form-label">{{ $t('auth.newPassword') }}</span>
-                <input v-model="newPassword" type="password" class="form-input" autocomplete="new-password" />
+                <AppInput v-model="newPassword" type="password" clearable autocomplete="new-password" />
               </label>
 
               <p v-if="resetError" class="form-error">{{ resetError }}</p>
@@ -205,8 +205,9 @@ import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import TableLoading from '@/components/common/TableLoading.vue'
 import Pagination from '@/components/common/Pagination.vue'
-import RegionSelect, { type RegionValue } from '@/components/common/RegionSelect.vue'
+import AppCascader, { type CascaderValue } from '@/components/common/AppCascader.vue'
 import DatePicker from '@/components/common/DatePicker.vue'
+import AppInput from '@/components/common/AppInput.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -365,7 +366,7 @@ const regionVisible = ref(false)
 const regionSubmitting = ref(false)
 const regionError = ref('')
 const regionUser = ref<AdminUser | null>(null)
-const regionValue = ref<RegionValue>({ province: '', city: '', district: '' })
+const regionValue = ref<CascaderValue>({ province: '', city: '', district: '' })
 const editBirthday = ref('')
 const editGender = ref('')
 

@@ -126,11 +126,11 @@
             <form class="form-body" @submit.prevent="submitForm">
               <label class="form-field">
                 <span class="form-label">model_key</span>
-                <input v-model="form.model_key" type="text" class="form-input" :placeholder="'Qwen/Qwen2.5-7B'" />
+                <AppInput v-model="form.model_key" type="text" :placeholder="'Qwen/Qwen2.5-7B'" />
               </label>
               <label class="form-field">
                 <span class="form-label">{{ $t('console.name') }}</span>
-                <input v-model="form.name" type="text" class="form-input" :placeholder="$t('console.namePlaceholder')" />
+                <AppInput v-model="form.name" type="text" :placeholder="$t('console.namePlaceholder')" />
               </label>
               <div class="form-row">
                 <label class="form-field">
@@ -141,7 +141,7 @@
                 </label>
                 <label class="form-field">
                   <span class="form-label">{{ $t('console.sortOrder') }}</span>
-                  <input v-model.number="form.sort_order" type="number" class="form-input" />
+                  <AppInput v-model="form.sort_order" type="number" :min="0" :step="1" />
                 </label>
               </div>
               <div class="form-checks">
@@ -209,6 +209,7 @@ import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import TableLoading from '@/components/common/TableLoading.vue'
 import Pagination from '@/components/common/Pagination.vue'
+import AppInput from '@/components/common/AppInput.vue'
 import { DEFAULT_PROVIDERS, type ModelProvider } from '@/config/models'
 import { useToast } from '@/composables/useToast'
 

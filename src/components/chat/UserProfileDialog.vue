@@ -52,13 +52,13 @@
               <div class="profile-group">
                 <label class="profile-field">
                   <span class="profile-label">{{ $t('profile.username') }}</span>
-                  <input
+                  <AppInput
                     v-model="username"
-                    class="profile-input"
-                    :class="{ 'profile-input--error': usernameError, 'profile-input--ok': usernameOk }"
+                    :error="usernameError"
                     :maxlength="32"
                     :disabled="usernameLocked"
                     :placeholder="usernameLocked ? $t('profile.usernameLimitReached') : ''"
+                    clearable
                     @input="onUsernameInput"
                     @blur="onUsernameBlur"
                   />
@@ -93,7 +93,7 @@
 
                 <div class="profile-field">
                   <span class="profile-label">{{ $t('profile.region') }}</span>
-                  <RegionSelect v-model="region" :vertical="device.isMobile" />
+                  <AppCascader v-model="region" />
                 </div>
               </div>
 
@@ -126,11 +126,12 @@ import { useDevice } from '@/composables/useDevice'
 import { useToast } from '@/composables/useToast'
 import { checkUsername } from '@/services/authService'
 import { readFileAsDataUrl } from '@/utils/image'
-import RegionSelect, { type RegionValue } from '@/components/common/RegionSelect.vue'
+import AppCascader, { type CascaderValue } from '@/components/common/AppCascader.vue'
 import DatePicker from '@/components/common/DatePicker.vue'
 import AvatarCropDialog from '@/components/chat/AvatarCropDialog.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
+import AppInput from '@/components/common/AppInput.vue'
 
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ (e: 'update:visible', v: boolean): void }>()
@@ -143,7 +144,7 @@ const { showToast } = useToast()
 const username = ref('')
 const birthday = ref('')
 const gender = ref('')
-const region = ref<RegionValue>({ province: '', city: '', district: '' })
+const region = ref<CascaderValue>({ province: '', city: '', district: '' })
 const avatar = ref('')
 
 const saving = ref(false)

@@ -5,6 +5,12 @@ export default {
   common: {
     send: 'Send',
     clear: 'Clear',
+    reset: 'Reset',
+    all: 'All',
+    search: 'Search',
+    noData: 'No data',
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
     stop: 'Stop',
     copy: 'Copy',
     copied: 'Copied',

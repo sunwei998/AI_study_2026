@@ -37,20 +37,23 @@
         <div v-else-if="message.content && message.role === 'user'" class="user-text">{{ message.content }}</div>
         <div v-if="message.isSearching" class="message-searching">
           <div class="searching-animation">
-            <AppIcon name="lucide:search" :size="18" class="spinning" />
+            <span class="searching-pulse"></span>
+            <AppIcon name="lucide:search" :size="16" class="searching-icon" />
           </div>
-          <span class="searching-text">{{ message.searchingText || '联网搜索中...' }}</span>
-          <span v-if="message.searchStartTime" class="search-duration">
-            {{ ((Date.now() - message.searchStartTime) / 1000).toFixed(1) }}s
+          <span class="searching-text">
+            {{ (message.searchingText || '联网搜索中').replace(/\.+$/, '') }}
+            <span class="searching-dots"><span>.</span><span>.</span><span>.</span></span>
           </span>
         </div>
         <span v-if="message.loading && message.content" class="streaming-cursor"></span>
-        <div v-if="message.loading && !message.content" class="loading-dots">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-        <div v-if="message.loading && !message.content" class="loading-text">{{ $t('chat.thinking') }}</div>
+        <template v-if="message.loading && !message.content && !message.isSearching">
+          <div class="loading-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="loading-text">{{ $t('chat.thinking') }}</div>
+        </template>
       </div>
       <div v-if="message.role === 'assistant' && message.reasoning" class="message-reasoning">
         <button type="button" class="reasoning-toggle" @click="reasoningOpen = !reasoningOpen">
@@ -506,50 +509,82 @@ const openImage = (url: string) => {
 }
 
 .message-searching {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-secondary);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
+  color: var(--color-primary);
   font-size: 12px;
   font-family: var(--font-mono);
-  font-style: italic;
+  width: fit-content;
 }
 
 .searching-animation {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 20px;
+  height: 20px;
 }
 
-.searching-animation .spinning {
-  animation: spin 1s linear infinite;
+.searching-icon {
+  position: relative;
+  z-index: 1;
+  color: var(--color-primary);
+  animation: searching-swing 1.6s ease-in-out infinite;
+  transform-origin: center;
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.searching-pulse {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-primary);
+  opacity: 0;
+  animation: searching-pulse 1.6s ease-out infinite;
+}
+
+@keyframes searching-swing {
+  0%, 100% { transform: rotate(-12deg) translateX(-1px); }
+  50% { transform: rotate(12deg) translateX(1px); }
+}
+
+@keyframes searching-pulse {
+  0% { transform: scale(0.6); opacity: 0.6; }
+  100% { transform: scale(1.8); opacity: 0; }
 }
 
 .searching-text {
-  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.search-duration {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--color-text-secondary);
-  opacity: 0.8;
+.searching-dots {
+  display: inline;
+}
+
+.searching-dots span {
+  opacity: 0;
+  animation: searching-dot 1.4s ease-in-out infinite;
+}
+
+.searching-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.searching-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes searching-dot {
+  0%, 60%, 100% { opacity: 0; }
+  30% { opacity: 1; }
 }
 
 /* 搜索状态徽标：成功/无结果/失败 */

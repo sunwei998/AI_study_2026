@@ -29,19 +29,19 @@
             <tr v-for="s in settings" :key="s.key">
               <td class="cell-key">{{ s.key }}</td>
               <td class="cell-value">
-                <input
+                <AppInput
                   v-model="s.value"
                   type="text"
-                  class="value-input"
+                  size="small"
                   :data-key="s.key"
                   @keydown.enter="save(s)"
                 />
               </td>
               <td class="cell-remark">
-                <input
+                <AppInput
                   v-model="s.remark"
                   type="text"
-                  class="value-input"
+                  size="small"
                   :placeholder="$t('console.remarkPlaceholder')"
                   @keydown.enter="save(s)"
                 />
@@ -128,6 +128,7 @@ import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import TableLoading from '@/components/common/TableLoading.vue'
 import Pagination from '@/components/common/Pagination.vue'
+import AppInput from '@/components/common/AppInput.vue'
 import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
