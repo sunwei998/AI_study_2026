@@ -252,6 +252,7 @@ const toggleEnabled = async (m: AdminModel) => {
   try {
     await updateAdminModel(m.id, toPayload(target))
     m.enabled = target.enabled
+    showToast(target.enabled ? t('console.enableSuccess') : t('console.disableSuccess'), 'success')
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   }
@@ -336,8 +337,10 @@ const submitForm = async () => {
   try {
     if (formMode.value === 'create') {
       await createAdminModel(form.value)
+      showToast(t('console.addModelSuccess'), 'success')
     } else if (editingId.value != null) {
       await updateAdminModel(editingId.value, form.value)
+      showToast(t('console.editModelSuccess'), 'success')
     }
     formVisible.value = false
     await load()
@@ -364,6 +367,7 @@ const doDelete = async () => {
   confirmLoading.value = true
   try {
     await deleteAdminModel(deletingId.value)
+    showToast(t('console.deleted'), 'success')
     confirmVisible.value = false
     await load()
   } catch (err) {

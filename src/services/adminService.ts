@@ -57,7 +57,19 @@ export function fetchOverview(): Promise<AdminOverview> {
 }
 
 export function fetchAdminModels(): Promise<AdminModel[]> {
-  return request('/models')
+  // 后端 SQLite 的布尔列以整数 0/1 返回，需转成真正的布尔，
+  // 否则模板 <input type="checkbox" v-model> 因 looseEqual(value, true) 对 1 判定为 false，
+  // 导致编辑表单里 checkbox 无法正确回显（该勾选的反而未勾选）。
+  return request<unknown[]>('/models').then((rows) =>
+    (rows as Array<Record<string, unknown>>).map((r) => ({
+      ...(r as unknown as AdminModel),
+      free: !!r.free,
+      vision: !!r.vision,
+      supports_search: !!r.supports_search,
+      enabled: !!r.enabled,
+      is_default: !!r.is_default
+    }))
+  )
 }
 
 export function createAdminModel(payload: ModelPayload): Promise<{ ok: boolean }> {
