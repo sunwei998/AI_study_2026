@@ -340,6 +340,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
 }
 
 .page-error {
@@ -356,7 +359,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 300px;
+  width: 100%;
+  min-height: 60vh;
 }
 
 .chart-card {

@@ -38,7 +38,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="m in pagedFiltered" :key="m.id">
+          <tr v-for="m in models" :key="m.id">
             <td>
               <button
                 class="toggle"
@@ -103,7 +103,7 @@
               </div>
             </td>
           </tr>
-          <tr v-if="filtered.length === 0">
+          <tr v-if="total === 0">
             <td colspan="10" class="cell-empty">{{ $t('console.noModels') }}</td>
           </tr>
         </tbody>
@@ -111,7 +111,7 @@
     </div>
 
     <Pagination
-      :total="filtered.length"
+      :total="total"
       v-model:page="currentPage"
       v-model:page-size="pageSize"
     />
@@ -193,7 +193,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AdminModel, ModelPayload } from '@/types/admin'
 import {
@@ -219,37 +219,24 @@ const models = ref<AdminModel[]>([])
 const loading = ref(true)
 const error = ref('')
 const search = ref('')
+const total = ref(0)
 
 // 模型提供方数据字典：默认取本地字典，若后台 settings.model_providers 已配置则覆盖
 const providers = ref<ModelProvider[]>(DEFAULT_PROVIDERS)
 
-const filtered = computed(() => {
-  const kw = search.value.trim().toLowerCase()
-  if (!kw) return models.value
-  return models.value.filter(
-    (m) => m.model_key.toLowerCase().includes(kw) || m.name.toLowerCase().includes(kw)
-  )
-})
-
 const currentPage = ref(1)
 const pageSize = ref(10)
-
-const pagedFiltered = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  return filtered.value.slice(start, start + pageSize.value)
-})
-
-watch(search, () => {
-  currentPage.value = 1
-})
-
 const load = async () => {
   loading.value = true
   error.value = ''
   try {
-    const [list, settings] = await Promise.all([fetchAdminModels(), fetchSettings()])
-    models.value = list
-    const row = settings.find((s) => s.key === 'model_providers')
+    const [res, settings] = await Promise.all([
+      fetchAdminModels({ page: currentPage.value, pageSize: pageSize.value, search: search.value }),
+      fetchSettings({ search: 'model_providers' })
+    ])
+    models.value = res.items
+    total.value = res.total
+    const row = settings.items.find((s) => s.key === 'model_providers')
     if (row?.value) {
       try {
         const parsed = JSON.parse(row.value) as unknown
@@ -266,6 +253,18 @@ const load = async () => {
     loading.value = false
   }
 }
+watch(search, () => {
+  currentPage.value = 1
+  load()
+})
+
+watch(currentPage, load)
+watch(pageSize, () => {
+  currentPage.value = 1
+  load()
+})
+
+
 
 onMounted(load)
 

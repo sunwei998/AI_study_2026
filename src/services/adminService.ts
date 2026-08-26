@@ -17,6 +17,19 @@ import { notifyUnauthorized } from './unauthorized'
 
 const API_BASE = '/api/admin'
 
+export interface PaginatedResult<T> {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface PaginationParams {
+  page?: number
+  pageSize?: number
+  search?: string
+}
+
 function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   const token = getToken()
@@ -56,20 +69,30 @@ export function fetchOverview(): Promise<AdminOverview> {
   return request('/overview')
 }
 
-export function fetchAdminModels(): Promise<AdminModel[]> {
-  // 后端 SQLite 的布尔列以整数 0/1 返回，需转成真正的布尔，
-  // 否则模板 <input type="checkbox" v-model> 因 looseEqual(value, true) 对 1 判定为 false，
-  // 导致编辑表单里 checkbox 无法正确回显（该勾选的反而未勾选）。
-  return request<unknown[]>('/models').then((rows) =>
-    (rows as Array<Record<string, unknown>>).map((r) => ({
-      ...(r as unknown as AdminModel),
-      free: !!r.free,
-      vision: !!r.vision,
-      supports_search: !!r.supports_search,
-      enabled: !!r.enabled,
-      is_default: !!r.is_default
-    }))
-  )
+export function fetchAdminModels(params: PaginationParams = {}): Promise<PaginatedResult<AdminModel>> {
+  const query = new URLSearchParams()
+  if (params.page) query.set('page', String(params.page))
+  if (params.pageSize) query.set('page_size', String(params.pageSize))
+  if (params.search) query.set('search', params.search)
+  const qs = query.toString()
+  return request<{ items: unknown[]; total: number; page: number; pageSize: number }>(
+    `/models${qs ? `?${qs}` : ''}`
+  ).then((res) => ({
+    items: res.items.map((r) => {
+      const row = r as Record<string, unknown>
+      return {
+        ...(row as unknown as AdminModel),
+        free: !!row.free,
+        vision: !!row.vision,
+        supports_search: !!row.supports_search,
+        enabled: !!row.enabled,
+        is_default: !!row.is_default
+      }
+    }),
+    total: res.total,
+    page: res.page,
+    pageSize: res.pageSize
+  }))
 }
 
 export function fetchAdminModel(modelId: number): Promise<AdminModel> {
@@ -98,8 +121,13 @@ export function deleteAdminModel(modelId: number): Promise<{ ok: boolean }> {
   return request(`/models/${modelId}`, { method: 'DELETE' })
 }
 
-export function fetchAdminUsers(): Promise<AdminUser[]> {
-  return request('/users')
+export function fetchAdminUsers(params: PaginationParams = {}): Promise<PaginatedResult<AdminUser>> {
+  const query = new URLSearchParams()
+  if (params.page) query.set('page', String(params.page))
+  if (params.pageSize) query.set('page_size', String(params.pageSize))
+  if (params.search) query.set('search', params.search)
+  const qs = query.toString()
+  return request<PaginatedResult<AdminUser>>(`/users${qs ? `?${qs}` : ''}`)
 }
 
 export function fetchAdminUser(userId: number): Promise<AdminUser> {
@@ -128,8 +156,13 @@ export interface SettingPatch {
   enabled?: boolean
 }
 
-export function fetchSettings(): Promise<SettingItem[]> {
-  return request('/settings')
+export function fetchSettings(params: PaginationParams = {}): Promise<PaginatedResult<SettingItem>> {
+  const query = new URLSearchParams()
+  if (params.page) query.set('page', String(params.page))
+  if (params.pageSize) query.set('page_size', String(params.pageSize))
+  if (params.search) query.set('search', params.search)
+  const qs = query.toString()
+  return request<PaginatedResult<SettingItem>>(`/settings${qs ? `?${qs}` : ''}`)
 }
 
 export function updateSetting(key: string, patch: SettingPatch): Promise<{ ok: boolean }> {

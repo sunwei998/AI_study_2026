@@ -3,7 +3,7 @@
     <div v-if="error" class="page-error">{{ error }}</div>
 
     <div v-if="loading" class="page-loading">
-      <AppLoading :size="28" glow />
+      <ChartLoading />
     </div>
 
     <div v-else class="search-settings-body">
@@ -199,6 +199,7 @@ import { onMounted, ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchSettings, updateSetting } from '@/services/adminService'
 import AppLoading from '@/components/common/AppLoading.vue'
+import ChartLoading from '@/components/common/ChartLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import { useToast } from '@/composables/useToast'
 
@@ -233,7 +234,8 @@ const load = async () => {
   loading.value = true
   error.value = ''
   try {
-    const settings = await fetchSettings()
+    const res = await fetchSettings({ pageSize: 100 })
+    const settings = res.items
     const row = settings.find((s) => s.key === 'websearch_providers')
     if (row?.value) {
       try {
@@ -414,11 +416,11 @@ import type { SearchProvider } from '@/types/admin'
 }
 
 .page-loading {
-  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 240px;
+  width: 100%;
+  min-height: 60vh;
 }
 
 .settings-section {

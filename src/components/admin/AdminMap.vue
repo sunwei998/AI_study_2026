@@ -2,7 +2,7 @@
   <div class="admin-map" :class="{ 'admin-map--fullscreen': fullscreen }">
     <div v-if="error" class="page-error">{{ error }}</div>
     <div v-if="loading" class="page-loading">
-      <AppLoading :size="28" glow />
+      <ChartLoading />
     </div>
     <template v-else>
       <section class="map-card" :class="{ 'map-card--fullscreen': fullscreen }">
@@ -130,6 +130,7 @@ import { HEAT_PERIODS, computeProvinceHeat } from '@/utils/provinceHeat'
 import { avatarSrc, roundAvatarDataUrl } from '@/utils/avatar'
 import { useChatStore } from '@/stores/chatStore'
 import AppLoading from '@/components/common/AppLoading.vue'
+import ChartLoading from '@/components/common/ChartLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import chinaGeo from '@/assets/maps/china.json'
 import cityCoords from '@/assets/maps/city-coords.json'
@@ -1106,6 +1107,8 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 100%;
+  min-height: 0;
 }
 
 .page-error {
@@ -1122,7 +1125,8 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 300px;
+  width: 100%;
+  min-height: 60vh;
 }
 
 .map-card,

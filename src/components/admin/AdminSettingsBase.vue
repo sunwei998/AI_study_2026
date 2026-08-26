@@ -65,12 +65,18 @@
                 </div>
               </td>
             </tr>
-            <tr v-if="settings.length === 0">
+            <tr v-if="total === 0">
               <td colspan="5" class="cell-empty">{{ $t('console.noSettings') }}</td>
             </tr>
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        :total="total"
+        v-model:page="currentPage"
+        v-model:page-size="pageSize"
+      />
 
       <Teleport to="body">
         <Transition name="confirm" appear>
@@ -114,13 +120,14 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SettingItem } from '@/types/admin'
 import { fetchSettings, updateSetting } from '@/services/adminService'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import TableLoading from '@/components/common/TableLoading.vue'
+import Pagination from '@/components/common/Pagination.vue'
 import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
@@ -130,18 +137,30 @@ const settings = ref<SettingItem[]>([])
 const loading = ref(true)
 const error = ref('')
 const savingKey = ref('')
+const total = ref(0)
 
+const currentPage = ref(1)
+const pageSize = ref(10)
 const load = async () => {
   loading.value = true
   error.value = ''
   try {
-    settings.value = await fetchSettings()
+    const res = await fetchSettings({ page: currentPage.value, pageSize: pageSize.value })
+    settings.value = res.items
+    total.value = res.total
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
     loading.value = false
   }
 }
+watch(currentPage, load)
+watch(pageSize, () => {
+  currentPage.value = 1
+  load()
+})
+
+
 
 onMounted(load)
 
@@ -152,6 +171,7 @@ const save = async (s: SettingItem) => {
   try {
     await updateSetting(s.key, { value: s.value, remark: s.remark })
     showToast(t('console.saved'), 'success')
+    await load()
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
@@ -165,6 +185,7 @@ const toggle = async (s: SettingItem) => {
   try {
     await updateSetting(s.key, { enabled: next })
     showToast(next ? t('console.enableSuccess') : t('console.disableSuccess'), 'success')
+    await load()
   } catch (err) {
     s.enabled = !next
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
@@ -209,7 +230,6 @@ const submitAdd = async () => {
 </script>
 
 <style scoped>
-/* 复用 AdminSettings.vue 的样式，保持一致 */
 .admin-settings-base {
   display: flex;
   flex-direction: column;

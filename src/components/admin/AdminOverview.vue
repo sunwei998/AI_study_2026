@@ -674,6 +674,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 100%;
+  min-height: 0;
   overflow: auto;
   padding-right: 2px;
 }
@@ -692,7 +694,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 240px;
+  width: 100%;
+  min-height: 60vh;
 }
 
 .ov-cards {

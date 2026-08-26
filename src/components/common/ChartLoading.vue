@@ -25,9 +25,9 @@ withDefaults(
 <style scoped>
 .chart-loading {
   position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 200px;
+  width: 220px;
+  height: 180px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;

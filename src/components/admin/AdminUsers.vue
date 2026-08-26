@@ -26,7 +26,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="u in pagedUsers" :key="u.id">
+          <tr v-for="u in users" :key="u.id">
             <td class="cell-user">
               {{ u.username }}
               <span v-if="u.id === auth.user?.id" class="self-tag">{{ $t('console.self') }}</span>
@@ -81,7 +81,7 @@
               </div>
             </td>
           </tr>
-          <tr v-if="users.length === 0">
+          <tr v-if="total === 0">
             <td colspan="13" class="cell-empty">{{ $t('console.noUsers') }}</td>
           </tr>
         </tbody>
@@ -89,7 +89,7 @@
     </div>
 
     <Pagination
-      :total="users.length"
+      :total="total"
       v-model:page="currentPage"
       v-model:page-size="pageSize"
     />
@@ -194,7 +194,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref ,watch} from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AdminUser, UserRole, UserUpdatePayload } from '@/types/admin'
 import { fetchAdminUser, fetchAdminUsers, resetUserPassword, updateAdminUser } from '@/services/adminService'
@@ -215,26 +215,30 @@ const { showToast } = useToast()
 const users = ref<AdminUser[]>([])
 const loading = ref(true)
 const error = ref('')
+const total = ref(0)
 
 const currentPage = ref(1)
 const pageSize = ref(10)
-
-const pagedUsers = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  return users.value.slice(start, start + pageSize.value)
-})
-
 const load = async () => {
   loading.value = true
   error.value = ''
   try {
-    users.value = await fetchAdminUsers()
+    const res = await fetchAdminUsers({ page: currentPage.value, pageSize: pageSize.value })
+    users.value = res.items
+    total.value = res.total
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
     loading.value = false
   }
 }
+watch(currentPage, load)
+watch(pageSize, () => {
+  currentPage.value = 1
+  load()
+})
+
+
 
 onMounted(load)
 
@@ -304,17 +308,12 @@ const askToggleActive = (u: AdminUser) => {
     t(target ? 'console.enableUserMessage' : 'console.disableUserMessage', { name: u.username }),
     async () => {
       await updateAdminUser(u.id, { is_active: target })
-      u.is_active = target
-      touchUpdated(u)
+      await load()
       showToast(target ? t('console.enableSuccess') : t('console.disableSuccess'), 'success')
     }
   )
 }
 
-const touchUpdated = (u: AdminUser) => {
-  u.updated_at = Date.now()
-  u.updated_by = auth.user?.username ?? ''
-}
 
 const askToggleRole = (u: AdminUser) => {
   const target: UserRole = u.role === 'admin' ? 'user' : 'admin'
@@ -323,8 +322,7 @@ const askToggleRole = (u: AdminUser) => {
     t('console.roleSwitchMessage', { name: u.username, role: target }),
     async () => {
       await updateAdminUser(u.id, { role: target })
-      u.role = target
-      touchUpdated(u)
+      await load()
       showToast(t('console.roleUpdated'), 'success')
     },
     false
@@ -424,13 +422,7 @@ const submitRegion = async () => {
     }
     if (birthday) payload.birthday = birthday
     await updateAdminUser(regionUser.value.id, payload)
-    const u = regionUser.value
-    u.province = regionValue.value.province
-    u.city = regionValue.value.city
-    u.district = regionValue.value.district
-    u.birthday = birthday || u.birthday
-    u.gender = editGender.value
-    touchUpdated(u)
+    await load()
     regionVisible.value = false
     showToast(t('console.updated'), 'success')
   } catch (err) {

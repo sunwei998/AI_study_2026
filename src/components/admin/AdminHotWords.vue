@@ -10,7 +10,7 @@ import { fetchHotWords } from '@/services/adminService'
 import { HEAT_PERIODS } from '@/utils/provinceHeat'
 import { useChatStore } from '@/stores/chatStore'
 import { createRafCoalescer } from '@/utils/resize'
-import AppLoading from '@/components/common/AppLoading.vue'
+import ChartLoading from '@/components/common/ChartLoading.vue'
 
 echarts.use([BarChart, GridComponent, TooltipComponent, CanvasRenderer])
 
@@ -189,7 +189,9 @@ onBeforeUnmount(() => {
 
     <div v-if="error" class="page-error">{{ error }}</div>
 
-    <AppLoading v-else-if="loading" />
+    <div v-else-if="loading" class="page-loading">
+      <ChartLoading />
+    </div>
 
     <template v-else>
       <div v-if="words.length === 0" class="hw-empty">{{ t('console.hotWordsEmpty') }}</div>
@@ -228,6 +230,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
 }
 
 .hw-toolbar {
@@ -314,6 +319,14 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: var(--color-text-secondary);
   opacity: 0.8;
+}
+
+.page-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 60vh;
 }
 
 .page-error {
