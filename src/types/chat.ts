@@ -110,4 +110,6 @@ export interface ModelInfo {
   vision?: boolean
   /** 是否支持联网搜索（后端 models.supports_search，默认 true） */
   supportsSearch?: boolean
+  /** 是否为后台配置的默认模型（后端 models.is_default） */
+  is_default?: boolean
 }

@@ -75,7 +75,7 @@ export const MODEL_LIST: ModelInfo[] = [
   { id: 'Qwen/Qwen3.6-27B', name: 'Qwen3.6-27B', free: false },
   { id: 'Qwen/Qwen3.6-35B-A3B', name: 'Qwen3.6-35B-A3B', free: false },
   { id: 'THUDM/GLM-4-32B-0414', name: 'GLM-4-32B', free: false },
-  { id: 'tencent/Hunyuan-MT-7B', name: 'Hunyuan-MT-7B', free: true },
+  { id: 'tencent/Hunyuan-MT-7B', name: 'Hunyuan-MT-7B', free: true, is_default: true },
   { id: 'deepseek-ai/DeepSeek-OCR', name: 'DeepSeek-OCR', free: false, vision: true },
   { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek-R1', free: false },
   { id: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B', name: 'DeepSeek-R1-0528-Qwen3-8B', free: true },

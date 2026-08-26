@@ -29,8 +29,17 @@ export const useChatStore = defineStore('chat', () => {
     () => sessions.value.find((s) => s.id === currentSessionId.value) ?? null
   )
 
-  // 排序由后端统一决定（置顶最新在前，非置顶最近活跃在前）
-  const sortedSessions = computed(() => sessions.value)
+  // 真正参与排序：与后端 ORDER BY 保持一致——置顶组(pinned_at 倒序)在前，
+  // 非置顶组(updated_at 倒序)在后。这样新增/变更会话会自动归位到正确分组，
+  // 新开会话(未置顶)会落到普通分组，而不会跑到置顶分组前面。
+  const sortedSessions = computed(() => {
+    return [...sessions.value].sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+      const at = a.pinned ? a.pinnedAt ?? 0 : a.updatedAt
+      const bt = b.pinned ? b.pinnedAt ?? 0 : b.updatedAt
+      return bt - at || (b.createdAt ?? 0) - (a.createdAt ?? 0)
+    })
+  })
 
   const messages = computed(() => messageCache.value[currentSessionId.value] || [])
 
@@ -65,12 +74,17 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  // 后台配置的默认模型：优先取 is_default 为真的启用模型，否则回退到写死的兜底常量。
+  const defaultModelId = computed(
+    () => availableModels.value.find((m) => m.is_default)?.id ?? DEFAULT_MODEL
+  )
+
   const currentModel = computed(() => {
     const session = currentSession.value
     if (session?.model && availableModels.value.some((m) => m.id === session.model)) {
       return session.model
     }
-    return DEFAULT_MODEL
+    return defaultModelId.value
   })
 
   const currentModelInfo = computed(() => {
@@ -81,7 +95,7 @@ export const useChatStore = defineStore('chat', () => {
     if (session?.model && availableModels.value.some((m) => m.id === session.model)) {
       return session.model
     }
-    return DEFAULT_MODEL
+    return defaultModelId.value
   }
 
   const getSession = (sessionId: string): ChatSession | undefined => {
@@ -189,18 +203,19 @@ export const useChatStore = defineStore('chat', () => {
       // 新会话 = 新列表里原来没有的那条（有置顶会话时 list[0] 不一定是新会话）
       const created = Array.isArray(list) ? list.find((s) => !oldIds.has(s.id)) : null
       if (created?.id) {
-        // 本地前插 + 同帧切换 currentSessionId：避免整表替换导致列表重排、高亮闪烁
-        sessions.value = [created, ...sessions.value.filter((s) => s.id !== created.id)]
+        // 本地追加 + 同帧切换 currentSessionId：避免整表替换导致列表重排、高亮闪烁；
+        // 排序交给 sortedSessions 统一处理，新会话(未置顶)会自动落入普通分组顶部。
+        sessions.value = [...sessions.value.filter((s) => s.id !== created.id), created]
         currentSessionId.value = created.id
       } else {
         applyList(list)
       }
     } catch {
       const id = `session_${Date.now()}`
-      sessions.value.unshift({
+      const fallback: ChatSession = {
         id,
         title: '',
-        model: DEFAULT_MODEL,
+        model: defaultModelId.value,
         webSearch: false,
         pinned: false,
         pinnedAt: null,
@@ -208,7 +223,9 @@ export const useChatStore = defineStore('chat', () => {
         updatedAt: Date.now(),
         messageCount: 0,
         lastPreview: ''
-      })
+      }
+      // 追加而非前插：未置顶的新会话应落入普通分组，由 sortedSessions 统一排序。
+      sessions.value = [...sessions.value, fallback]
       currentSessionId.value = id
     }
     return currentSessionId.value

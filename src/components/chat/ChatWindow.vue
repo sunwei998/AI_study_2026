@@ -108,28 +108,45 @@
           </button>
         </div>
         <div class="sessions-list">
-          <div
-            v-for="session in filteredSessions"
+          <template
+            v-for="(session, i) in filteredSessions"
             :key="session.id"
-            :class="[
-              'session-item',
-              {
-                active: session.id === currentSessionId,
-                deleting: deleteRevealedId === session.id
-              }
-            ]"
-            @click="onSessionClick(session.id)"
-            @touchstart.passive="onSessionPressStart(session.id)"
-            @touchmove.passive="onSessionPressMove"
-            @touchend="onSessionPressEnd"
-            @touchcancel="onSessionPressEnd"
           >
-            <div class="session-content">
-              <div class="session-title">{{ sessionTitle(session) }}</div>
-              <div class="session-meta">
-                {{ $t('chat.messageCount', { count: session.messageCount }) }}
+            <div
+              :class="[
+                'session-item',
+                {
+                  active: session.id === currentSessionId,
+                  deleting: deleteRevealedId === session.id
+                }
+              ]"
+              @click="onSessionClick(session.id)"
+              @touchstart.passive="onSessionPressStart(session.id)"
+              @touchmove.passive="onSessionPressMove"
+              @touchend="onSessionPressEnd"
+              @touchcancel="onSessionPressEnd"
+            >
+              <span v-if="session.pinned" class="pin-mark" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M12 17v5" />
+                  <path
+                    d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"
+                  />
+                </svg>
+              </span>
+              <div class="session-content">
+                <div class="session-title">{{ sessionTitle(session) }}</div>
+                <div class="session-meta">
+                  {{ $t('chat.messageCount', { count: session.messageCount }) }}
+                </div>
               </div>
-            </div>
             <button
               class="pin-btn"
               :class="{ pinned: session.pinned }"
@@ -163,6 +180,11 @@
               ✕
             </button>
           </div>
+          <div
+            v-if="session.pinned && i < filteredSessions.length - 1 && !filteredSessions[i + 1].pinned"
+            class="session-divider"
+          ></div>
+          </template>
           <div v-if="filteredSessions.length === 0" class="filter-empty">
             {{ $t('chat.filterEmpty') }}
           </div>
@@ -889,6 +911,29 @@ const handleRegenerate = async (message: Message) => {
   margin-top: 4px;
 }
 
+.pin-mark {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-secondary);
+  opacity: 0.72;
+}
+
+.pin-mark svg {
+  width: 14px;
+  height: 14px;
+}
+
+.session-divider {
+  height: 1px;
+  margin: 6px 4px;
+  background: linear-gradient(90deg, transparent, var(--color-border), transparent);
+  border: none;
+}
+
 .delete-btn,
 .pin-btn {
   width: 24px;
@@ -932,9 +977,8 @@ const handleRegenerate = async (message: Message) => {
 }
 
 .pin-btn.pinned {
-  background: rgba(255, 193, 7, 0.22);
-  color: #ffc107;
-  box-shadow: 0 0 10px rgba(255, 193, 7, 0.55);
+  background: var(--color-glass);
+  color: var(--color-text-secondary);
 }
 
 .delete-btn:hover {

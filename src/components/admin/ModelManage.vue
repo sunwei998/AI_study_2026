@@ -32,6 +32,7 @@
             <th>{{ $t('console.free') }}</th>
             <th>{{ $t('console.vision') }}</th>
             <th>{{ $t('console.supportsSearch') }}</th>
+            <th>{{ $t('console.default') }}</th>
             <th>{{ $t('console.sortOrder') }}</th>
             <th>{{ $t('console.actions') }}</th>
           </tr>
@@ -72,6 +73,23 @@
                 :glow="m.supports_search"
               />
             </td>
+            <td>
+              <button
+                class="default-btn"
+                :class="{ on: m.is_default, off: !m.is_default, blocked: !m.enabled }"
+                :title="
+                  m.is_default
+                    ? $t('console.defaultModel')
+                    : m.enabled
+                      ? $t('console.setDefault')
+                      : $t('console.defaultDisabledHint')
+                "
+                :disabled="m.is_default || !m.enabled"
+                @click="setDefault(m)"
+              >
+                <AppIcon name="lucide:star" :size="16" :glow="m.is_default" />
+              </button>
+            </td>
             <td class="cell-order">{{ m.sort_order }}</td>
             <td>
               <div class="row-actions">
@@ -85,7 +103,7 @@
             </td>
           </tr>
           <tr v-if="filtered.length === 0">
-            <td colspan="9" class="cell-empty">{{ $t('console.noModels') }}</td>
+            <td colspan="10" class="cell-empty">{{ $t('console.noModels') }}</td>
           </tr>
         </tbody>
       </table>
@@ -182,8 +200,10 @@ import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import { DEFAULT_PROVIDERS, type ModelProvider } from '@/config/models'
+import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
+const { showToast } = useToast()
 
 const models = ref<AdminModel[]>([])
 const loading = ref(true)
@@ -237,6 +257,18 @@ const toggleEnabled = async (m: AdminModel) => {
   }
 }
 
+// 设为默认模型：后端会校验“禁用模型不能设默认”，并自动取消其它默认，保证全局唯一。
+const setDefault = async (m: AdminModel) => {
+  if (m.is_default || !m.enabled) return
+  try {
+    await updateAdminModel(m.id, { ...toPayload(m), is_default: true })
+    models.value.forEach((x) => (x.is_default = x.id === m.id))
+    showToast(t('console.defaultSet'), 'success')
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
+  }
+}
+
 const formVisible = ref(false)
 const formMode = ref<'create' | 'edit'>('create')
 const formSubmitting = ref(false)
@@ -253,7 +285,8 @@ function emptyForm(): ModelPayload {
     vision: false,
     supports_search: true,
     enabled: true,
-    sort_order: 100
+    sort_order: 100,
+    is_default: false
   }
 }
 
@@ -271,7 +304,8 @@ function toPayload(m: AdminModel): ModelPayload {
     vision: m.vision,
     supports_search: m.supports_search,
     enabled: m.enabled,
-    sort_order: m.sort_order
+    sort_order: m.sort_order,
+    is_default: m.is_default
   }
 }
 
@@ -525,6 +559,39 @@ const doDelete = async () => {
 .toggle.on .toggle-knob {
   left: 18px;
   background: #fff;
+}
+
+.default-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-glass);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-fast);
+}
+
+.default-btn.on {
+  color: #ffce5c;
+  border-color: #ffce5c;
+  box-shadow: 0 0 10px rgba(255, 206, 92, 0.45);
+  cursor: default;
+}
+
+.default-btn.off:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 8px var(--color-glow);
+}
+
+.default-btn.blocked {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .row-actions {

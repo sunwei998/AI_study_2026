@@ -41,6 +41,18 @@
         </svg>
       </button>
     </Transition>
+    <Transition name="backtop">
+      <button
+        v-if="showBottomBtn"
+        class="back-top-btn"
+        :title="$t('common.backToBottom')"
+        @click="scrollToBottom"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 5v14M5 12l7 7 7-7" />
+        </svg>
+      </button>
+    </Transition>
   </div>
 </template>
 
@@ -69,6 +81,7 @@ const emit = defineEmits<{
 const listRef = ref<HTMLElement>()
 const topSentinel = ref<HTMLElement>()
 const showTopBtn = ref(false)
+const showBottomBtn = ref(false)
 const smoothScrolling = ref(false)
 let scrollTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -115,18 +128,39 @@ const setupObserver = () => {
 
 watch(
   () => [store.currentSessionId, props.messages.length] as const,
-  () => nextTick(setupObserver)
+  () =>
+    nextTick(() => {
+      setupObserver()
+      syncScrollButtons()
+    })
 )
 
-const onScroll = () => {
+// 滚动到一定距离显示「回到顶部」；停在顶部且内容可滚动时显示「回到底部」。
+// 两者互斥（一个在顶部、一个在底部），同一位置不会同时出现。
+const SCROLL_SHOW_TOP = 200
+const AT_TOP_THRESHOLD = 4
+const OVERFLOW_THRESHOLD = 12
+
+const syncScrollButtons = () => {
   const el = listRef.value
-  showTopBtn.value = !!el && el.scrollTop > 200
+  if (!el) {
+    showTopBtn.value = false
+    showBottomBtn.value = false
+    return
+  }
+  const atTop = el.scrollTop <= AT_TOP_THRESHOLD
+  const overflow = el.scrollHeight - el.clientHeight > OVERFLOW_THRESHOLD
+  showTopBtn.value = el.scrollTop > SCROLL_SHOW_TOP
+  showBottomBtn.value = atTop && overflow
+}
+
+const onScroll = () => {
+  syncScrollButtons()
 }
 
 const finishScroll = () => {
   smoothScrolling.value = false
-  const el = listRef.value
-  showTopBtn.value = !!el && el.scrollTop > 200
+  syncScrollButtons()
 }
 
 const scrollToTop = () => {
@@ -158,6 +192,32 @@ const scrollToTop = () => {
   requestAnimationFrame(step)
 }
 
+const scrollToBottom = () => {
+  const el = listRef.value
+  if (!el) return
+  smoothScrolling.value = true
+  if (scrollTimer) clearTimeout(scrollTimer)
+  if ('scrollBehavior' in document.documentElement.style) {
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    el.addEventListener('scrollend', finishScroll, { once: true })
+    scrollTimer = setTimeout(finishScroll, 1500)
+    return
+  }
+  const start = el.scrollTop
+  const target = el.scrollHeight
+  const duration = 320
+  const startTime = performance.now()
+  const easeInOutCubic = (t: number) =>
+    t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+  const step = (now: number) => {
+    const t = Math.min((now - startTime) / duration, 1)
+    el.scrollTop = Math.round(start + (target - start) * easeInOutCubic(t))
+    if (t < 1) requestAnimationFrame(step)
+    else finishScroll()
+  }
+  requestAnimationFrame(step)
+}
+
 const i18nFallback = computed<string[]>(() => tm('chat.suggestions') as unknown as string[])
 
 // 推荐词 = 用户提问高频词 TOP4（不分中英文，语言切换不影响）；无数据时用 i18n 兜底
@@ -178,6 +238,7 @@ onMounted(async () => {
   }
   await nextTick()
   setupObserver()
+  syncScrollButtons()
 })
 
 onUnmounted(() => {

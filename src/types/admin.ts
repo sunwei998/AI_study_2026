@@ -35,6 +35,7 @@ export interface AdminModel {
   supports_search: boolean
   enabled: boolean
   sort_order: number
+  is_default: boolean
   created_at: number
 }
 
@@ -75,6 +76,7 @@ export interface ModelPayload {
   supports_search: boolean
   enabled: boolean
   sort_order: number
+  is_default?: boolean
 }
 
 export interface UserUpdatePayload {
