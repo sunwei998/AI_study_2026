@@ -13,13 +13,13 @@ const store = useChatStore()
 
 const palettes: Record<string, string[]> = {
   dark: ['#00e5ff', '#7c5cff', '#e6f1ff'],
-  light: ['#0066ff', '#7c5cff', '#10163a'],
+  light: ['#4f46e5', '#7c3aed', '#111827'],
   neon: ['#00ff88', '#ff2ea6', '#baffdb'],
-  ocean: ['#22d3ee', '#3b82f6', '#d9f6ff'],
+  magenta: ['#ff2d95', '#00e5ff', '#ffe0f0'],
   midnight: ['#b388ff', '#ff79c6', '#efe9ff'],
   amber: ['#ffb74d', '#ff6d00', '#fff3e0'],
-  mint: ['#43a047', '#00897b', '#e8f5e9'],
-  sand: ['#b07838', '#c2612f', '#f5ecdc']
+  mint: ['#00e676', '#ff4081', '#e0fff0'],
+  sand: ['#7a4f1f', '#8b3a0a', '#3d3a2e']
 }
 
 const options = computed<ISourceOptions>(() => ({

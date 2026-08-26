@@ -3,7 +3,7 @@ export type ThemeType =
   | 'dark'
   | 'light'
   | 'neon'
-  | 'ocean'
+  | 'magenta'
   | 'midnight'
   | 'amber'
   | 'mint'

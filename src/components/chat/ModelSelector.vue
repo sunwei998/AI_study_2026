@@ -30,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import type { ModelInfo } from '@/types/chat'
 import { useChatStore } from '@/stores/chatStore'
 
@@ -45,6 +45,25 @@ const selectModel = (model: ModelInfo) => {
   store.setModel(model)
   isOpen.value = false
 }
+
+// 点击组件外部任意区域关闭下拉（捕获阶段，不受层叠上下文影响）
+const onDocClick = (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  if (target.closest('.model-selector')) return
+  isOpen.value = false
+}
+
+watch(isOpen, (val) => {
+  if (val) {
+    document.addEventListener('click', onDocClick, true)
+  } else {
+    document.removeEventListener('click', onDocClick, true)
+  }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocClick, true)
+})
 </script>
 
 <style scoped>
@@ -96,14 +115,14 @@ const selectModel = (model: ModelInfo) => {
 .model-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 999;
+  z-index: 9999;
 }
 
 .model-menu {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 1000;
+  z-index: 10000;
   width: 280px;
   max-height: 400px;
   background: var(--color-glass);

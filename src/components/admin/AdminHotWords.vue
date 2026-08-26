@@ -68,9 +68,9 @@ function render() {
     color: [c.primary],
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(10, 10, 20, 0.9)',
+      backgroundColor: cssVar('--color-surface', '#0e1430'),
       borderColor: c.line,
-      textStyle: { color: '#fff' }
+      textStyle: { color: cssVar('--color-text', '#e6f1ff') }
     },
     grid: { left: 12, right: 52, top: 16, bottom: 24, containLabel: true },
     xAxis: {

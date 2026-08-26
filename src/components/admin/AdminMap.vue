@@ -347,7 +347,8 @@ function mapPalette() {
     surface: cssVar('--color-surface', '#0e1430'),
     background: cssVar('--color-background', '#070a1a'),
     text: cssVar('--color-text', '#e6f1ff'),
-    textSec: cssVar('--color-text-secondary', '#8fa3c8')
+    textSec: cssVar('--color-text-secondary', '#8fa3c8'),
+    border: cssVar('--color-border', '#233055')
   }
 }
 
@@ -436,7 +437,7 @@ function buildTipHtml(
     .tt-name{font-weight:700;color:${text};font-size:13px;letter-spacing:.04em}
     .tt-count{font-family:var(--font-mono);font-size:12px;color:${acc};text-shadow:0 0 8px ${hexToRgba(acc, 0.8)}}
     .tt-label{font-size:10px;letter-spacing:.18em;color:${sec};padding:0 14px 7px;text-transform:uppercase}
-    .tt-row{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:0 8px 6px;border-radius:9px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
+    .tt-row{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:0 8px 6px;border-radius:9px;background:${hexToRgba(pal.primary, 0.04)};border:1px solid ${hexToRgba(pal.border, 0.6)}}
     .tt-avatar{width:22px;height:22px;border-radius:50%;flex-shrink:0;object-fit:cover;border:1px solid ${hexToRgba(prim, 0.35)}}
     .tt-rank{width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
     .tt-rank-1{background:linear-gradient(135deg,${prim},${acc});box-shadow:0 0 10px ${hexToRgba(prim, 0.65)}}
@@ -471,7 +472,7 @@ function buildUserTipHtml(
     .tt-uavatar{width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1px solid ${hexToRgba(prim, 0.45)}}
     .tt-uname{font-weight:700;color:${text};font-size:13px;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .tt-urank{font-size:11px;color:${acc};text-shadow:0 0 8px ${hexToRgba(acc, 0.8)}}
-    .tt-ubody{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:0 8px 6px;border-radius:9px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
+    .tt-ubody{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:0 8px 6px;border-radius:9px;background:${hexToRgba(pal.primary, 0.04)};border:1px solid ${hexToRgba(pal.border, 0.6)}}
     .tt-req{color:${prim};font-size:12px;white-space:nowrap}
     .tt-tok{color:${sec};font-size:11px;white-space:nowrap}
   </style>
@@ -617,11 +618,11 @@ function buildMapOption(
       trigger: 'item',
       enterable: true,
       confine: true,
-      backgroundColor: 'rgba(7, 10, 24, 0.96)',
+      backgroundColor: hexToRgba(pal.surface, 0.96),
       borderColor: hexToRgba(pal.primary, 0.35),
       borderWidth: 1,
       padding: 0,
-      extraCssText: `border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 24px ${hexToRgba(pal.primary, 0.18)};backdrop-filter:blur(8px);overflow:hidden;`,
+      extraCssText: `border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,.28),0 0 24px ${hexToRgba(pal.primary, 0.18)};backdrop-filter:blur(8px);overflow:hidden;`,
       textStyle: { color: pal.text, fontSize: 12 },
       formatter: (params: unknown) => {
         const p = params as {

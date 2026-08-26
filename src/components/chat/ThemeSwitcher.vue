@@ -24,7 +24,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ThemeType } from '@/types/chat'
 import { useChatStore } from '@/stores/chatStore'
@@ -55,7 +55,7 @@ const getThemeName = (theme: ThemeType): string => {
     dark: t('theme.dark'),
     light: t('theme.light'),
     neon: t('theme.neon'),
-    ocean: t('theme.ocean'),
+    magenta: t('theme.magenta'),
     midnight: t('theme.midnight'),
     amber: t('theme.amber'),
     mint: t('theme.mint'),
@@ -69,6 +69,25 @@ const selectTheme = (theme: ThemeType) => {
   applyTheme(theme)
   isOpen.value = false
 }
+
+// 点击组件外部任意区域关闭下拉（捕获阶段，不受层叠上下文影响）
+const onDocClick = (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  if (target.closest('.theme-switcher')) return
+  isOpen.value = false
+}
+
+watch(isOpen, (val) => {
+  if (val) {
+    document.addEventListener('click', onDocClick, true)
+  } else {
+    document.removeEventListener('click', onDocClick, true)
+  }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocClick, true)
+})
 </script>
 
 <style scoped>
@@ -102,14 +121,14 @@ const selectTheme = (theme: ThemeType) => {
 .theme-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 999;
+  z-index: 9999;
 }
 
 .theme-menu {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 1000;
+  z-index: 10000;
   background: var(--color-glass);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
@@ -160,38 +179,39 @@ const selectTheme = (theme: ThemeType) => {
   height: 100%;
   border-radius: 6px;
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 .theme-preview.dark {
-  background: linear-gradient(135deg, #00e5ff, #7c5cff);
+  background: linear-gradient(135deg, #070a1a 0%, #00e5ff 50%, #7c5cff 100%);
 }
 
 .theme-preview.light {
-  background: linear-gradient(135deg, #0066ff, #7c5cff);
+  background: linear-gradient(135deg, #f9fafb 0%, #4f46e5 50%, #7c3aed 100%);
 }
 
 .theme-preview.neon {
-  background: linear-gradient(135deg, #00ff88, #ff2ea6);
+  background: linear-gradient(135deg, #0a0918 0%, #00ff88 50%, #ff2ea6 100%);
 }
 
-.theme-preview.ocean {
-  background: linear-gradient(135deg, #22d3ee, #3b82f6);
+.theme-preview.magenta {
+  background: linear-gradient(135deg, #120510 0%, #ff2d95 50%, #00e5ff 100%);
 }
 
 .theme-preview.midnight {
-  background: linear-gradient(135deg, #b388ff, #ff79c6);
+  background: linear-gradient(135deg, #0a0714 0%, #b388ff 50%, #ff79c6 100%);
 }
 
 .theme-preview.amber {
-  background: linear-gradient(135deg, #ffb74d, #ff6d00);
+  background: linear-gradient(135deg, #140d04 0%, #ffb74d 50%, #ff6d00 100%);
 }
 
 .theme-preview.mint {
-  background: linear-gradient(135deg, #43a047, #00897b);
+  background: linear-gradient(135deg, #050f0a 0%, #00e676 50%, #ff4081 100%);
 }
 
 .theme-preview.sand {
-  background: linear-gradient(135deg, #b07838, #c2612f);
+  background: linear-gradient(135deg, #faf4e8 0%, #7a4f1f 50%, #8b3a0a 100%);
 }
 
 @media (max-width: 768px) {

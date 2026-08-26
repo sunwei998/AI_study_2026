@@ -120,7 +120,7 @@ const themeName = (theme: ThemeType): string => {
     dark: t('theme.dark'),
     light: t('theme.light'),
     neon: t('theme.neon'),
-    ocean: t('theme.ocean'),
+    magenta: t('theme.magenta'),
     midnight: t('theme.midnight'),
     amber: t('theme.amber'),
     mint: t('theme.mint'),
@@ -421,6 +421,7 @@ import type { ThemeType } from '@/types/chat'
   border: 2px solid transparent;
   cursor: pointer;
   transition: var(--transition-normal);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 .theme-dot:hover {
@@ -433,35 +434,35 @@ import type { ThemeType } from '@/types/chat'
 }
 
 .theme-dot.dark {
-  background: linear-gradient(135deg, #00e5ff, #7c5cff);
+  background: linear-gradient(135deg, #070a1a 0%, #00e5ff 50%, #7c5cff 100%);
 }
 
 .theme-dot.light {
-  background: linear-gradient(135deg, #0066ff, #7c5cff);
+  background: linear-gradient(135deg, #f9fafb 0%, #4f46e5 50%, #7c3aed 100%);
 }
 
 .theme-dot.neon {
-  background: linear-gradient(135deg, #00ff88, #ff2ea6);
+  background: linear-gradient(135deg, #0a0918 0%, #00ff88 50%, #ff2ea6 100%);
 }
 
-.theme-dot.ocean {
-  background: linear-gradient(135deg, #22d3ee, #3b82f6);
+.theme-dot.magenta {
+  background: linear-gradient(135deg, #120510 0%, #ff2d95 50%, #00e5ff 100%);
 }
 
 .theme-dot.midnight {
-  background: linear-gradient(135deg, #b388ff, #ff79c6);
+  background: linear-gradient(135deg, #0a0714 0%, #b388ff 50%, #ff79c6 100%);
 }
 
 .theme-dot.amber {
-  background: linear-gradient(135deg, #ffb74d, #ff6d00);
+  background: linear-gradient(135deg, #140d04 0%, #ffb74d 50%, #ff6d00 100%);
 }
 
 .theme-dot.mint {
-  background: linear-gradient(135deg, #43a047, #00897b);
+  background: linear-gradient(135deg, #050f0a 0%, #00e676 50%, #ff4081 100%);
 }
 
 .theme-dot.sand {
-  background: linear-gradient(135deg, #b07838, #c2612f);
+  background: linear-gradient(135deg, #faf4e8 0%, #7a4f1f 50%, #8b3a0a 100%);
 }
 
 .sheet-action {

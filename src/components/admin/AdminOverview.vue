@@ -361,11 +361,11 @@ function ageLabel(key: string): string {
 
 function baseTooltip(borderColor: string): Record<string, unknown> {
   return {
-    backgroundColor: 'rgba(7, 10, 24, 0.94)',
+    backgroundColor: cssVar('--color-surface', '#0e1430'),
     borderColor: borderColor,
     borderWidth: 1,
-    textStyle: { color: '#fff' },
-    extraCssText: 'border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.5);'
+    textStyle: { color: cssVar('--color-text', '#e6f1ff') },
+    extraCssText: 'border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.28);'
   }
 }
 
@@ -698,6 +698,7 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 14px;
+  padding-top: 8px;
 }
 
 .ov-card {

@@ -63,12 +63,12 @@ export default {
   },
   theme: {
     dark: '深空黑',
-    light: '亮白',
+    light: '极简白',
     neon: '霓虹绿',
-    ocean: '深海蓝',
+    magenta: '品红',
     midnight: '午夜紫',
     amber: '琥珀橙',
-    mint: '薄荷护眼绿',
+    mint: '翡翠绿',
     sand: '暖沙护眼黄'
   },
   api: {

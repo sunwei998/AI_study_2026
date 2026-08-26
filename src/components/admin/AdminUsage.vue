@@ -99,7 +99,7 @@ function render() {
     const chart = echarts.init(dailyRef.value)
     chart.setOption({
       color: [c.primary, c.accent],
-      tooltip: { trigger: 'axis', backgroundColor: 'rgba(10, 10, 20, 0.9)', borderColor: c.line, textStyle: { color: '#fff' }, valueFormatter: (val: number | string) => formatTokens(val) },
+      tooltip: { trigger: 'axis', backgroundColor: cssVar('--color-surface', '#0e1430'), borderColor: c.line, textStyle: { color: cssVar('--color-text', '#e6f1ff') }, valueFormatter: (val: number | string) => formatTokens(val) },
       legend: { bottom: 8, left: 'center', itemWidth: 16, itemHeight: 10, textStyle: baseTextStyle },
       grid: { left: 64, right: 24, top: 40, bottom: 64 },
       xAxis: {
@@ -125,7 +125,7 @@ function render() {
     const chart = echarts.init(modelRef.value)
     chart.setOption({
       color: [c.primary],
-      tooltip: { trigger: 'axis', backgroundColor: 'rgba(10, 10, 20, 0.9)', borderColor: c.line, textStyle: { color: '#fff' } },
+      tooltip: { trigger: 'axis', backgroundColor: cssVar('--color-surface', '#0e1430'), borderColor: c.line, textStyle: { color: cssVar('--color-text', '#e6f1ff') } },
       grid: { left: 10, right: 40, top: 20, bottom: 60 },
       xAxis: {
         type: 'value',
@@ -158,7 +158,7 @@ function render() {
     const chart = echarts.init(userRef.value)
     chart.setOption({
       color: [c.accent],
-      tooltip: { trigger: 'axis', backgroundColor: 'rgba(10, 10, 20, 0.9)', borderColor: c.line, textStyle: { color: '#fff' } },
+      tooltip: { trigger: 'axis', backgroundColor: cssVar('--color-surface', '#0e1430'), borderColor: c.line, textStyle: { color: cssVar('--color-text', '#e6f1ff') } },
       grid: { left: 10, right: 40, top: 20, bottom: 60 },
       xAxis: { type: 'value', axisLabel: { ...baseTextStyle, formatter: formatTokens }, splitLine },
       yAxis: {
@@ -186,7 +186,7 @@ function render() {
     const chart = echarts.init(ageRef.value)
     chart.setOption({
       color: pieColors(),
-      tooltip: { trigger: 'item', backgroundColor: 'rgba(10, 10, 20, 0.9)', borderColor: c.line, textStyle: { color: '#fff' } },
+      tooltip: { trigger: 'item', backgroundColor: cssVar('--color-surface', '#0e1430'), borderColor: c.line, textStyle: { color: cssVar('--color-text', '#e6f1ff') } },
       legend: {
         type: 'scroll',
         orient: 'horizontal',
@@ -217,7 +217,7 @@ function render() {
     const chart = echarts.init(genderRef.value)
     chart.setOption({
       color: pieColors(),
-      tooltip: { trigger: 'item', backgroundColor: 'rgba(10, 10, 20, 0.9)', borderColor: c.line, textStyle: { color: '#fff' } },
+      tooltip: { trigger: 'item', backgroundColor: cssVar('--color-surface', '#0e1430'), borderColor: c.line, textStyle: { color: cssVar('--color-text', '#e6f1ff') } },
       legend: { bottom: 0, left: 'center', itemWidth: 12, itemHeight: 8, textStyle: baseTextStyle },
       series: [
         {

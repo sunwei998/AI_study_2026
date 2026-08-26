@@ -68,12 +68,12 @@ export default {
   },
   theme: {
     dark: 'Deep Space Black',
-    light: 'Bright White',
+    light: 'Minimal White',
     neon: 'Neon Green',
-    ocean: 'Ocean Blue',
+    magenta: 'Magenta',
     midnight: 'Midnight Violet',
     amber: 'Amber Orange',
-    mint: 'Mint Green',
+    mint: 'Emerald Green',
     sand: 'Warm Sand'
   },
   api: {
