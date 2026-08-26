@@ -2,7 +2,7 @@
   <div class="admin-usage" ref="rootRef">
     <div v-if="error" class="page-error">{{ error }}</div>
     <div v-if="loading" class="page-loading">
-      <AppLoading :size="28" glow />
+      <ChartLoading />
     </div>
     <template v-else>
       <section class="chart-card">
@@ -45,6 +45,7 @@ import { fetchUsage } from '@/services/adminService'
 import { useChatStore } from '@/stores/chatStore'
 import { createRafCoalescer } from '@/utils/resize'
 import AppLoading from '@/components/common/AppLoading.vue'
+import ChartLoading from '@/components/common/ChartLoading.vue'
 
 echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, LegendComponent, LegendScrollComponent, CanvasRenderer])
 

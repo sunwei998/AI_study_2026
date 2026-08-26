@@ -22,7 +22,16 @@ export default {
     backToTop: '回到顶部',
     backToBottom: '回到底部',
     close: '关闭',
-    errorOccurred: '发生错误'
+    errorOccurred: '发生错误',
+    loading: '加载中',
+    itemsUnit: '条',
+    prevPage: '上一页',
+    nextPage: '下一页',
+    goTo: '前往',
+    pageUnit: '页',
+    itemsPerPage: '{size}条/页',
+    pleaseSelect: '请选择',
+    noOptions: '暂无选项'
   },
   input: {
     placeholder: '输入您的问题... (按 Enter 发送)',
@@ -332,6 +341,14 @@ export default {
     prevYear: '上一年',
     nextYear: '下一年',
     prevMonth: '上一月',
-    nextMonth: '下一月'
+    nextMonth: '下一月',
+    hour: '时',
+    minute: '分',
+    second: '秒',
+    confirm: '确定',
+    startDate: '开始日期',
+    endDate: '结束日期',
+    startPlaceholder: '开始日期',
+    endPlaceholder: '结束日期'
   }
 }

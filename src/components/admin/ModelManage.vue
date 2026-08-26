@@ -18,7 +18,7 @@
     <div v-if="error" class="page-error">{{ error }}</div>
 
     <div v-if="loading" class="page-loading">
-      <AppLoading :size="26" glow />
+      <TableLoading :rows="6" :cols="5" :text="$t('common.loading')" />
     </div>
 
     <div v-else class="model-table-wrap">
@@ -34,11 +34,11 @@
             <th>{{ $t('console.supportsSearch') }}</th>
             <th>{{ $t('console.default') }}</th>
             <th>{{ $t('console.sortOrder') }}</th>
-            <th>{{ $t('console.actions') }}</th>
+            <th class="actions-th">{{ $t('console.actions') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="m in filtered" :key="m.id">
+          <tr v-for="m in pagedFiltered" :key="m.id">
             <td>
               <button
                 class="toggle"
@@ -87,11 +87,12 @@
                 :disabled="m.is_default || !m.enabled"
                 @click="setDefault(m)"
               >
-                <AppIcon name="lucide:star" :size="16" :glow="m.is_default" />
+                <span v-if="m.is_default" class="star-char">★</span>
+                <AppIcon v-else name="lucide:star" :size="16" />
               </button>
             </td>
             <td class="cell-order">{{ m.sort_order }}</td>
-            <td>
+            <td class="actions-td">
               <div class="row-actions">
                 <button class="row-btn" :title="$t('console.edit')" @click="openEdit(m)">
                   <AppIcon name="lucide:pencil" :size="15" />
@@ -108,6 +109,12 @@
         </tbody>
       </table>
     </div>
+
+    <Pagination
+      :total="filtered.length"
+      v-model:page="currentPage"
+      v-model:page-size="pageSize"
+    />
 
     <Teleport to="body">
       <Transition name="confirm" appear>
@@ -186,12 +193,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AdminModel, ModelPayload } from '@/types/admin'
 import {
   createAdminModel,
   deleteAdminModel,
+  fetchAdminModel,
   fetchAdminModels,
   fetchSettings,
   updateAdminModel
@@ -199,6 +207,8 @@ import {
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import TableLoading from '@/components/common/TableLoading.vue'
+import Pagination from '@/components/common/Pagination.vue'
 import { DEFAULT_PROVIDERS, type ModelProvider } from '@/config/models'
 import { useToast } from '@/composables/useToast'
 
@@ -219,6 +229,18 @@ const filtered = computed(() => {
   return models.value.filter(
     (m) => m.model_key.toLowerCase().includes(kw) || m.name.toLowerCase().includes(kw)
   )
+})
+
+const currentPage = ref(1)
+const pageSize = ref(10)
+
+const pagedFiltered = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filtered.value.slice(start, start + pageSize.value)
+})
+
+watch(search, () => {
+  currentPage.value = 1
 })
 
 const load = async () => {
@@ -318,12 +340,18 @@ const openCreate = () => {
   formVisible.value = true
 }
 
-const openEdit = (m: AdminModel) => {
+const openEdit = async (m: AdminModel) => {
   formMode.value = 'edit'
   editingId.value = m.id
-  form.value = toPayload(m)
   formError.value = ''
   formVisible.value = true
+  try {
+    const detail = await fetchAdminModel(m.id)
+    form.value = toPayload(detail)
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : t('common.errorOccurred')
+    formVisible.value = false
+  }
 }
 
 const submitForm = async () => {
@@ -522,6 +550,22 @@ const doDelete = async () => {
   padding: 32px !important;
 }
 
+.actions-th,
+.actions-td {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  box-shadow: -6px 0 12px rgba(0, 0, 0, 0.18);
+}
+
+.actions-th {
+  top: 0;
+  z-index: 3;
+  background: var(--color-glass);
+}
+
 .badge {
   padding: 2px 8px;
   border-radius: 20px;
@@ -580,10 +624,19 @@ const doDelete = async () => {
 }
 
 .default-btn.on {
-  color: #ffce5c;
-  border-color: #ffce5c;
-  box-shadow: 0 0 10px rgba(255, 206, 92, 0.45);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 8px var(--color-glow);
   cursor: default;
+  opacity: 1 !important;
+}
+
+.star-char {
+  color: var(--color-primary);
+  text-shadow: 0 0 5px var(--color-primary), 0 0 10px var(--color-glow);
+  font-size: 16px;
+  line-height: 1;
+  display: inline-block;
 }
 
 .default-btn.off:hover {

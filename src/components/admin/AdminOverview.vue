@@ -2,7 +2,7 @@
   <div class="admin-overview" ref="rootRef">
     <div v-if="error" class="ov-error">{{ error }}</div>
     <div v-if="loading" class="ov-loading">
-      <AppLoading :size="28" glow />
+      <ChartLoading />
     </div>
 
     <template v-else-if="overview">
@@ -127,6 +127,7 @@ import { HEAT_PERIODS } from '@/utils/provinceHeat'
 import { useChatStore } from '@/stores/chatStore'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import ChartLoading from '@/components/common/ChartLoading.vue'
 import { avatarSrc } from '@/utils/avatar'
 import { createDebounced, createRafCoalescer } from '@/utils/resize'
 import cloud from 'd3-cloud'

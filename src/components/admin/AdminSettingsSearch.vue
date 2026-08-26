@@ -102,28 +102,28 @@
           </label>
         </div>
 
-        <div class="section-actions">
+        <div class="section-actions section-actions--split">
+          <div class="action-left">
+            <button
+              class="page-btn page-btn--ghost"
+              @click="testSearxngConnection"
+              :disabled="testingSearxng"
+            >
+              <AppLoading v-if="testingSearxng" :size="14" />
+              <AppIcon v-else name="lucide:wifi" :size="15" />
+              <span>{{ $t('console.testConnection') }}</span>
+            </button>
+
+            <span v-if="testResult !== null" :class="['test-result', testResult ? 'success' : 'error']">
+              <AppIcon :name="testResult ? 'lucide:check-circle' : 'lucide:x-circle'" :size="14" />
+              <span>{{ testResult ? $t('console.testSuccess') : $t('console.testFailed') }}</span>
+            </span>
+          </div>
+
           <button class="page-btn page-btn--primary" @click="saveSearxngConfig">
             <AppLoading v-if="savingSearxng" :size="14" color="#fff" glow />
             {{ $t('confirm.save') }}
           </button>
-        </div>
-
-        <div class="test-connection-area">
-          <button
-            class="page-btn page-btn--ghost"
-            @click="testSearxngConnection"
-            :disabled="testingSearxng"
-          >
-            <AppLoading v-if="testingSearxng" :size="14" />
-            <AppIcon v-else name="lucide:wifi" :size="15" />
-            <span>{{ $t('console.testConnection') }}</span>
-          </button>
-
-          <span v-if="testResult !== null" :class="['test-result', testResult ? 'success' : 'error']">
-            <AppIcon :name="testResult ? 'lucide:check-circle' : 'lucide:x-circle'" :size="14" />
-            <span>{{ testResult ? $t('console.testSuccess') : $t('console.testFailed') }}</span>
-          </span>
         </div>
       </div>
 
@@ -725,13 +725,15 @@ import type { SearchProvider } from '@/types/admin'
   margin-top: 14px;
 }
 
-.test-connection-area {
+.section-actions--split {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.action-left {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border);
 }
 
 .test-result {
@@ -748,5 +750,50 @@ import type { SearchProvider } from '@/types/admin'
 
 .test-result.error {
   color: #ff5b6a;
+}
+
+/* ===== 按钮样式（跟随主题） ===== */
+.page-btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-glass);
+  color: var(--color-text);
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: var(--transition-fast);
+}
+
+.page-btn--primary {
+  border: none;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  color: #fff;
+  box-shadow: 0 4px 14px var(--color-glow);
+}
+
+.page-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.page-btn--ghost {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.page-btn--ghost:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+  box-shadow: 0 0 10px var(--color-glow);
+}
+
+.page-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

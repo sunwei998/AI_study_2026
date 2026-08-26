@@ -72,6 +72,20 @@ export function fetchAdminModels(): Promise<AdminModel[]> {
   )
 }
 
+export function fetchAdminModel(modelId: number): Promise<AdminModel> {
+  return request<unknown>(`/models/${modelId}`).then((r) => {
+    const row = r as Record<string, unknown>
+    return {
+      ...(row as unknown as AdminModel),
+      free: !!row.free,
+      vision: !!row.vision,
+      supports_search: !!row.supports_search,
+      enabled: !!row.enabled,
+      is_default: !!row.is_default
+    }
+  })
+}
+
 export function createAdminModel(payload: ModelPayload): Promise<{ ok: boolean }> {
   return request('/models', { method: 'POST', body: JSON.stringify(payload) })
 }
@@ -86,6 +100,10 @@ export function deleteAdminModel(modelId: number): Promise<{ ok: boolean }> {
 
 export function fetchAdminUsers(): Promise<AdminUser[]> {
   return request('/users')
+}
+
+export function fetchAdminUser(userId: number): Promise<AdminUser> {
+  return request(`/users/${userId}`)
 }
 
 export function updateAdminUser(userId: number, payload: UserUpdatePayload): Promise<{ ok: boolean }> {

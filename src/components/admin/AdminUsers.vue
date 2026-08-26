@@ -3,7 +3,7 @@
     <div v-if="error" class="page-error">{{ error }}</div>
 
     <div v-if="loading" class="page-loading">
-      <AppLoading :size="28" glow />
+      <TableLoading :rows="8" :cols="6" :text="$t('common.loading')" />
     </div>
 
     <div v-else class="users-table-wrap">
@@ -26,7 +26,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="u in users" :key="u.id">
+          <tr v-for="u in pagedUsers" :key="u.id">
             <td class="cell-user">
               {{ u.username }}
               <span v-if="u.id === auth.user?.id" class="self-tag">{{ $t('console.self') }}</span>
@@ -87,6 +87,12 @@
         </tbody>
       </table>
     </div>
+
+    <Pagination
+      :total="users.length"
+      v-model:page="currentPage"
+      v-model:page-size="pageSize"
+    />
 
     <Teleport to="body">
       <Transition name="confirm" appear>
@@ -191,12 +197,14 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AdminUser, UserRole, UserUpdatePayload } from '@/types/admin'
-import { fetchAdminUsers, resetUserPassword, updateAdminUser } from '@/services/adminService'
+import { fetchAdminUser, fetchAdminUsers, resetUserPassword, updateAdminUser } from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
 import { useToast } from '@/composables/useToast'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import TableLoading from '@/components/common/TableLoading.vue'
+import Pagination from '@/components/common/Pagination.vue'
 import RegionSelect, { type RegionValue } from '@/components/common/RegionSelect.vue'
 import DatePicker from '@/components/common/DatePicker.vue'
 
@@ -207,6 +215,14 @@ const { showToast } = useToast()
 const users = ref<AdminUser[]>([])
 const loading = ref(true)
 const error = ref('')
+
+const currentPage = ref(1)
+const pageSize = ref(10)
+
+const pagedUsers = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return users.value.slice(start, start + pageSize.value)
+})
 
 const load = async () => {
   loading.value = true
@@ -367,17 +383,23 @@ const regionPreview = computed(() => {
   return parts.join('')
 })
 
-const openEditRegion = (u: AdminUser) => {
+const openEditRegion = async (u: AdminUser) => {
   regionUser.value = u
-  regionValue.value = {
-    province: u.province || '',
-    city: u.city || '',
-    district: u.district || ''
-  }
-  editBirthday.value = u.birthday || ''
-  editGender.value = u.gender || ''
   regionError.value = ''
   regionVisible.value = true
+  try {
+    const detail = await fetchAdminUser(u.id)
+    regionValue.value = {
+      province: detail.province || '',
+      city: detail.city || '',
+      district: detail.district || ''
+    }
+    editBirthday.value = detail.birthday || ''
+    editGender.value = detail.gender || ''
+    regionUser.value = detail
+  } catch (err) {
+    regionError.value = err instanceof Error ? err.message : t('common.errorOccurred')
+  }
 }
 
 const submitRegion = async () => {

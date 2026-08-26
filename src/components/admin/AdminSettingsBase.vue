@@ -3,7 +3,7 @@
     <div v-if="error" class="page-error">{{ error }}</div>
 
     <div v-if="loading" class="page-loading">
-      <AppLoading :size="28" glow />
+      <TableLoading :rows="6" :cols="4" :text="$t('common.loading')" />
     </div>
 
     <div v-else class="settings-body">
@@ -120,6 +120,7 @@ import type { SettingItem } from '@/types/admin'
 import { fetchSettings, updateSetting } from '@/services/adminService'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import TableLoading from '@/components/common/TableLoading.vue'
 import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
@@ -196,16 +197,9 @@ const submitAdd = async () => {
   addSubmitting.value = true
   try {
     await updateSetting(key, { value: newValue.value, remark: newRemark.value })
-    const existing = settings.value.find((s) => s.key === key)
-    if (existing) {
-      existing.value = newValue.value
-      existing.remark = newRemark.value
-      existing.enabled = true
-    } else {
-      settings.value.push({ key, value: newValue.value, remark: newRemark.value, enabled: true })
-    }
     addVisible.value = false
     showToast(t('console.created'), 'success')
+    await load()
   } catch (err) {
     addError.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {

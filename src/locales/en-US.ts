@@ -22,7 +22,16 @@ export default {
     backToTop: 'Back to top',
     backToBottom: 'Back to bottom',
     close: 'Close',
-    errorOccurred: 'An error occurred'
+    errorOccurred: 'An error occurred',
+    loading: 'Loading',
+    itemsUnit: 'items',
+    prevPage: 'Previous',
+    nextPage: 'Next',
+    goTo: 'Go to',
+    pageUnit: 'page',
+    itemsPerPage: '{size}/page',
+    pleaseSelect: 'Please select',
+    noOptions: 'No options'
   },
   input: {
     placeholder: 'Type your question... (Enter to send)',
@@ -337,6 +346,14 @@ export default {
     prevYear: 'Previous year',
     nextYear: 'Next year',
     prevMonth: 'Previous month',
-    nextMonth: 'Next month'
+    nextMonth: 'Next month',
+    hour: 'Hour',
+    minute: 'Min',
+    second: 'Sec',
+    confirm: 'OK',
+    startDate: 'Start date',
+    endDate: 'End date',
+    startPlaceholder: 'Start date',
+    endPlaceholder: 'End date'
   }
 }
