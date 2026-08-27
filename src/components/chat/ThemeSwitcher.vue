@@ -207,7 +207,7 @@ onBeforeUnmount(() => {
 }
 
 .theme-preview.mint {
-  background: linear-gradient(135deg, #050f0a 0%, #00e676 50%, #ff4081 100%);
+  background: linear-gradient(135deg, #001a12 0%, #00b359 70%, #9dffd4 100%);
 }
 
 .theme-preview.sand {

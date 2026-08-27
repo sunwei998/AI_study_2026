@@ -8,7 +8,7 @@
 
     <div v-else class="settings-body">
       <div class="settings-toolbar">
-        <button class="page-btn page-btn--primary" @click="openAdd">
+        <button v-if="canManageSettings" class="page-btn page-btn--primary" @click="openAdd">
           <AppIcon name="lucide:plus" :size="15" />
           {{ $t('console.addSetting') }}
         </button>
@@ -22,7 +22,7 @@
               <th>{{ $t('console.value') }}</th>
               <th>{{ $t('console.remark') }}</th>
               <th>{{ $t('console.status') }}</th>
-              <th>{{ $t('console.actions') }}</th>
+              <th v-if="canManageSettings">{{ $t('console.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -33,6 +33,7 @@
                   v-model="s.value"
                   type="text"
                   size="small"
+                  :disabled="!canManageSettings"
                   :data-key="s.key"
                   @keydown.enter="save(s)"
                 />
@@ -42,6 +43,7 @@
                   v-model="s.remark"
                   type="text"
                   size="small"
+                  :disabled="!canManageSettings"
                   :placeholder="$t('console.remarkPlaceholder')"
                   @keydown.enter="save(s)"
                 />
@@ -50,6 +52,7 @@
                 <button
                   class="switch"
                   :class="{ on: s.enabled }"
+                  :disabled="!canManageSettings"
                   :aria-pressed="s.enabled"
                   :title="s.enabled ? $t('console.enabled') : $t('console.disabled')"
                   @click="toggle(s)"
@@ -57,7 +60,7 @@
                   <span class="switch-knob"></span>
                 </button>
               </td>
-              <td>
+              <td v-if="canManageSettings">
                 <div class="row-actions">
                   <button class="row-btn" :title="$t('console.save')" @click="save(s)">
                     <AppIcon name="lucide:save" :size="15" />
@@ -120,10 +123,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SettingItem } from '@/types/admin'
 import { fetchSettings, updateSetting } from '@/services/adminService'
+import { useAuthStore } from '@/stores/authStore'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import TableLoading from '@/components/common/TableLoading.vue'
@@ -133,6 +137,12 @@ import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
 const { showToast } = useToast()
+const auth = useAuthStore()
+
+/** 系统设置权限：超级管理员 / 系统管理员 */
+const canManageSettings = computed(
+  () => auth.user?.role === 'super_admin' || auth.user?.role === 'system_admin'
+)
 
 const settings = ref<SettingItem[]>([])
 const loading = ref(true)

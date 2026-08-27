@@ -2,6 +2,7 @@ import type { MessageRole, ModelInfo, ChatSession, SessionPatch, ChatStreamMeta,
 import { i18n } from '@/locales'
 import { clearToken, getToken } from './token'
 import { notifyUnauthorized } from './unauthorized'
+import { notifyForbidden } from './forbidden'
 
 export interface ChatHistoryItem {
   role: MessageRole
@@ -113,6 +114,9 @@ async function handleJson(resp: Response): Promise<unknown> {
       clearToken()
       notifyUnauthorized()
       throw new Error(i18n.global.t('auth.expired'))
+    }
+    if (resp.status === 403) {
+      notifyForbidden()
     }
     let detail = ''
     try {

@@ -9,7 +9,7 @@
           :placeholder="$t('console.searchModels')"
         />
       </div>
-      <button class="page-btn page-btn--primary" @click="openCreate">
+      <button v-if="canManageModels" class="page-btn page-btn--primary" @click="openCreate">
         <AppIcon name="lucide:plus" :size="15" />
         {{ $t('console.addModel') }}
       </button>
@@ -34,7 +34,7 @@
             <th>{{ $t('console.supportsSearch') }}</th>
             <th>{{ $t('console.default') }}</th>
             <th>{{ $t('console.sortOrder') }}</th>
-            <th class="actions-th">{{ $t('console.actions') }}</th>
+            <th class="actions-th" v-if="canManageModels">{{ $t('console.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -43,6 +43,7 @@
               <button
                 class="toggle"
                 :class="{ on: m.enabled }"
+                :disabled="!canManageModels"
                 :title="m.enabled ? $t('console.disable') : $t('console.enable')"
                 @click="toggleEnabled(m)"
               >
@@ -76,7 +77,7 @@
             <td>
               <button
                 class="default-btn"
-                :class="{ on: m.is_default, off: !m.is_default, blocked: !m.enabled }"
+                :class="{ on: m.is_default, off: !m.is_default, blocked: !m.enabled || !canManageModels }"
                 :title="
                   m.is_default
                     ? $t('console.defaultModel')
@@ -84,7 +85,7 @@
                       ? $t('console.setDefault')
                       : $t('console.defaultDisabledHint')
                 "
-                :disabled="m.is_default || !m.enabled"
+                :disabled="m.is_default || !m.enabled || !canManageModels"
                 @click="setDefault(m)"
               >
                 <span v-if="m.is_default" class="star-char">★</span>
@@ -92,7 +93,7 @@
               </button>
             </td>
             <td class="cell-order">{{ m.sort_order }}</td>
-            <td class="actions-td">
+            <td v-if="canManageModels" class="actions-td">
               <div class="row-actions">
                 <button class="row-btn" :title="$t('console.edit')" @click="openEdit(m)">
                   <AppIcon name="lucide:pencil" :size="15" />
@@ -193,7 +194,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AdminModel, ModelPayload } from '@/types/admin'
 import {
@@ -204,6 +205,7 @@ import {
   fetchSettings,
   updateAdminModel
 } from '@/services/adminService'
+import { useAuthStore } from '@/stores/authStore'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
@@ -215,6 +217,12 @@ import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
 const { showToast } = useToast()
+const auth = useAuthStore()
+
+/** 模型管理权限：超级管理员 / 模型管理员 */
+const canManageModels = computed(
+  () => auth.user?.role === 'super_admin' || auth.user?.role === 'model_admin'
+)
 
 const models = ref<AdminModel[]>([])
 const loading = ref(true)

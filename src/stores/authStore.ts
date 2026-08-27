@@ -3,12 +3,16 @@ import { computed, ref } from 'vue'
 import type { AuthUser, ProfileUpdatePayload } from '@/types/admin'
 import { fetchMe, login as apiLogin, register as apiRegister, updateProfile as apiUpdateProfile } from '@/services/authService'
 import { clearToken, getToken, setToken } from '@/services/token'
+import { isManagerRole, isSuperAdminRole } from '@/utils/roles'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<AuthUser | null>(null)
 
   const isLoggedIn = computed(() => !!user.value)
-  const isAdmin = computed(() => user.value?.role === 'admin')
+  /** 管理角色（super_admin / system_admin / model_admin）：可进入管理控制台 */
+  const isManager = computed(() => isManagerRole(user.value?.role))
+  /** 仅超级管理员 */
+  const isSuperAdmin = computed(() => isSuperAdminRole(user.value?.role))
 
   let initPromise: Promise<void> | null = null
 
@@ -58,7 +62,8 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     user,
     isLoggedIn,
-    isAdmin,
+    isManager,
+    isSuperAdmin,
     init,
     login,
     register,

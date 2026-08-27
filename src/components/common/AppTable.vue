@@ -72,13 +72,19 @@
                 @click="onHeaderClick(col, $event)"
               >
                 <div class="app-table__th-content">
-                  <span
-                    v-if="col.sortable || col.sorter"
-                    class="app-table__sort"
-                    @click.stop="toggleSort(col)"
-                  >
+                  <span class="app-table__th-title">
                     <slot v-if="$slots[`header-${col.key}`]" :name="`header-${col.key}`" :column="col" />
                     <template v-else>{{ col.title }}</template>
+                  </span>
+
+                  <!-- 排序按钮（位于筛选按钮之前） -->
+                  <button
+                    v-if="col.sortable || col.sorter"
+                    type="button"
+                    class="app-table__sort-btn"
+                    :class="{ active: currentSort.key === col.key && currentSort.order }"
+                    @click.stop="toggleSort(col)"
+                  >
                     <span class="app-table__sort-icons">
                       <svg class="app-table__sort-up" :class="{ active: currentSort.key === col.key && currentSort.order === 'asc' }" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="18 15 12 9 6 15" />
@@ -87,25 +93,20 @@
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
                     </span>
-                  </span>
-                  <template v-else>
-                    <slot v-if="$slots[`header-${col.key}`]" :name="`header-${col.key}`" :column="col" />
-                    <template v-else>{{ col.title }}</template>
-                  </template>
+                  </button>
 
                   <!-- 过滤按钮 -->
-                  <span v-if="col.filterable" class="app-table__filter-wrap">
-                    <button
-                      type="button"
-                      class="app-table__filter-btn"
-                      :class="{ active: isFilterActive(col) }"
-                      @click.stop="toggleFilter(col, $event)"
-                    >
-                      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-                      </svg>
-                    </button>
-                  </span>
+                  <button
+                    v-if="col.filterable"
+                    type="button"
+                    class="app-table__filter-btn"
+                    :class="{ active: isFilterActive(col) }"
+                    @click.stop="toggleFilter(col, $event)"
+                  >
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                    </svg>
+                  </button>
 
                   <!-- 列宽拖拽手柄 -->
                   <span
@@ -329,14 +330,31 @@
             </div>
           </div>
 
-          <!-- radio 组 -->
+          <!-- radio 单选（带「全部」） -->
           <div v-else-if="filterPanel.filterType === 'radio'" class="app-table__filter-list">
-            <AppRadioGroup
-              :model-value="filterPanel.selected[0]"
-              :options="radioOptions"
+            <AppRadio
+              class="app-table__filter-item app-table__filter-item--all"
+              :value="''"
+              :label="t('common.all')"
+              :model-value="filterPanel.selected.length === 0 ? '' : null"
+              :name="radioGroupName"
               size="small"
-              @update:model-value="onRadioGroupChange"
+              @update:model-value="onRadioSelect('')"
             />
+            <AppRadio
+              v-for="f in filteredPanelFilters"
+              :key="String(f.value)"
+              class="app-table__filter-item"
+              :value="f.value"
+              :label="f.text"
+              :model-value="filterPanel.selected[0]"
+              :name="radioGroupName"
+              size="small"
+              @update:model-value="(v: any) => onRadioSelect(v)"
+            />
+            <div v-if="filteredPanelFilters.length === 0" class="app-table__filter-empty">
+              {{ $t('common.noData') }}
+            </div>
           </div>
 
           <!-- select 下拉 -->
@@ -398,7 +416,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppInput from '@/components/common/AppInput.vue'
 import AppSelect from '@/components/common/AppSelect.vue'
-import AppRadioGroup, { type RadioOption } from '@/components/common/AppRadioGroup.vue'
+import AppRadio from '@/components/common/AppRadio.vue'
 import AppTooltip from '@/components/common/AppTooltip.vue'
 import TableLoading from '@/components/common/TableLoading.vue'
 
@@ -489,6 +507,8 @@ const props = withDefaults(
     spanMethod?: (props: SpanMethodProps) => { rowspan: number; colspan: number } | undefined
     summaryMethod?: (data: any[], column: TableColumn) => string | number
     defaultSort?: SortState
+    customSort?: boolean
+    sortMethod?: (key: string, order: 'asc' | 'desc' | null) => void
     indentSize?: number
   }>(),
   {
@@ -507,6 +527,7 @@ const props = withDefaults(
     pageSize: 10,
     showHeader: true,
     highlightCurrentRow: false,
+    customSort: false,
     expandable: false,
     expandedRowKeys: () => [],
     defaultExpandAll: false,
@@ -713,6 +734,8 @@ function toggleSort(col: TableColumn) {
   }
   emit('sortChange', innerSort.value.key, innerSort.value.order)
   emit('change', innerSort.value, activeFilters.value)
+  // 自定义排序（服务端排序）：把排序状态交给外部处理后端请求
+  props.sortMethod?.(innerSort.value.key, innerSort.value.order)
 }
 
 function sort(key: string, order: 'asc' | 'desc' | null) {
@@ -766,9 +789,7 @@ const filteredPanelFilters = computed(() => {
 })
 
 // 各类型 options
-const radioOptions = computed<RadioOption[]>(() =>
-  filteredPanelFilters.value.map((f) => ({ label: f.text, value: f.value }))
-)
+const radioGroupName = computed(() => `app-table-filter-${filterPanel.value.colKey}`)
 
 const selectOptions = computed(() => [
   { label: t('common.all'), value: '' },
@@ -779,8 +800,9 @@ function onAllFilterChange() {
   filterPanel.value.selected = []
 }
 
-function onRadioGroupChange(value: any) {
-  filterPanel.value.selected = value === '' || value === undefined ? [] : [value]
+function onRadioSelect(value: any) {
+  // 选中「全部」(value 为空) 表示不筛选
+  filterPanel.value.selected = value === '' || value === undefined || value === null ? [] : [value]
 }
 
 function onSelectChange(value: any) {
@@ -842,6 +864,7 @@ function applyFilter() {
 
 function resetFilter() {
   filterPanel.value.selected = []
+  filterPanel.value.inputValue = ''
 }
 
 function clearFilter(columnKeys?: string[]) {
@@ -864,7 +887,7 @@ function closeFilterPanel() {
 function onFilterDocClick(e: MouseEvent) {
   const target = e.target as Node
   // 点击筛选图标本身时交给 toggleFilter 处理（用于再次点击收起），不在此处关闭
-  if ((target as Element | null)?.closest?.('.app-table__filter-wrap')) return
+  if ((target as Element | null)?.closest?.('.app-table__filter-btn')) return
   if (filterPanelRef.value && !filterPanelRef.value.contains(target)) {
     closeFilterPanel()
   }
@@ -889,9 +912,9 @@ const processedData = computed(() => {
     }
   }
 
-  // 排序
+  // 排序（customSort 为服务端排序模式：数据顺序由后端返回，前端不再排序）
   const { key, order } = currentSort.value
-  if (key && order) {
+  if (!props.customSort && key && order) {
     const col = flatColumns.value.find((c) => c.key === key)
     const dir = order === 'asc' ? 1 : -1
     const sorter = col?.sorter
@@ -1306,6 +1329,23 @@ initDefaults()
   position: relative;
 }
 
+/* 列间分割线：中间一段、垂直居中（不顶天立地） */
+.app-table__th::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 50%;
+  background: color-mix(in srgb, var(--color-border) 45%, transparent);
+  pointer-events: none;
+}
+
+.app-table__th:last-child::after {
+  display: none;
+}
+
 .app-table__th--center { text-align: center; }
 .app-table__th--right { text-align: right; }
 
@@ -1376,16 +1416,35 @@ initDefaults()
   background: color-mix(in srgb, var(--color-surface) 90%, transparent);
 }
 
-/* 排序 */
-.app-table__sort {
+/* 表头标题 */
+.app-table__th-title {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  transition: var(--transition-fast);
+  min-width: 0;
+  white-space: nowrap;
 }
 
-.app-table__sort:hover { color: var(--color-primary); }
+/* 排序按钮（位于筛选按钮之前，风格与筛选按钮一致） */
+.app-table__sort-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.app-table__sort-btn:hover,
+.app-table__sort-btn.active {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
+}
 
 .app-table__sort-icons {
   display: inline-flex;
@@ -1406,8 +1465,6 @@ initDefaults()
 }
 
 /* 过滤按钮 */
-.app-table__filter-wrap { margin-left: auto; }
-
 .app-table__filter-btn {
   display: flex;
   align-items: center;
@@ -1420,6 +1477,7 @@ initDefaults()
   color: var(--color-text-secondary);
   cursor: pointer;
   transition: var(--transition-fast);
+  flex-shrink: 0;
 }
 
 .app-table__filter-btn:hover,
@@ -1675,6 +1733,12 @@ initDefaults()
   overflow-y: auto;
 }
 
+/* 让 AppRadio 在筛选列表中纵向铺满 */
+.app-table__filter-list :deep(.app-radio) {
+  display: flex;
+  width: 100%;
+}
+
 .app-table__filter-select {
   padding: 2px 0;
 }
@@ -1705,6 +1769,10 @@ initDefaults()
   border-bottom: 1px solid var(--color-border);
   color: var(--color-primary);
   font-weight: 600;
+}
+
+.app-table__filter-item--all :deep(.app-radio__label) {
+  color: var(--color-primary);
 }
 
 .app-table__filter-item input {

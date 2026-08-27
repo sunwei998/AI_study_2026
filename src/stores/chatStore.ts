@@ -61,13 +61,20 @@ export const useChatStore = defineStore('chat', () => {
 
   const availableThemes = THEMES
 
-  const availableModels = ref<ModelInfo[]>(MODEL_LIST)
+  const allModels = ref<ModelInfo[]>(MODEL_LIST)
+
+  /** 当前用户可见模型：普通用户仅免费模型；订阅用户/管理员可用全部 */
+  const availableModels = computed<ModelInfo[]>(() => {
+    const role = auth.user?.role
+    if (role === 'user') return allModels.value.filter((m) => m.free)
+    return allModels.value
+  })
 
   const loadModels = async () => {
     try {
       const list = await apiService.fetchModels()
       if (list.length) {
-        availableModels.value = list
+        allModels.value = list
       }
     } catch {
       // 后端不可用时保留本地兜底列表

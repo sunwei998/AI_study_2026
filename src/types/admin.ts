@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'user'
+export type UserRole = 'super_admin' | 'system_admin' | 'model_admin' | 'user' | 'subscriber'
 export type Gender = 'male' | 'female' | 'other'
 
 export interface AuthUser {

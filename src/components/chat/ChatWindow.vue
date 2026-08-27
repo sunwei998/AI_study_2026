@@ -25,7 +25,7 @@
           {{ auth.user.username }}
         </button>
         <button
-          v-if="auth.isAdmin && !device.isMobile"
+          v-if="auth.isManager && !device.isMobile"
           class="admin-btn"
           :title="$t('console.title')"
           @click="router.push('/admin')"

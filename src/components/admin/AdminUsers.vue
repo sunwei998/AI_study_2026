@@ -12,6 +12,8 @@
         :empty-text="$t('console.noUsers')"
         row-key="id"
         size="small"
+        custom-sort
+        :sort-method="onServerSort"
         @filter-change="onFilterChange"
       >
         <template #column-username="{ row }">
@@ -24,8 +26,8 @@
         </template>
 
         <template #column-role="{ row }">
-          <span class="role-badge" :class="row.role === 'admin' ? 'role-admin' : 'role-user'">
-            {{ row.role }}
+          <span class="role-badge" :class="`role-${row.role}`">
+            {{ t(roleLabelKey(row.role)) }}
           </span>
         </template>
 
@@ -33,7 +35,7 @@
           <button
             class="toggle"
             :class="{ on: row.is_active }"
-            :disabled="row.id === auth.user?.id"
+            :disabled="row.id === auth.user?.id || !auth.isSuperAdmin"
             :title="row.is_active ? $t('console.disable') : $t('console.enable')"
             @click="askToggleActive(row)"
           >
@@ -41,13 +43,10 @@
           </button>
         </template>
 
-        <template #column-actions="{ row }">
+        <template v-if="auth.isSuperAdmin" #column-actions="{ row }">
           <div class="row-actions">
             <button class="row-btn" :title="$t('console.roleSwitch')" @click="askToggleRole(row)">
-              <AppIcon
-                :name="row.role === 'admin' ? 'lucide:user' : 'lucide:shield'"
-                :size="15"
-              />
+              <AppIcon name="lucide:shield" :size="15" />
             </button>
             <button class="row-btn" :title="$t('console.editProfile')" @click="openEditRegion(row)">
               <AppIcon name="lucide:pencil" :size="15" />
@@ -153,6 +152,36 @@
       </Transition>
     </Teleport>
 
+    <Teleport to="body">
+      <Transition name="confirm" appear>
+        <div v-if="roleVisible" class="form-overlay" @click.self="roleVisible = false">
+          <div class="form-modal" role="dialog" aria-modal="true">
+            <span class="form-accent-line"></span>
+            <h3 class="form-title">{{ $t('console.roleSwitch') }} — {{ roleTargetUser?.username }}</h3>
+
+            <form class="form-body" @submit.prevent="submitRoleChange">
+              <label class="form-field">
+                <span class="form-label">{{ $t('console.role') }}</span>
+                <AppSelect v-model="selectedRole" :options="roleOptions" size="default" />
+              </label>
+
+              <p v-if="roleError" class="form-error">{{ roleError }}</p>
+
+              <div class="form-actions">
+                <button type="button" class="form-btn form-btn--ghost" @click="roleVisible = false">
+                  {{ $t('confirm.cancel') }}
+                </button>
+                <button type="submit" class="form-btn form-btn--primary" :disabled="roleSubmitting">
+                  <AppLoading v-if="roleSubmitting" :size="14" color="#fff" glow />
+                  {{ $t('confirm.ok') }}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <ConfirmModal
       v-model:visible="confirmVisible"
       :title="confirmTitle"
@@ -179,8 +208,10 @@ import Pagination from '@/components/common/Pagination.vue'
 import AppCascader, { type CascaderValue } from '@/components/common/AppCascader.vue'
 import DatePicker from '@/components/common/DatePicker.vue'
 import AppInput from '@/components/common/AppInput.vue'
+import AppSelect from '@/components/common/AppSelect.vue'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import AppTooltip from '@/components/common/AppTooltip.vue'
+import { ALL_ROLES, ROLE_LABEL_KEYS } from '@/utils/roles'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -196,6 +227,8 @@ const pageSize = ref(10)
 const usernameFilter = ref('')
 const genderFilter = ref<string[]>([])
 const roleFilter = ref<string[]>([])
+const isActiveFilter = ref<boolean | null>(null)
+const sortFilter = ref<{ key: string; order: 'asc' | 'desc' | null }>({ key: '', order: null })
 
 const load = async () => {
   loading.value = true
@@ -206,7 +239,10 @@ const load = async () => {
       pageSize: pageSize.value,
       username: usernameFilter.value || undefined,
       genders: genderFilter.value.length ? genderFilter.value : undefined,
-      roles: roleFilter.value.length ? roleFilter.value : undefined
+      roles: roleFilter.value.length ? roleFilter.value : undefined,
+      isActive: isActiveFilter.value === null ? undefined : isActiveFilter.value,
+      sort: sortFilter.value.order ? sortFilter.value.key : undefined,
+      order: sortFilter.value.order ?? undefined
     })
     users.value = res.items
     total.value = res.total
@@ -217,11 +253,23 @@ const load = async () => {
   }
 }
 
+// 服务端排序：AppTable 通过 sort-method 回调，把排序状态交给后端查询
+function onServerSort(key: string, order: 'asc' | 'desc' | null) {
+  sortFilter.value = { key, order }
+  if (currentPage.value === 1) {
+    load()
+  } else {
+    currentPage.value = 1
+  }
+}
+
 function onFilterChange(filters: Record<string, any[]>) {
   const username = filters.username?.[0]
   usernameFilter.value = typeof username === 'string' ? username : ''
   genderFilter.value = (filters.gender ?? []).map(String)
   roleFilter.value = (filters.role ?? []).map(String)
+  const rawActive = filters.is_active?.[0]
+  isActiveFilter.value = typeof rawActive === 'boolean' ? rawActive : null
   if (currentPage.value === 1) {
     load()
   } else {
@@ -268,7 +316,7 @@ const columns = computed<TableColumn[]>(() => [
   {
     key: 'username',
     title: t('console.username'),
-    width: 160,
+    width: 220,
     ellipsis: true,
     filterable: true,
     filterType: 'input',
@@ -279,27 +327,25 @@ const columns = computed<TableColumn[]>(() => [
   {
     key: 'role',
     title: t('console.role'),
-    width: 90,
+    width: 130,
     align: 'center',
     filterable: true,
     filterType: 'checkbox',
-    filters: [
-      { text: t('console.roleAdmin'), value: 'admin' },
-      { text: t('console.roleUser'), value: 'user' }
-    ]
+    filters: ALL_ROLES.map((r) => ({ text: t(ROLE_LABEL_KEYS[r]), value: r }))
   },
   {
     key: 'birthday',
     title: t('console.birthday'),
-    width: 130,
+    width: 200,
     ellipsis: true,
+    sortable: true,
     className: 'cell-num',
     formatter: (row: AdminUser) => row.birthday || '-'
   },
   {
     key: 'gender',
     title: t('console.gender'),
-    width: 90,
+    width: 150,
     align: 'center',
     filterable: true,
     filterType: 'checkbox',
@@ -310,11 +356,24 @@ const columns = computed<TableColumn[]>(() => [
     ],
     formatter: (row: AdminUser) => genderLabel(row.gender)
   },
-  { key: 'is_active', title: t('console.enabled'), width: 80, align: 'center' },
+  {
+    key: 'is_active',
+    title: t('console.enabled'),
+    width: 150,
+    align: 'center',
+    filterable: true,
+    filterType: 'radio',
+    filters: [
+      { text: t('console.enabled'), value: true },
+      { text: t('console.disabled'), value: false }
+    ],
+    // 后端返回 1/0（数字），筛选值是 true/false（布尔），需宽松比较，否则会被前端 processedData 严格比较过滤掉
+    filterMethod: (v: any, row: AdminUser) => Boolean(row.is_active) === Boolean(v)
+  },
   {
     key: 'region',
     title: t('console.region'),
-    width: 140,
+    width: 160,
     ellipsis: true,
     className: 'cell-region',
     formatter: (row: AdminUser) => formatRegion(row)
@@ -322,57 +381,76 @@ const columns = computed<TableColumn[]>(() => [
   {
     key: 'logins',
     title: t('console.logins'),
-    width: 70,
+    width: 150,
     align: 'right',
+    sortable: true,
     className: 'cell-num',
     formatter: (row: AdminUser) => row.logins ?? 0
   },
   {
     key: 'total_tokens',
     title: t('console.totalTokens'),
-    width: 90,
+    width: 150,
     align: 'right',
+    sortable: true,
     className: 'cell-num',
     formatter: (row: AdminUser) => formatNum(row.total_tokens)
   },
   {
     key: 'last_seen_at',
     title: t('console.lastSeen'),
-    width: 180,
+    width: 250,
     ellipsis: true,
+    sortable: true,
     className: 'cell-time',
     formatter: (row: AdminUser) => formatTime(row.last_seen_at)
   },
   {
     key: 'created_at',
     title: t('console.createdAt'),
-    width: 180,
+    width: 250,
     ellipsis: true,
+    sortable: true,
     className: 'cell-time',
     formatter: (row: AdminUser) => formatTime(row.created_at)
   },
   {
     key: 'updated_at',
     title: t('console.updatedAt'),
-    width: 180,
+    width: 250,
     ellipsis: true,
+    sortable: true,
     className: 'cell-time',
     formatter: (row: AdminUser) => formatTime(row.updated_at)
   },
   {
     key: 'updated_by',
     title: t('console.updatedBy'),
-    width: 120,
+    width: 170,
     className: 'cell-time',
     formatter: (row: AdminUser) => row.updated_by || '-'
   },
-  { key: 'actions', title: t('console.actions'), width: 120, align: 'center', fixed: 'right' }
+  ...(auth.isSuperAdmin
+    ? [
+        {
+          key: 'actions',
+          title: t('console.actions'),
+          width: 140,
+          align: 'center',
+          fixed: 'right'
+        } as TableColumn
+      ]
+    : [])
 ])
 
 function genderLabel(gender: string): string {
   if (!gender) return '-'
   const opt = genderOptions.find((o) => o.value === gender)
   return opt ? opt.label : gender
+}
+
+function roleLabelKey(role: string): string {
+  return ROLE_LABEL_KEYS[role as UserRole] || 'console.roleUser'
 }
 
 const confirmVisible = ref(false)
@@ -419,17 +497,38 @@ const askToggleActive = (u: AdminUser) => {
 
 
 const askToggleRole = (u: AdminUser) => {
-  const target: UserRole = u.role === 'admin' ? 'user' : 'admin'
-  openConfirm(
-    t('console.roleSwitch'),
-    t('console.roleSwitchMessage', { name: u.username, role: target }),
-    async () => {
-      await updateAdminUser(u.id, { role: target })
-      await load()
-      showToast(t('console.roleUpdated'), 'success')
-    },
-    false
-  )
+  roleTargetUser.value = u
+  selectedRole.value = u.role
+  roleError.value = ''
+  roleVisible.value = true
+}
+
+// 角色切换弹窗
+const roleOptions = ALL_ROLES.map((r) => ({ label: t(ROLE_LABEL_KEYS[r]), value: r }))
+const roleVisible = ref(false)
+const roleSubmitting = ref(false)
+const roleError = ref('')
+const roleTargetUser = ref<AdminUser | null>(null)
+const selectedRole = ref<UserRole>('user')
+
+const submitRoleChange = async () => {
+  if (roleSubmitting.value || !roleTargetUser.value) return
+  if (selectedRole.value === roleTargetUser.value.role) {
+    roleVisible.value = false
+    return
+  }
+  roleSubmitting.value = true
+  roleError.value = ''
+  try {
+    await updateAdminUser(roleTargetUser.value.id, { role: selectedRole.value })
+    await load()
+    showToast(t('console.roleUpdated'), 'success')
+    roleVisible.value = false
+  } catch (err) {
+    roleError.value = err instanceof Error ? err.message : t('common.errorOccurred')
+  } finally {
+    roleSubmitting.value = false
+  }
 }
 
 const resetVisible = ref(false)
@@ -621,14 +720,38 @@ const submitRegion = async () => {
   border-radius: 20px;
   font-family: var(--font-mono);
   font-size: 11px;
+  white-space: nowrap;
 }
 
-.role-admin {
+/* 超级管理员：金色 */
+.role-super_admin {
   background: rgba(255, 183, 77, 0.15);
   border: 1px solid #ffb74d;
   color: #ffb74d;
 }
 
+/* 系统管理员：青色（主题主色） */
+.role-system_admin {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* 模型管理员：紫色 */
+.role-model_admin {
+  background: rgba(167, 139, 250, 0.15);
+  border: 1px solid #a78bfa;
+  color: #a78bfa;
+}
+
+/* 订阅用户：绿色 */
+.role-subscriber {
+  background: rgba(52, 211, 153, 0.15);
+  border: 1px solid #34d399;
+  color: #34d399;
+}
+
+/* 普通用户：中性 */
 .role-user {
   background: var(--color-glass);
   border: 1px solid var(--color-border);

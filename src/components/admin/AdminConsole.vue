@@ -464,6 +464,11 @@ const logout = () => {
   color: var(--color-text-secondary);
 }
 
+/* 二级菜单项之间留出间距，避免 hover/active 高亮贴在一起 */
+.console-menu-child + .console-menu-child {
+  margin-top: 4px;
+}
+
 .console-menu-child:hover {
   color: var(--color-primary);
   background: var(--color-surface);

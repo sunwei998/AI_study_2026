@@ -29,44 +29,46 @@
     </button>
 
     <Transition name="as-dropdown">
-      <div v-if="isOpen" class="as-panel" role="listbox">
-        <div class="as-panel-inner">
-          <button
-            v-for="opt in normalizedOptions"
-            :key="String(opt.value)"
-            type="button"
-            class="as-option"
-            :class="{ active: modelValue === opt.value }"
-            role="option"
-            :aria-selected="modelValue === opt.value"
-            @click="select(opt)"
-          >
-            <span class="as-option-label">{{ opt.label }}</span>
-            <svg
-              v-if="modelValue === opt.value"
-              class="as-check"
-              viewBox="0 0 24 24"
-              width="14"
-              height="14"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+      <Teleport to="body">
+        <div v-if="isOpen" ref="panelRef" class="as-panel" :style="panelStyle" role="listbox">
+          <div class="as-panel-inner">
+            <button
+              v-for="opt in normalizedOptions"
+              :key="String(opt.value)"
+              type="button"
+              class="as-option"
+              :class="{ active: modelValue === opt.value }"
+              role="option"
+              :aria-selected="modelValue === opt.value"
+              @click="select(opt)"
             >
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-          </button>
-          <div v-if="normalizedOptions.length === 0" class="as-empty">{{ $t('common.noOptions') }}</div>
+              <span class="as-option-label">{{ opt.label }}</span>
+              <svg
+                v-if="modelValue === opt.value"
+                class="as-check"
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </button>
+            <div v-if="normalizedOptions.length === 0" class="as-empty">{{ $t('common.noOptions') }}</div>
+          </div>
+          <div class="as-scanline"></div>
         </div>
-        <div class="as-scanline"></div>
-      </div>
+      </Teleport>
     </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 interface SelectOption {
@@ -96,8 +98,45 @@ const emit = defineEmits<{
 }>()
 
 const rootRef = ref<HTMLElement | null>(null)
+const panelRef = ref<HTMLElement | null>(null)
 const isOpen = ref(false)
 const isFocused = ref(false)
+
+// 下拉面板定位：Teleport 到 body，fixed 定位，避免被父容器 overflow/滚动裁剪
+const PANEL_MAX_HEIGHT = 260
+const panelStyle = ref<Record<string, string>>({})
+
+function updatePanelPos() {
+  const el = rootRef.value
+  if (!el || !isOpen.value) return
+  const rect = el.getBoundingClientRect()
+  // 用面板实际高度精确贴住触发器（向下贴底边，向上贴顶边，0 间隙）
+  const panelH = panelRef.value?.offsetHeight || PANEL_MAX_HEIGHT
+  let top = rect.bottom
+  if (top + panelH > window.innerHeight && rect.top > panelH + 12) {
+    top = Math.max(4, rect.top - panelH)
+  }
+  panelStyle.value = {
+    position: 'fixed',
+    top: `${top}px`,
+    left: `${rect.left}px`,
+    minWidth: `${rect.width}px`
+  }
+}
+
+watch(isOpen, async (open) => {
+  if (open) {
+    // 等面板挂载后再定位，才能拿到真实高度
+    await nextTick()
+    updatePanelPos()
+    // 任意元素滚动/视口变化时跟随定位（capture 可捕获内部滚动容器）
+    window.addEventListener('scroll', updatePanelPos, true)
+    window.addEventListener('resize', updatePanelPos)
+  } else {
+    window.removeEventListener('scroll', updatePanelPos, true)
+    window.removeEventListener('resize', updatePanelPos)
+  }
+})
 
 const normalizedOptions = computed<SelectOption[]>(() => {
   return props.options.map((opt) => {
@@ -131,13 +170,18 @@ function select(opt: SelectOption) {
 
 function onDocClick(e: MouseEvent) {
   if (!isOpen.value) return
-  if (rootRef.value && !rootRef.value.contains(e.target as Node)) {
+  const target = e.target as Node
+  const insideRoot = rootRef.value?.contains(target)
+  const insidePanel = panelRef.value?.contains(target)
+  if (!insideRoot && !insidePanel) {
     isOpen.value = false
   }
 }
 
 document.addEventListener('click', onDocClick)
 onBeforeUnmount(() => {
+  window.removeEventListener('scroll', updatePanelPos, true)
+  window.removeEventListener('resize', updatePanelPos)
   document.removeEventListener('click', onDocClick)
 })
 </script>
@@ -213,13 +257,9 @@ onBeforeUnmount(() => {
   color: var(--color-primary);
 }
 
-/* 下拉面板 */
+/* 下拉面板（Teleport 到 body，fixed 定位由 JS 计算） */
 .as-panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  min-width: 100%;
-  z-index: 1000;
+  z-index: 3000;
   background: var(--color-glass);
   backdrop-filter: blur(16px) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(16px) saturate(var(--glass-saturate));
@@ -241,6 +281,7 @@ onBeforeUnmount(() => {
 
 .as-option {
   width: 100%;
+  margin: 2px 0;
   padding: 8px 12px;
   border: none;
   background: transparent;

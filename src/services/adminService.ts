@@ -14,6 +14,7 @@ import type {
 } from '@/types/admin'
 import { clearToken, getToken } from './token'
 import { notifyUnauthorized } from './unauthorized'
+import { notifyForbidden } from './forbidden'
 
 const API_BASE = '/api/admin'
 
@@ -31,6 +32,9 @@ export interface PaginationParams {
   username?: string
   genders?: string[]
   roles?: string[]
+  isActive?: boolean
+  sort?: string
+  order?: 'asc' | 'desc'
 }
 
 function authHeaders(): Record<string, string> {
@@ -57,6 +61,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     clearToken()
     notifyUnauthorized()
     throw new Error('unauthorized')
+  }
+  if (resp.status === 403) {
+    // 权限不足：全局 toast 提醒
+    notifyForbidden()
   }
   if (!resp.ok) {
     throw new Error(await parseError(resp))
@@ -132,6 +140,11 @@ export function fetchAdminUsers(params: PaginationParams = {}): Promise<Paginate
   if (params.username) query.set('username', params.username)
   if (params.genders?.length) query.set('gender', params.genders.join(','))
   if (params.roles?.length) query.set('role', params.roles.join(','))
+  if (params.isActive !== undefined && params.isActive !== null) {
+    query.set('is_active', params.isActive ? 'true' : 'false')
+  }
+  if (params.sort) query.set('sort', params.sort)
+  if (params.order) query.set('order', params.order)
   const qs = query.toString()
   return request<PaginatedResult<AdminUser>>(`/users${qs ? `?${qs}` : ''}`)
 }

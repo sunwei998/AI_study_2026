@@ -32,7 +32,7 @@ const router = createRouter({
     {
       path: '/admin',
       component: () => import('@/components/admin/AdminConsole.vue'),
-      meta: { requiresAuth: true, requiresAdmin: true },
+      meta: { requiresAuth: true, requiresManager: true },
       children: [
         { path: '', redirect: '/admin/overview' },
         {
@@ -102,7 +102,7 @@ router.beforeEach(async (to) => {
     }
   }
 
-  if (to.meta.requiresAdmin && !auth.isAdmin) {
+  if (to.meta.requiresManager && !auth.isManager) {
     return { path: '/chat' }
   }
 

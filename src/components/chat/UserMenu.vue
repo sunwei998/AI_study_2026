@@ -7,7 +7,7 @@
     >
       <span v-if="auth.user?.avatar" class="avatar-img"><img :src="auth.user.avatar" alt="" /></span>
       <span v-else class="avatar-char">{{ avatarChar }}</span>
-      <span v-if="auth.isAdmin" class="avatar-admin-dot" :title="$t('console.title')"></span>
+      <span v-if="auth.isManager" class="avatar-admin-dot" :title="$t('console.title')"></span>
     </button>
 
     <Teleport to="body">
@@ -68,7 +68,7 @@
           </div>
 
           <div class="sheet-section">
-            <button v-if="auth.isAdmin" class="sheet-action" @click="goAdmin">
+            <button v-if="auth.isManager" class="sheet-action" @click="goAdmin">
               <AppIcon name="lucide:settings-2" :size="16" />
               <span>{{ $t('console.title') }}</span>
             </button>
@@ -96,6 +96,7 @@ import { useChatStore } from '@/stores/chatStore'
 import { applyTheme } from '@/styles/themes'
 import LanguageSwitcher from '@/components/chat/LanguageSwitcher.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import { ROLE_LABEL_KEYS } from '@/utils/roles'
 
 const emit = defineEmits<{ (e: 'logout'): void; (e: 'edit-profile'): void }>()
 
@@ -108,9 +109,11 @@ const open = ref(false)
 
 const username = computed(() => auth.user?.username || '')
 const avatarChar = computed(() => (username.value ? username.value.charAt(0).toUpperCase() : '?'))
-const roleLabel = computed(() =>
-  auth.isAdmin ? t('console.roleAdmin') : t('console.roleUser')
-)
+const roleLabel = computed(() => {
+  const role = auth.user?.role
+  const key = role ? ROLE_LABEL_KEYS[role] : 'console.roleUser'
+  return t(key)
+})
 
 const currentTheme = computed(() => store.currentTheme)
 const availableThemes = computed(() => store.availableThemes as ThemeType[])
@@ -458,7 +461,7 @@ import type { ThemeType } from '@/types/chat'
 }
 
 .theme-dot.mint {
-  background: linear-gradient(135deg, #050f0a 0%, #00e676 50%, #ff4081 100%);
+  background: linear-gradient(135deg, #001a12 0%, #00b359 70%, #9dffd4 100%);
 }
 
 .theme-dot.sand {

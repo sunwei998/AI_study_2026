@@ -21,7 +21,7 @@
             class="provider-item"
             :class="{ dragging: dragIndex === index }"
           >
-            <div class="provider-drag-handle" @mousedown="onDragStart($event, index)">
+            <div v-if="canManageSettings" class="provider-drag-handle" @mousedown="onDragStart($event, index)">
               <AppIcon name="lucide:grip-vertical" :size="16" />
             </div>
 
@@ -30,6 +30,7 @@
                 <input
                   type="checkbox"
                   v-model="provider.enabled"
+                  :disabled="!canManageSettings"
                   @change="onProviderToggle(provider)"
                 >
                 <span class="checkmark"></span>
@@ -53,7 +54,7 @@
                 <span>{{ $t('console.testConnection') }}</span>
               </button>
 
-              <div class="drag-handle" @mousedown="onDragStart($event, index)">
+              <div v-if="canManageSettings" class="drag-handle" @mousedown="onDragStart($event, index)">
                 <AppIcon name="lucide:grip-vertical" :size="16" />
               </div>
             </div>
@@ -63,7 +64,7 @@
         </div>
 
         <div class="section-actions">
-          <button class="page-btn page-btn--primary" @click="saveProviders">
+          <button v-if="canManageSettings" class="page-btn page-btn--primary" @click="saveProviders">
             <AppLoading v-if="saving" :size="14" color="#fff" glow />
             {{ $t('confirm.save') }}
           </button>
@@ -85,6 +86,7 @@
               v-model="searxngUrl"
               type="url"
               clearable
+              :disabled="!canManageSettings"
               :placeholder="$t('console.searxngUrlPlaceholder')"
             />
           </label>
@@ -96,6 +98,7 @@
               type="number"
               :min="5"
               :max="60"
+              :disabled="!canManageSettings"
               :placeholder="$t('console.searxngTimeoutPlaceholder')"
             />
           </label>
@@ -119,7 +122,7 @@
             </span>
           </div>
 
-          <button class="page-btn page-btn--primary" @click="saveSearxngConfig">
+          <button v-if="canManageSettings" class="page-btn page-btn--primary" @click="saveSearxngConfig">
             <AppLoading v-if="savingSearxng" :size="14" color="#fff" glow />
             {{ $t('confirm.save') }}
           </button>
@@ -142,6 +145,7 @@
               type="number"
               :min="1"
               :max="20"
+              :disabled="!canManageSettings"
             />
           </label>
 
@@ -152,6 +156,7 @@
               type="number"
               :min="1"
               :max="10"
+              :disabled="!canManageSettings"
             />
           </label>
 
@@ -161,6 +166,7 @@
               type="button"
               class="toggle"
               :class="{ on: fetchContentEnabled }"
+              :disabled="!canManageSettings"
               @click="fetchContentEnabled = !fetchContentEnabled"
             >
               <span class="toggle-knob"></span>
@@ -175,12 +181,13 @@
               :min="2000"
               :max="50000"
               :step="1000"
+              :disabled="!canManageSettings"
             />
           </label>
         </div>
 
         <div class="section-actions">
-          <button class="page-btn page-btn--primary" @click="saveAdvancedSettings">
+          <button v-if="canManageSettings" class="page-btn page-btn--primary" @click="saveAdvancedSettings">
             <AppLoading v-if="savingAdvanced" :size="14" color="#fff" glow />
             {{ $t('confirm.save') }}
           </button>
@@ -194,6 +201,7 @@
 import { onMounted, ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchSettings, updateSetting } from '@/services/adminService'
+import { useAuthStore } from '@/stores/authStore'
 import AppLoading from '@/components/common/AppLoading.vue'
 import ChartLoading from '@/components/common/ChartLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
@@ -202,6 +210,12 @@ import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
 const { showToast } = useToast()
+const auth = useAuthStore()
+
+/** 系统设置权限：超级管理员 / 系统管理员 */
+const canManageSettings = computed(
+  () => auth.user?.role === 'super_admin' || auth.user?.role === 'system_admin'
+)
 
 interface SearchProvider {
   id: string
@@ -284,6 +298,7 @@ const providerOptions = [
 const searxngProvider = computed(() => providers.value.find((p) => p.id === 'searxng'))
 
 function onDragStart(event: MouseEvent, index: number) {
+  if (!canManageSettings.value) return
   dragIndex.value = index
 }
 
