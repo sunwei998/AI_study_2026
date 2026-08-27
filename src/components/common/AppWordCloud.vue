@@ -102,8 +102,9 @@ function textWidth(text: string, size: number): number {
   return w
 }
 
-// 词云布局：按权重降序，从画布中心用阿基米德螺线向外放置，矩形碰撞检测
-function layout(): PlacedWord[] {
+// 词云布局：按权重降序，从画布中心用阿基米德螺线向外放置，矩形碰撞检测。
+// scale 为字号缩放系数（空间不足时整体缩小字号，让更多词放得下）。
+function layout(scale: number): PlacedWord[] {
   const list = [...props.words].sort((a, b) => b.weight - a.weight)
   if (!list.length) return []
   const maxW = Math.max(1, list[0].weight)
@@ -111,13 +112,16 @@ function layout(): PlacedWord[] {
   const range = Math.max(1, maxW - minW)
   const cx = width.value / 2
   const cy = height.value / 2
+  // 应用缩放后的字号范围，最小字号保持 ≥10px 可读
+  const effMin = Math.max(10, props.minSize * scale)
+  const effMax = Math.max(effMin, props.maxSize * scale)
   const placed: PlacedWord[] = []
   const boxes: { x1: number; y1: number; x2: number; y2: number }[] = []
   const pad = props.padding
 
   for (const word of list) {
     const t = range === 0 ? 1 : (word.weight - minW) / range
-    const size = Math.round(props.minSize + (props.maxSize - props.minSize) * t)
+    const size = Math.round(effMin + (effMax - effMin) * t)
     const w = textWidth(word.text, size)
     const h = size * 1.15
     const rotate = word.weight === maxW ? 0 : Math.random() < 0.12 ? 90 : 0
@@ -133,7 +137,8 @@ function layout(): PlacedWord[] {
     let angle = Math.random() * Math.PI * 2
     let r = 0
     const step = 1.4
-    const maxR = Math.max(cx, cy) + Math.max(w, h)
+    // 用对角线长度覆盖到画布四角，避免角落空间浪费
+    const maxR = Math.hypot(cx, cy) + Math.max(w, h)
 
     while (r < maxR && !found) {
       const x = cx + r * Math.cos(angle)
@@ -160,6 +165,9 @@ function layout(): PlacedWord[] {
       angle += golden
       r = step * Math.sqrt(angle)
     }
+
+    // 放不下的词直接剔除，不再堆到中心
+    if (!found) continue
 
     const color = pickColor(t, Math.random())
     // 银河繁星：每个词独立的小幅漂移（幅度随字号略增），随机时长与相位
@@ -194,7 +202,23 @@ function layout(): PlacedWord[] {
 const placedWords = ref<PlacedWord[]>([])
 
 function relayout() {
-  if (props.words.length) placedWords.value = layout()
+  if (!props.words.length) {
+    placedWords.value = []
+    return
+  }
+  const total = props.words.length
+  // 自适应字号：从 1.0 逐步缩小，直到放下 ≥95% 的词或字号触底
+  const MIN_SCALE = 0.5
+  const STEP = 0.05
+  const TARGET_RATIO = 0.95
+  for (let scale = 1.0; scale >= MIN_SCALE - 1e-6; scale -= STEP) {
+    const result = layout(scale)
+    if (result.length / total >= TARGET_RATIO || scale <= MIN_SCALE + 1e-6) {
+      placedWords.value = result
+      return
+    }
+  }
+  placedWords.value = layout(MIN_SCALE)
 }
 
 watch(() => props.words, relayout, { deep: true })

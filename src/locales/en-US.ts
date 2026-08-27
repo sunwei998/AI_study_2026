@@ -375,7 +375,7 @@ export default {
     noSettings: 'No settings',
     keyRequired: 'Key is required',
     hotWords: 'Hot Words',
-    hotWordsTitle: 'Top User Query Words (Global)',
+    hotWordsTitle: 'Top User Query Words',
     hotWordsRankTitle: 'Word Ranking',
     hotWordsPeriod: 'Period',
     hotWordsLimit: 'Show',

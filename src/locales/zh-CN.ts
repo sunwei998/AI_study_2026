@@ -370,7 +370,7 @@ export default {
     noSettings: '暂无设置',
     keyRequired: '请输入键名',
     hotWords: '热词分析',
-    hotWordsTitle: '用户提问高频词（全平台）',
+    hotWordsTitle: '用户提问高频词',
     hotWordsRankTitle: '高频词排行',
     hotWordsPeriod: '统计周期',
     hotWordsLimit: '显示条数',
