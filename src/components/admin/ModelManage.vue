@@ -1,10 +1,10 @@
 <template>
   <div class="model-manage">
     <div class="page-toolbar">
-      <button v-if="canManageModels" class="page-btn page-btn--primary" @click="openCreate">
+      <AppButton v-if="canManageModels" size="middle" @click="openCreate">
         <AppIcon name="lucide:plus" :size="15" />
         {{ $t('console.addModel') }}
-      </button>
+      </AppButton>
     </div>
 
     <div v-if="error" class="page-error">{{ error }}</div>
@@ -189,6 +189,7 @@ import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import AppInput from '@/components/common/AppInput.vue'
+import AppButton from '@/components/common/AppButton.vue'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import { DEFAULT_PROVIDERS, type ModelProvider } from '@/config/models'
 import { useToast } from '@/composables/useToast'
@@ -494,6 +495,8 @@ const doDelete = async () => {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
+  /* 父容器 gap:14px 基础上收紧，让按钮组与表格间距统一为 6px */
+  margin-bottom: -8px;
 }
 
 .page-btn {

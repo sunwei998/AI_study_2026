@@ -116,9 +116,9 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
-type TabKey = 'overview' | 'models' | 'users' | 'map' | 'usage' | 'hot-words' | 'settings' | 'settings-base' | 'settings-search'
+type TabKey = 'overview' | 'models' | 'users' | 'map' | 'usage' | 'hot-words' | 'settings' | 'settings-base' | 'settings-search' | 'data' | 'data-import' | 'data-export'
 
-const expandedGroups = ref<string[]>(['settings'])
+const expandedGroups = ref<string[]>(['settings', 'data'])
 
 // 侧边栏收起/展开（仅 PC 端生效；移动端始终只显示图标，见样式中的媒体查询）
 const collapsed = ref(false)
@@ -149,6 +149,15 @@ const tabs = computed(() => [
     children: [
       { key: 'settings-base' as TabKey, label: t('console.settingsBase'), path: '/admin/settings/base' },
       { key: 'settings-search' as TabKey, label: t('console.settingsSearch'), path: '/admin/settings/search' }
+    ]
+  },
+  {
+    key: 'data' as TabKey,
+    icon: 'lucide:database',
+    label: t('console.dataManage'),
+    children: [
+      { key: 'data-import' as TabKey, label: t('console.importManage'), path: '/admin/data/import' },
+      { key: 'data-export' as TabKey, label: t('console.exportManage'), path: '/admin/data/export' }
     ]
   }
 ])

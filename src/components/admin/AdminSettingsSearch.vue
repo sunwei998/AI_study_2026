@@ -64,10 +64,9 @@
         </div>
 
         <div class="section-actions">
-          <button v-if="canManageSettings" class="page-btn page-btn--primary" @click="saveProviders">
-            <AppLoading v-if="saving" :size="14" color="#fff" glow />
+          <AppButton v-if="canManageSettings" size="small" :loading="saving" @click="saveProviders">
             {{ $t('confirm.save') }}
-          </button>
+          </AppButton>
         </div>
       </div>
 
@@ -122,10 +121,9 @@
             </span>
           </div>
 
-          <button v-if="canManageSettings" class="page-btn page-btn--primary" @click="saveSearxngConfig">
-            <AppLoading v-if="savingSearxng" :size="14" color="#fff" glow />
+          <AppButton v-if="canManageSettings" size="small" :loading="savingSearxng" @click="saveSearxngConfig">
             {{ $t('confirm.save') }}
-          </button>
+          </AppButton>
         </div>
       </div>
 
@@ -187,10 +185,9 @@
         </div>
 
         <div class="section-actions">
-          <button v-if="canManageSettings" class="page-btn page-btn--primary" @click="saveAdvancedSettings">
-            <AppLoading v-if="savingAdvanced" :size="14" color="#fff" glow />
+          <AppButton v-if="canManageSettings" size="small" :loading="savingAdvanced" @click="saveAdvancedSettings">
             {{ $t('confirm.save') }}
-          </button>
+          </AppButton>
         </div>
       </div>
     </div>
@@ -202,6 +199,7 @@ import { onMounted, ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchSettings, updateSetting } from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
+import AppButton from '@/components/common/AppButton.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import ChartLoading from '@/components/common/ChartLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'

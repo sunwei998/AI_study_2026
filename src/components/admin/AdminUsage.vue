@@ -20,10 +20,6 @@
         </section>
       </div>
       <div class="chart-grid">
-        <section class="chart-card">
-          <h3 class="chart-title">{{ $t('console.byAge') }}</h3>
-          <div ref="ageRef" class="chart-box"></div>
-        </section>
         <section class="chart-card gauge-card">
           <AppGauge
             :value="gaugeValue"
@@ -31,6 +27,15 @@
             :label="$t('console.todayTokens')"
             unit="Tokens"
             :caption="gaugeCaption"
+          />
+        </section>
+        <section class="chart-card gauge-card">
+          <AppGauge
+            :value="reqGaugeValue"
+            :max="reqGaugeMax"
+            :label="$t('console.todayRequests')"
+            unit="次"
+            :caption="reqGaugeCaption"
           />
         </section>
       </div>
@@ -41,8 +46,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts/core'
-import { BarChart, LineChart, PieChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, LegendScrollComponent, TooltipComponent } from 'echarts/components'
+import { BarChart, LineChart } from 'echarts/charts'
+import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { useI18n } from 'vue-i18n'
 import type { AdminUsage } from '@/types/admin'
@@ -53,7 +58,7 @@ import AppLoading from '@/components/common/AppLoading.vue'
 import ChartLoading from '@/components/common/ChartLoading.vue'
 import AppGauge from '@/components/common/AppGauge.vue'
 
-echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, LegendComponent, LegendScrollComponent, CanvasRenderer])
+echarts.use([BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 
 const { t, locale } = useI18n()
 const chatStore = useChatStore()
@@ -65,7 +70,6 @@ const error = ref('')
 const dailyRef = ref<HTMLDivElement | null>(null)
 const modelRef = ref<HTMLDivElement | null>(null)
 const userRef = ref<HTMLDivElement | null>(null)
-const ageRef = ref<HTMLDivElement | null>(null)
 const rootRef = ref<HTMLDivElement | null>(null)
 
 let charts: echarts.ECharts[] = []
@@ -187,37 +191,6 @@ function render() {
     })
     charts.push(chart)
   }
-
-  if (ageRef.value) {
-    const chart = echarts.init(ageRef.value)
-    chart.setOption({
-      color: pieColors(),
-      tooltip: { trigger: 'item', backgroundColor: cssVar('--color-surface', '#0e1430'), borderColor: c.line, textStyle: { color: cssVar('--color-text', '#e6f1ff') } },
-      legend: {
-        type: 'scroll',
-        orient: 'horizontal',
-        bottom: 0,
-        left: 'center',
-        itemWidth: 12,
-        itemHeight: 8,
-        pageIconSize: 12,
-        pageIconColor: c.text,
-        pageIconInactiveColor: c.line,
-        textStyle: baseTextStyle
-      },
-      series: [
-        {
-          type: 'pie',
-          radius: ['42%', '68%'],
-          center: ['50%', '44%'],
-          data: usage.value.age_dist.map((d) => ({ name: ageLabel(d.key), value: d.count })),
-          label: { color: c.text, fontSize: 10 },
-          itemStyle: { borderColor: 'rgba(8, 8, 18, 0.6)', borderWidth: 1 }
-        }
-      ]
-    })
-    charts.push(chart)
-  }
 }
 
 // 码表数据：今日 Token 消耗（最近一天）+ 量程 + 速率说明
@@ -242,33 +215,25 @@ const gaugeCaption = computed(() => {
   return t('console.tokenRate', { rate: rateStr })
 })
 
-function pieColors(): string[] {
-  return [
-    cssVar('--color-primary', '#00e5ff'),
-    cssVar('--color-accent', '#7c5cff'),
-    '#ffb74d',
-    '#ff5b6a',
-    '#34d399',
-    '#60a5fa',
-    '#e879f9',
-    '#94a3b8'
-  ]
-}
+// 码表数据：今日模型调用次数
+const reqGaugeValue = computed(() => {
+  const daily = usage.value?.daily
+  if (!daily?.length) return 0
+  return daily[daily.length - 1].requests
+})
 
-const ageBuckets: Record<string, string> = {
-  '0-17': 'age0_17',
-  '18-24': 'age18_24',
-  '25-34': 'age25_34',
-  '35-44': 'age35_44',
-  '45-54': 'age45_54',
-  '55-64': 'age55_64',
-  '65+': 'age65'
-}
+const reqGaugeMax = computed(() => {
+  const daily = usage.value?.daily
+  if (!daily?.length) return 1
+  return Math.max(...daily.map((d) => d.requests)) * 1.15 || 1
+})
 
-function ageLabel(key: string): string {
-  const k = ageBuckets[key]
-  return k ? t(`console.${k}`) : t('console.unknown')
-}
+const reqGaugeCaption = computed(() => {
+  const daily = usage.value?.daily
+  if (!daily?.length) return ''
+  const total = daily.reduce((s, d) => s + d.requests, 0)
+  return t('console.requestRate', { total: total.toLocaleString() })
+})
 
 // 把大数值格式化为紧凑形式（横轴/柱标签/趋势图 y 轴通用），避免 token 长数字挤在一起
 // 单位约定：千=K、万=W、百万=M、亿(>=1e8)兜底

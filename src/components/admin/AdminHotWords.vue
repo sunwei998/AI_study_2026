@@ -1,22 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import * as echarts from 'echarts/core'
-import { BarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent } from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { HeatPeriod, HotWordItem } from '@/types/admin'
 import { fetchHotWords } from '@/services/adminService'
 import { HEAT_PERIODS } from '@/utils/provinceHeat'
-import { useChatStore } from '@/stores/chatStore'
-import { createRafCoalescer } from '@/utils/resize'
 import ChartLoading from '@/components/common/ChartLoading.vue'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 
-echarts.use([BarChart, GridComponent, TooltipComponent, CanvasRenderer])
-
-const { t, locale } = useI18n()
-const chatStore = useChatStore()
+const { t } = useI18n()
 
 const period = ref<HeatPeriod>('month')
 const limit = ref(20)
@@ -24,14 +15,13 @@ const HW_LIMITS = [10, 20, 50]
 const words = ref<HotWordItem[]>([])
 const loading = ref(true)
 const error = ref('')
-const chartRef = ref<HTMLDivElement | null>(null)
-const rootRef = ref<HTMLDivElement | null>(null)
-let chart: echarts.ECharts | null = null
-let resizeObserver: ResizeObserver | null = null
 
 // 滑动指示条索引（同热点地图右上角周期组件）
 const periodIndex = computed(() => Math.max(0, HEAT_PERIODS.findIndex((p) => p.key === period.value)))
 const limitIndex = computed(() => Math.max(0, HW_LIMITS.indexOf(limit.value)))
+
+// 排行榜：最大次数用于计算条形宽度（百分比，有限空间内清晰对比）
+const maxCount = computed(() => Math.max(1, ...words.value.map((d) => d.count)))
 
 // 热词列表（纯展示，无排序/筛选）
 const hwColumns = computed<TableColumn[]>(() => [
@@ -54,18 +44,6 @@ const hwColumns = computed<TableColumn[]>(() => [
   }
 ])
 
-function cssVar(name: string, fallback: string) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
-}
-function axisColors() {
-  return {
-    text: cssVar('--color-text-secondary', '#8fa3c8'),
-    line: cssVar('--color-border', '#233055'),
-    primary: cssVar('--color-primary', '#00e5ff'),
-    accent: cssVar('--color-accent', '#7c5cff')
-  }
-}
-
 async function load() {
   loading.value = true
   error.value = ''
@@ -75,57 +53,8 @@ async function load() {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
     loading.value = false
-    await nextTick()
-    render()
   }
 }
-
-function render() {
-  if (!chartRef.value) return
-  const c = axisColors()
-  chart?.dispose()
-  chart = echarts.init(chartRef.value)
-  const list = words.value
-  chart.setOption({
-    color: [c.primary],
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: cssVar('--color-surface', '#0e1430'),
-      borderColor: c.line,
-      textStyle: { color: cssVar('--color-text', '#e6f1ff') }
-    },
-    grid: { left: 12, right: 52, top: 16, bottom: 24, containLabel: true },
-    xAxis: {
-      type: 'value',
-      axisLabel: { color: c.text },
-      splitLine: { lineStyle: { color: c.line, opacity: 0.35 } }
-    },
-    yAxis: {
-      type: 'category',
-      inverse: true,
-      data: list.map((d) => d.word),
-      axisLabel: { color: c.text, width: 160, overflow: 'truncate' },
-      axisLine: { lineStyle: { color: c.line } }
-    },
-    series: [
-      {
-        type: 'bar',
-        barMaxWidth: 16,
-        data: list.map((d) => d.count),
-        itemStyle: { borderRadius: [0, 4, 4, 0] },
-        label: { show: true, position: 'right', color: c.text, fontSize: 10 }
-      }
-    ]
-  })
-}
-
-function onResize() {
-  chart?.resize()
-}
-
-// window resize 与容器 ResizeObserver 会同时触发，经 rAF 合并后同帧只执行一次
-const scheduleLayout = createRafCoalescer()
-const onWindowResize = () => scheduleLayout(onResize)
 
 function switchPeriod(p: HeatPeriod) {
   if (p !== period.value) {
@@ -140,37 +69,11 @@ function switchLimit(n: number) {
   }
 }
 
-watch(() => locale.value, () => {
-  if (words.value.length) render()
-})
-
-// 主题切换时重绘条形图：图表颜色取自 CSS 变量（--color-primary/--color-text-secondary/
-// --color-border），切主题只改变量、不触发 ECharts 重绘，需手动重绘套用新主题色。
-watch(() => chatStore.currentTheme, () => {
-  if (words.value.length) render()
-})
-
-onMounted(() => {
-  window.addEventListener('resize', onWindowResize)
-  // 容器尺寸变化也重绘：窗口缩放、侧边栏收起/展开等都会改变图表宽度，
-  // 仅监听 window resize 会漏掉（此前正是因此导致条形图不随窗口缩放）
-  if (rootRef.value) {
-    resizeObserver = new ResizeObserver(() => scheduleLayout(onResize))
-    resizeObserver.observe(rootRef.value)
-  }
-  load()
-})
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', onWindowResize)
-  resizeObserver?.disconnect()
-  resizeObserver = null
-  chart?.dispose()
-  chart = null
-})
+onMounted(load)
 </script>
 
 <template>
-  <div class="admin-hot-words" ref="rootRef">
+  <div class="admin-hot-words">
     <div class="hw-toolbar">
       <p class="hw-scope">{{ t('console.hotWordsScope') }}</p>
       <div class="hw-fields">
@@ -219,12 +122,30 @@ onBeforeUnmount(() => {
       <div v-if="words.length === 0" class="hw-empty">{{ t('console.hotWordsEmpty') }}</div>
 
       <template v-else>
-        <div class="chart-card">
-          <h3 class="chart-title">{{ t('console.hotWordsTitle') }}</h3>
-          <div ref="chartRef" class="chart-box" :style="{ height: Math.max(300, words.length * 26) + 'px' }"></div>
+        <div class="rank-card">
+          <h3 class="rank-title">{{ t('console.hotWordsTitle') }}</h3>
+          <ul class="rank-list">
+            <li
+              v-for="(d, i) in words"
+              :key="d.word"
+              class="rank-row"
+              :class="{ 'is-top': i < 3 }"
+            >
+              <span class="rank-badge" :class="`rank-${i + 1}`">{{ i + 1 }}</span>
+              <span class="rank-word" :title="d.word">{{ d.word }}</span>
+              <div class="rank-bar-wrap">
+                <div
+                  class="rank-bar"
+                  :class="{ 'rank-bar--top': i < 3 }"
+                  :style="{ width: `${(d.count / maxCount) * 100}%` }"
+                ></div>
+              </div>
+              <span class="rank-count">{{ d.count.toLocaleString() }}</span>
+            </li>
+          </ul>
         </div>
 
-        <div class="chart-card">
+        <div class="rank-card">
           <AppTable
             :columns="hwColumns"
             :data="words"
@@ -287,7 +208,6 @@ onBeforeUnmount(() => {
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35), inset 0 0 14px var(--color-glow);
 }
 
-/* 滑动指示条：青→紫霓虹渐变，跟随主题强调色 */
 .hw-seg-track {
   position: absolute;
   top: 3px;
@@ -360,7 +280,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-lg);
 }
 
-.chart-card {
+.rank-card {
   padding: 16px;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
@@ -368,8 +288,8 @@ onBeforeUnmount(() => {
   box-shadow: var(--shadow-sm);
 }
 
-.chart-title {
-  margin: 0 0 12px;
+.rank-title {
+  margin: 0 0 14px;
   font-family: var(--font-display);
   font-size: 13px;
   font-weight: 600;
@@ -378,8 +298,108 @@ onBeforeUnmount(() => {
   text-shadow: 0 0 12px var(--color-glow);
 }
 
-.chart-box {
-  width: 100%;
+/* 排行榜：有限空间内最清晰的横向条形对比 */
+.rank-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rank-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 4px;
+  border-radius: var(--radius-sm);
+  transition: background 0.2s ease;
+}
+
+.rank-row:hover {
+  background: var(--color-glass);
+}
+
+.rank-badge {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-text-secondary) 12%, transparent);
+  border: 1px solid transparent;
+}
+
+.rank-badge.rank-1 {
+  color: #1a1200;
+  background: linear-gradient(135deg, #ffd76a, #ffb020);
+  box-shadow: 0 0 12px rgba(255, 176, 32, 0.5);
+}
+
+.rank-badge.rank-2 {
+  color: #0e1418;
+  background: linear-gradient(135deg, #e8ecf2, #b9c3d0);
+  box-shadow: 0 0 10px rgba(185, 195, 208, 0.4);
+}
+
+.rank-badge.rank-3 {
+  color: #1c0e06;
+  background: linear-gradient(135deg, #e9b08a, #c9804a);
+  box-shadow: 0 0 10px rgba(201, 128, 74, 0.4);
+}
+
+.rank-word {
+  flex-shrink: 0;
+  width: 120px;
+  font-size: 13px;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-row.is-top .rank-word {
+  font-weight: 600;
+  color: var(--color-primary);
+  text-shadow: 0 0 8px var(--color-glow);
+}
+
+.rank-bar-wrap {
+  flex: 1;
+  min-width: 0;
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-border) 45%, transparent);
+  overflow: hidden;
+}
+
+.rank-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+  box-shadow: 0 0 8px var(--color-glow);
+  opacity: 0.7;
+  transition: width 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.rank-bar--top {
+  opacity: 1;
+  box-shadow: 0 0 12px var(--color-glow), inset 0 0 6px rgba(255, 255, 255, 0.3);
+}
+
+.rank-count {
+  flex-shrink: 0;
+  width: 72px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 
 :deep(.cell-num) {

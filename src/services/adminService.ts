@@ -9,6 +9,8 @@ import type {
   ModelPayload,
   RegionStatsData,
   SettingItem,
+  TransferRecord,
+  TransferType,
   UserRole,
   UserUpdatePayload
 } from '@/types/admin'
@@ -207,6 +209,49 @@ export function updateSetting(key: string, patch: SettingPatch): Promise<{ ok: b
 
 export function fetchHotWords(period: HeatPeriod = 'month', limit = 20): Promise<HotWordItem[]> {
   return request(`/hot-words?period=${period}&limit=${limit}`)
+}
+
+export function fetchTransfers(
+  type: TransferType,
+  params: PaginationParams = {}
+): Promise<PaginatedResult<TransferRecord>> {
+  const query = new URLSearchParams()
+  query.set('type', type)
+  if (params.page) query.set('page', String(params.page))
+  if (params.pageSize) query.set('page_size', String(params.pageSize))
+  if (params.sort) query.set('sort', params.sort)
+  if (params.order) query.set('order', params.order)
+  const qs = query.toString()
+  return request<PaginatedResult<TransferRecord>>(`/transfers?${qs}`)
+}
+
+export function transferDownloadUrl(recordId: number): string {
+  return `${API_BASE}/transfers/${recordId}/download`
+}
+
+export async function downloadTransfer(recordId: number, filename: string): Promise<void> {
+  const resp = await fetch(`${API_BASE}/transfers/${recordId}/download`, { headers: authHeaders() })
+  if (resp.status === 401) {
+    clearToken()
+    notifyUnauthorized()
+    throw new Error('unauthorized')
+  }
+  if (resp.status === 403) {
+    notifyForbidden()
+    throw new Error(await parseError(resp))
+  }
+  if (!resp.ok) {
+    throw new Error(await parseError(resp))
+  }
+  const blob = await resp.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 export type { UserRole }

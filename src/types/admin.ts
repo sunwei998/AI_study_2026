@@ -136,6 +136,22 @@ export interface HotWordItem {
   count: number
 }
 
+export type TransferType = 'import' | 'export'
+
+export interface TransferRecord {
+  id: number
+  type: TransferType
+  user_id: number | null
+  username: string
+  filename: string
+  file_size: number
+  mime_type: string
+  file_path: string
+  remark: string
+  created_at: number
+  has_file: boolean
+}
+
 export interface RegionTopUser {
   username: string
   avatar: string

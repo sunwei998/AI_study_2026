@@ -1,11 +1,11 @@
 <template>
-  <div class="admin-settings-layout">
-    <div class="settings-tabs">
+  <div class="admin-data-layout">
+    <div class="data-tabs">
       <RouterLink
         v-for="tab in tabs"
         :key="tab.key"
         :to="tab.path"
-        class="settings-tab"
+        class="data-tab"
         :class="{ active: $route.name === tab.name }"
       >
         <AppIcon :name="tab.icon" :size="16" />
@@ -13,7 +13,7 @@
       </RouterLink>
     </div>
 
-    <div class="settings-content">
+    <div class="data-content">
       <RouterView />
     </div>
   </div>
@@ -27,20 +27,20 @@ import AppIcon from '@/components/common/AppIcon.vue'
 const { t } = useI18n()
 
 const tabs = computed(() => [
-  { key: 'base', icon: 'lucide:book-open', label: t('console.settingsBase'), path: '/admin/settings/base', name: 'admin-settings-base' },
-  { key: 'search', icon: 'lucide:search', label: t('console.settingsSearch'), path: '/admin/settings/search', name: 'admin-settings-search' }
+  { key: 'import', icon: 'lucide:upload', label: t('console.importManage'), path: '/admin/data/import', name: 'admin-data-import' },
+  { key: 'export', icon: 'lucide:download', label: t('console.exportManage'), path: '/admin/data/export', name: 'admin-data-export' }
 ])
 </script>
 
 <style scoped>
-.admin-settings-layout {
+.admin-data-layout {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
 }
 
-.settings-tabs {
+.data-tabs {
   display: flex;
   gap: 4px;
   padding: 12px 16px 8px;
@@ -48,7 +48,7 @@ const tabs = computed(() => [
   background: var(--color-surface);
 }
 
-.settings-tab {
+.data-tab {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -61,18 +61,18 @@ const tabs = computed(() => [
   transition: var(--transition-fast);
 }
 
-.settings-tab:hover {
+.data-tab:hover {
   color: var(--color-primary);
   background: var(--color-glass);
 }
 
-.settings-tab.active {
+.data-tab.active {
   color: var(--color-primary);
   background: linear-gradient(135deg, var(--color-glow), transparent 70%);
   box-shadow: inset 0 0 12px var(--color-glow);
 }
 
-.settings-content {
+.data-content {
   flex: 1;
   min-height: 0;
   overflow: auto;

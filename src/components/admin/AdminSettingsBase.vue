@@ -4,10 +4,10 @@
 
     <div class="settings-body">
       <div class="settings-toolbar">
-        <button v-if="canManageSettings" class="page-btn page-btn--primary" @click="openAdd">
+        <AppButton v-if="canManageSettings" size="middle" @click="openAdd">
           <AppIcon name="lucide:plus" :size="15" />
           {{ $t('console.addSetting') }}
-        </button>
+        </AppButton>
       </div>
 
       <div class="settings-table-wrap">
@@ -127,6 +127,7 @@ import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import AppInput from '@/components/common/AppInput.vue'
+import AppButton from '@/components/common/AppButton.vue'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import { useToast } from '@/composables/useToast'
 
@@ -325,6 +326,10 @@ const submitAdd = async () => {
 .settings-toolbar {
   display: flex;
   justify-content: flex-end;
+  /* 离顶部 tab 稍远一点 */
+  margin-top: 10px;
+  /* 父容器 gap:14px 基础上收紧，让按钮组与表格间距统一为 6px */
+  margin-bottom: -8px;
 }
 
 .page-btn {

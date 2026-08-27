@@ -81,6 +81,23 @@ const router = createRouter({
               component: () => import('@/components/admin/AdminSettingsSearch.vue')
             }
           ]
+        },
+        {
+          path: 'data',
+          component: () => import('@/components/admin/AdminDataLayout.vue'),
+          children: [
+            { path: '', redirect: '/admin/data/import' },
+            {
+              path: 'import',
+              name: 'admin-data-import',
+              component: () => import('@/components/admin/AdminImportRecords.vue')
+            },
+            {
+              path: 'export',
+              name: 'admin-data-export',
+              component: () => import('@/components/admin/AdminExportRecords.vue')
+            }
+          ]
         }
       ]
     },
