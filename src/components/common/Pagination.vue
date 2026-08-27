@@ -162,7 +162,6 @@ function confirmJump() {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  margin-top: 12px;
   background: var(--color-glass);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);

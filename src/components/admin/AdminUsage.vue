@@ -24,9 +24,14 @@
           <h3 class="chart-title">{{ $t('console.byAge') }}</h3>
           <div ref="ageRef" class="chart-box"></div>
         </section>
-        <section class="chart-card">
-          <h3 class="chart-title">{{ $t('console.byGender') }}</h3>
-          <div ref="genderRef" class="chart-box"></div>
+        <section class="chart-card gauge-card">
+          <AppGauge
+            :value="gaugeValue"
+            :max="gaugeMax"
+            :label="$t('console.todayTokens')"
+            unit="Tokens"
+            :caption="gaugeCaption"
+          />
         </section>
       </div>
     </template>
@@ -34,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts/core'
 import { BarChart, LineChart, PieChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, LegendScrollComponent, TooltipComponent } from 'echarts/components'
@@ -46,6 +51,7 @@ import { useChatStore } from '@/stores/chatStore'
 import { createRafCoalescer } from '@/utils/resize'
 import AppLoading from '@/components/common/AppLoading.vue'
 import ChartLoading from '@/components/common/ChartLoading.vue'
+import AppGauge from '@/components/common/AppGauge.vue'
 
 echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, LegendComponent, LegendScrollComponent, CanvasRenderer])
 
@@ -60,7 +66,6 @@ const dailyRef = ref<HTMLDivElement | null>(null)
 const modelRef = ref<HTMLDivElement | null>(null)
 const userRef = ref<HTMLDivElement | null>(null)
 const ageRef = ref<HTMLDivElement | null>(null)
-const genderRef = ref<HTMLDivElement | null>(null)
 const rootRef = ref<HTMLDivElement | null>(null)
 
 let charts: echarts.ECharts[] = []
@@ -213,27 +218,29 @@ function render() {
     })
     charts.push(chart)
   }
-
-  if (genderRef.value) {
-    const chart = echarts.init(genderRef.value)
-    chart.setOption({
-      color: pieColors(),
-      tooltip: { trigger: 'item', backgroundColor: cssVar('--color-surface', '#0e1430'), borderColor: c.line, textStyle: { color: cssVar('--color-text', '#e6f1ff') } },
-      legend: { bottom: 0, left: 'center', itemWidth: 12, itemHeight: 8, textStyle: baseTextStyle },
-      series: [
-        {
-          type: 'pie',
-          radius: ['42%', '68%'],
-          center: ['50%', '44%'],
-          data: usage.value.gender_dist.map((d) => ({ name: genderLabel(d.key), value: d.count })),
-          label: { color: c.text, fontSize: 10 },
-          itemStyle: { borderColor: 'rgba(8, 8, 18, 0.6)', borderWidth: 1 }
-        }
-      ]
-    })
-    charts.push(chart)
-  }
 }
+
+// 码表数据：今日 Token 消耗（最近一天）+ 量程 + 速率说明
+const gaugeValue = computed(() => {
+  const daily = usage.value?.daily
+  if (!daily?.length) return 0
+  return daily[daily.length - 1].total
+})
+
+const gaugeMax = computed(() => {
+  const daily = usage.value?.daily
+  if (!daily?.length) return 1
+  return Math.max(...daily.map((d) => d.total)) * 1.15 || 1
+})
+
+const gaugeCaption = computed(() => {
+  const daily = usage.value?.daily
+  if (!daily?.length) return ''
+  const last = daily[daily.length - 1]
+  const rate = last.total / 86400
+  const rateStr = rate >= 100 ? Math.round(rate).toLocaleString() : rate.toFixed(1)
+  return t('console.tokenRate', { rate: rateStr })
+})
 
 function pieColors(): string[] {
   return [
@@ -261,13 +268,6 @@ const ageBuckets: Record<string, string> = {
 function ageLabel(key: string): string {
   const k = ageBuckets[key]
   return k ? t(`console.${k}`) : t('console.unknown')
-}
-
-function genderLabel(key: string): string {
-  if (key === 'male') return t('auth.genderMale')
-  if (key === 'female') return t('auth.genderFemale')
-  if (key === 'other') return t('auth.genderOther')
-  return t('console.unknown')
 }
 
 // 把大数值格式化为紧凑形式（横轴/柱标签/趋势图 y 轴通用），避免 token 长数字挤在一起
@@ -390,6 +390,17 @@ onBeforeUnmount(() => {
 .chart-box {
   width: 100%;
   height: 300px;
+}
+
+.gauge-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 332px;
+}
+
+.gauge-card .app-gauge {
+  width: 100%;
 }
 
 @media (max-width: 900px) {

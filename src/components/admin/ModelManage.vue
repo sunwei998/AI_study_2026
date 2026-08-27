@@ -1,14 +1,6 @@
 <template>
   <div class="model-manage">
     <div class="page-toolbar">
-      <div class="page-search">
-        <input
-          v-model="search"
-          type="text"
-          class="page-input"
-          :placeholder="$t('console.searchModels')"
-        />
-      </div>
       <button v-if="canManageModels" class="page-btn page-btn--primary" @click="openCreate">
         <AppIcon name="lucide:plus" :size="15" />
         {{ $t('console.addModel') }}
@@ -17,98 +9,84 @@
 
     <div v-if="error" class="page-error">{{ error }}</div>
 
-    <div v-if="loading" class="page-loading">
-      <TableLoading :rows="6" :cols="5" :text="$t('common.loading')" />
-    </div>
+    <div v-if="!error" class="model-table-wrap">
+      <AppTable
+        :columns="columns"
+        :data="models"
+        :loading="loading"
+        loading-type="skeleton"
+        :skeleton-rows="8"
+        :empty-text="$t('console.noModels')"
+        row-key="id"
+        size="small"
+        custom-sort
+        :sort-method="onServerSort"
+        @filter-change="onFilterChange"
+      >
+        <template #column-enabled="{ row }">
+          <button
+            class="toggle"
+            :class="{ on: row.enabled }"
+            :disabled="!canManageModels"
+            :title="row.enabled ? $t('console.disable') : $t('console.enable')"
+            @click="toggleEnabled(row)"
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </template>
 
-    <div v-else class="model-table-wrap">
-      <table class="model-table">
-        <thead>
-          <tr>
-            <th>{{ $t('console.enabled') }}</th>
-            <th>model_key</th>
-            <th>{{ $t('console.name') }}</th>
-            <th>{{ $t('console.provider') }}</th>
-            <th>{{ $t('console.free') }}</th>
-            <th>{{ $t('console.vision') }}</th>
-            <th>{{ $t('console.supportsSearch') }}</th>
-            <th>{{ $t('console.default') }}</th>
-            <th>{{ $t('console.sortOrder') }}</th>
-            <th class="actions-th" v-if="canManageModels">{{ $t('console.actions') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="m in models" :key="m.id">
-            <td>
-              <button
-                class="toggle"
-                :class="{ on: m.enabled }"
-                :disabled="!canManageModels"
-                :title="m.enabled ? $t('console.disable') : $t('console.enable')"
-                @click="toggleEnabled(m)"
-              >
-                <span class="toggle-knob"></span>
-              </button>
-            </td>
-            <td class="cell-key">{{ m.model_key }}</td>
-            <td>{{ m.name }}</td>
-            <td><span class="badge">{{ providerName(m.provider) }}</span></td>
-            <td>
-              <AppIcon
-                :name="m.free ? 'lucide:check-circle' : 'lucide:circle'"
-                :size="16"
-                :glow="m.free"
-              />
-            </td>
-            <td>
-              <AppIcon
-                :name="m.vision ? 'lucide:check-circle' : 'lucide:circle'"
-                :size="16"
-                :glow="m.vision"
-              />
-            </td>
-            <td>
-              <AppIcon
-                :name="m.supports_search ? 'lucide:check-circle' : 'lucide:circle'"
-                :size="16"
-                :glow="m.supports_search"
-              />
-            </td>
-            <td>
-              <button
-                class="default-btn"
-                :class="{ on: m.is_default, off: !m.is_default, blocked: !m.enabled || !canManageModels }"
-                :title="
-                  m.is_default
-                    ? $t('console.defaultModel')
-                    : m.enabled
-                      ? $t('console.setDefault')
-                      : $t('console.defaultDisabledHint')
-                "
-                :disabled="m.is_default || !m.enabled || !canManageModels"
-                @click="setDefault(m)"
-              >
-                <span v-if="m.is_default" class="star-char">★</span>
-                <AppIcon v-else name="lucide:star" :size="16" />
-              </button>
-            </td>
-            <td class="cell-order">{{ m.sort_order }}</td>
-            <td v-if="canManageModels" class="actions-td">
-              <div class="row-actions">
-                <button class="row-btn" :title="$t('console.edit')" @click="openEdit(m)">
-                  <AppIcon name="lucide:pencil" :size="15" />
-                </button>
-                <button class="row-btn row-btn--danger" :title="$t('console.delete')" @click="askDelete(m)">
-                  <AppIcon name="lucide:trash-2" :size="15" />
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="total === 0">
-            <td colspan="10" class="cell-empty">{{ $t('console.noModels') }}</td>
-          </tr>
-        </tbody>
-      </table>
+        <template #column-free="{ row }">
+          <AppIcon :name="row.free ? 'lucide:check-circle' : 'lucide:circle'" :size="16" :glow="row.free" />
+        </template>
+
+        <template #column-vision="{ row }">
+          <AppIcon :name="row.vision ? 'lucide:check-circle' : 'lucide:circle'" :size="16" :glow="row.vision" />
+        </template>
+
+        <template #column-supports_search="{ row }">
+          <AppIcon
+            :name="row.supports_search ? 'lucide:check-circle' : 'lucide:circle'"
+            :size="16"
+            :glow="row.supports_search"
+          />
+        </template>
+
+        <template #column-is_default="{ row }">
+          <button
+            class="default-btn"
+            :class="{ on: row.is_default, off: !row.is_default, blocked: !row.enabled || !canManageModels }"
+            :title="
+              row.is_default
+                ? $t('console.defaultModel')
+                : row.enabled
+                  ? $t('console.setDefault')
+                  : $t('console.defaultDisabledHint')
+            "
+            :disabled="row.is_default || !row.enabled || !canManageModels"
+            @click="setDefault(row)"
+          >
+            <span v-if="row.is_default" class="star-char">★</span>
+            <AppIcon v-else name="lucide:star" :size="16" />
+          </button>
+        </template>
+
+        <template v-if="canManageModels" #column-actions="{ row }">
+          <div class="row-actions">
+            <button class="row-btn" :title="$t('console.edit')" @click="openEdit(row)">
+              <AppIcon name="lucide:pencil" :size="15" />
+            </button>
+            <button
+              class="row-btn row-btn--danger"
+              :class="{ 'is-disabled': row.enabled }"
+              :disabled="row.enabled"
+              :title="row.enabled ? $t('console.disableBeforeDelete') : $t('console.delete')"
+              @click="askDelete(row)"
+            >
+              <AppIcon name="lucide:trash-2" :size="15" />
+            </button>
+          </div>
+        </template>
+      </AppTable>
     </div>
 
     <Pagination
@@ -209,9 +187,9 @@ import { useAuthStore } from '@/stores/authStore'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
-import TableLoading from '@/components/common/TableLoading.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import AppInput from '@/components/common/AppInput.vue'
+import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import { DEFAULT_PROVIDERS, type ModelProvider } from '@/config/models'
 import { useToast } from '@/composables/useToast'
 
@@ -227,7 +205,6 @@ const canManageModels = computed(
 const models = ref<AdminModel[]>([])
 const loading = ref(true)
 const error = ref('')
-const search = ref('')
 const total = ref(0)
 
 // 模型提供方数据字典：默认取本地字典，若后台 settings.model_providers 已配置则覆盖
@@ -235,12 +212,25 @@ const providers = ref<ModelProvider[]>(DEFAULT_PROVIDERS)
 
 const currentPage = ref(1)
 const pageSize = ref(10)
+const enabledFilter = ref<boolean | null>(null)
+const freeFilter = ref<boolean | null>(null)
+const providerFilter = ref<string[]>([])
+const sortFilter = ref<{ key: string; order: 'asc' | 'desc' | null }>({ key: '', order: null })
+
 const load = async () => {
   loading.value = true
   error.value = ''
   try {
     const [res, settings] = await Promise.all([
-      fetchAdminModels({ page: currentPage.value, pageSize: pageSize.value, search: search.value }),
+      fetchAdminModels({
+        page: currentPage.value,
+        pageSize: pageSize.value,
+        enabled: enabledFilter.value === null ? undefined : enabledFilter.value,
+        free: freeFilter.value === null ? undefined : freeFilter.value,
+        providers: providerFilter.value.length ? providerFilter.value : undefined,
+        sort: sortFilter.value.order ? sortFilter.value.key : undefined,
+        order: sortFilter.value.order ?? undefined
+      }),
       fetchSettings({ search: 'model_providers' })
     ])
     models.value = res.items
@@ -262,10 +252,30 @@ const load = async () => {
     loading.value = false
   }
 }
-watch(search, () => {
-  currentPage.value = 1
-  load()
-})
+
+// 服务端排序
+function onServerSort(key: string, order: 'asc' | 'desc' | null) {
+  sortFilter.value = { key, order }
+  if (currentPage.value === 1) {
+    load()
+  } else {
+    currentPage.value = 1
+  }
+}
+
+// 服务端筛选：enabled/free 单选，provider 多选
+function onFilterChange(filters: Record<string, any[]>) {
+  const rawEnabled = filters.enabled?.[0]
+  enabledFilter.value = typeof rawEnabled === 'boolean' ? rawEnabled : null
+  const rawFree = filters.free?.[0]
+  freeFilter.value = typeof rawFree === 'boolean' ? rawFree : null
+  providerFilter.value = (filters.provider ?? []).map(String)
+  if (currentPage.value === 1) {
+    load()
+  } else {
+    currentPage.value = 1
+  }
+}
 
 watch(currentPage, load)
 watch(pageSize, () => {
@@ -273,9 +283,64 @@ watch(pageSize, () => {
   load()
 })
 
-
-
 onMounted(load)
+
+const columns = computed<TableColumn[]>(() => [
+  {
+    key: 'enabled',
+    title: t('console.enabled'),
+    width: 80,
+    align: 'center',
+    filterable: true,
+    filterType: 'radio',
+    filters: [
+      { text: t('console.enabled'), value: true },
+      { text: t('console.disabled'), value: false }
+    ],
+    // 后端返回 1/0，筛选值是布尔，需宽松比较
+    filterMethod: (v: any, row: AdminModel) => Boolean(row.enabled) === Boolean(v)
+  },
+  { key: 'model_key', title: 'model_key', width: 210, ellipsis: true, sortable: true, className: 'cell-key' },
+  { key: 'name', title: t('console.name'), width: 150, ellipsis: true, sortable: true },
+  {
+    key: 'provider',
+    title: t('console.provider'),
+    width: 120,
+    ellipsis: true,
+    sortable: true,
+    filterable: true,
+    filterType: 'checkbox',
+    filters: providers.value.map((p) => ({ text: p.name, value: p.id }))
+  },
+  {
+    key: 'free',
+    title: t('console.free'),
+    width: 80,
+    align: 'center',
+    filterable: true,
+    filterType: 'radio',
+    filters: [
+      { text: t('console.free'), value: true },
+      { text: t('console.paid'), value: false }
+    ],
+    filterMethod: (v: any, row: AdminModel) => Boolean(row.free) === Boolean(v)
+  },
+  { key: 'vision', title: t('console.vision'), width: 80, align: 'center' },
+  { key: 'supports_search', title: t('console.supportsSearch'), width: 90, align: 'center' },
+  { key: 'is_default', title: t('console.default'), width: 90, align: 'center' },
+  { key: 'sort_order', title: t('console.sortOrder'), width: 100, align: 'right', sortable: true, className: 'cell-order' },
+  ...(canManageModels.value
+    ? [
+        {
+          key: 'actions',
+          title: t('console.actions'),
+          width: 100,
+          align: 'center',
+          fixed: 'right'
+        } as TableColumn
+      ]
+    : [])
+])
 
 const toggleEnabled = async (m: AdminModel) => {
   const target = { ...m, enabled: !m.enabled }
@@ -288,7 +353,7 @@ const toggleEnabled = async (m: AdminModel) => {
   }
 }
 
-// 设为默认模型：后端会校验“禁用模型不能设默认”，并自动取消其它默认，保证全局唯一。
+// 设为默认模型：后端会校验"禁用模型不能设默认"，并自动取消其它默认，保证全局唯一。
 const setDefault = async (m: AdminModel) => {
   if (m.is_default || !m.enabled) return
   try {
@@ -427,31 +492,8 @@ const doDelete = async () => {
 .page-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-}
-
-.page-search {
-  flex: 1;
-  max-width: 320px;
-}
-
-.page-input {
-  width: 100%;
-  height: 38px;
-  padding: 0 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: 13px;
-  outline: none;
-  transition: var(--transition-normal);
-}
-
-.page-input:focus {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 10px var(--color-glow);
 }
 
 .page-btn {
@@ -491,87 +533,33 @@ const doDelete = async () => {
   font-size: 12px;
 }
 
-.page-loading {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-}
-
 .model-table-wrap {
   flex: 1;
-  overflow: auto;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--color-primary) 40%, transparent) transparent;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.model-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+.model-table-wrap :deep(.app-table-wrapper) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.model-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 12px 14px;
-  text-align: left;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--color-text-secondary);
-  background: var(--color-glass);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--color-border);
-  white-space: nowrap;
+.model-table-wrap :deep(.app-table-scroll) {
+  flex: 1;
+  min-height: 0;
 }
 
-.model-table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-text);
-  white-space: nowrap;
-}
-
-.model-table tbody tr:hover {
-  background: var(--color-glass);
-}
-
-.cell-key {
+:deep(.cell-key) {
   font-family: var(--font-mono);
   color: var(--color-primary);
 }
 
-.cell-order {
+:deep(.cell-order) {
   font-family: var(--font-mono);
   color: var(--color-text-secondary);
-}
-
-.cell-empty {
-  text-align: center;
-  color: var(--color-text-secondary);
-  padding: 32px !important;
-}
-
-.actions-th,
-.actions-td {
-  position: sticky;
-  right: 0;
-  z-index: 2;
-  background: var(--color-surface);
-  border-left: 1px solid var(--color-border);
-  box-shadow: -6px 0 12px rgba(0, 0, 0, 0.18);
-}
-
-.actions-th {
-  top: 0;
-  z-index: 3;
-  background: var(--color-glass);
 }
 
 .badge {
@@ -615,6 +603,11 @@ const doDelete = async () => {
 .toggle.on .toggle-knob {
   left: 18px;
   background: #fff;
+}
+
+.toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .default-btn {
@@ -688,6 +681,15 @@ const doDelete = async () => {
   color: #ff5b6a;
   border-color: #ff5b6a;
   box-shadow: 0 0 8px rgba(255, 77, 94, 0.5);
+}
+
+.row-btn.is-disabled,
+.row-btn.is-disabled:hover {
+  opacity: 0.35;
+  cursor: not-allowed;
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+  box-shadow: none;
 }
 
 .form-overlay {
@@ -898,12 +900,7 @@ const doDelete = async () => {
   }
 
   .page-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .page-search {
-    max-width: none;
+    justify-content: stretch;
   }
 }
 </style>

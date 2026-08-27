@@ -33,6 +33,9 @@ export interface PaginationParams {
   genders?: string[]
   roles?: string[]
   isActive?: boolean
+  enabled?: boolean
+  free?: boolean
+  providers?: string[]
   sort?: string
   order?: 'asc' | 'desc'
 }
@@ -85,6 +88,15 @@ export function fetchAdminModels(params: PaginationParams = {}): Promise<Paginat
   if (params.page) query.set('page', String(params.page))
   if (params.pageSize) query.set('page_size', String(params.pageSize))
   if (params.search) query.set('search', params.search)
+  if (params.enabled !== undefined && params.enabled !== null) {
+    query.set('enabled', params.enabled ? 'true' : 'false')
+  }
+  if (params.free !== undefined && params.free !== null) {
+    query.set('free', params.free ? 'true' : 'false')
+  }
+  if (params.providers?.length) query.set('provider', params.providers.join(','))
+  if (params.sort) query.set('sort', params.sort)
+  if (params.order) query.set('order', params.order)
   const qs = query.toString()
   return request<{ items: unknown[]; total: number; page: number; pageSize: number }>(
     `/models${qs ? `?${qs}` : ''}`
@@ -180,6 +192,11 @@ export function fetchSettings(params: PaginationParams = {}): Promise<PaginatedR
   if (params.page) query.set('page', String(params.page))
   if (params.pageSize) query.set('page_size', String(params.pageSize))
   if (params.search) query.set('search', params.search)
+  if (params.enabled !== undefined && params.enabled !== null) {
+    query.set('enabled', params.enabled ? 'true' : 'false')
+  }
+  if (params.sort) query.set('sort', params.sort)
+  if (params.order) query.set('order', params.order)
   const qs = query.toString()
   return request<PaginatedResult<SettingItem>>(`/settings${qs ? `?${qs}` : ''}`)
 }

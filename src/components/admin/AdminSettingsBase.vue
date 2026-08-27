@@ -2,11 +2,7 @@
   <div class="admin-settings-base">
     <div v-if="error" class="page-error">{{ error }}</div>
 
-    <div v-if="loading" class="page-loading">
-      <TableLoading :rows="6" :cols="4" :text="$t('common.loading')" />
-    </div>
-
-    <div v-else class="settings-body">
+    <div class="settings-body">
       <div class="settings-toolbar">
         <button v-if="canManageSettings" class="page-btn page-btn--primary" @click="openAdd">
           <AppIcon name="lucide:plus" :size="15" />
@@ -15,64 +11,63 @@
       </div>
 
       <div class="settings-table-wrap">
-        <table class="settings-table">
-          <thead>
-            <tr>
-              <th>{{ $t('console.key') }}</th>
-              <th>{{ $t('console.value') }}</th>
-              <th>{{ $t('console.remark') }}</th>
-              <th>{{ $t('console.status') }}</th>
-              <th v-if="canManageSettings">{{ $t('console.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="s in settings" :key="s.key">
-              <td class="cell-key">{{ s.key }}</td>
-              <td class="cell-value">
-                <AppInput
-                  v-model="s.value"
-                  type="text"
-                  size="small"
-                  :disabled="!canManageSettings"
-                  :data-key="s.key"
-                  @keydown.enter="save(s)"
-                />
-              </td>
-              <td class="cell-remark">
-                <AppInput
-                  v-model="s.remark"
-                  type="text"
-                  size="small"
-                  :disabled="!canManageSettings"
-                  :placeholder="$t('console.remarkPlaceholder')"
-                  @keydown.enter="save(s)"
-                />
-              </td>
-              <td class="cell-status">
-                <button
-                  class="switch"
-                  :class="{ on: s.enabled }"
-                  :disabled="!canManageSettings"
-                  :aria-pressed="s.enabled"
-                  :title="s.enabled ? $t('console.enabled') : $t('console.disabled')"
-                  @click="toggle(s)"
-                >
-                  <span class="switch-knob"></span>
-                </button>
-              </td>
-              <td v-if="canManageSettings">
-                <div class="row-actions">
-                  <button class="row-btn" :title="$t('console.save')" @click="save(s)">
-                    <AppIcon name="lucide:save" :size="15" />
-                  </button>
-                </div>
-              </td>
-            </tr>
-            <tr v-if="total === 0">
-              <td colspan="5" class="cell-empty">{{ $t('console.noSettings') }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <AppTable
+          :columns="columns"
+          :data="settings"
+          :loading="loading"
+          loading-type="skeleton"
+          :skeleton-rows="8"
+          :empty-text="$t('console.noSettings')"
+          row-key="key"
+          size="small"
+          custom-sort
+          :sort-method="onServerSort"
+          @filter-change="onFilterChange"
+        >
+          <template #column-value="{ row }">
+            <AppInput
+              v-model="row.value"
+              type="text"
+              size="small"
+              class="settings-cell-input"
+              :disabled="!canManageSettings"
+              @keydown.enter="save(row)"
+            />
+          </template>
+
+          <template #column-remark="{ row }">
+            <AppInput
+              v-model="row.remark"
+              type="text"
+              size="small"
+              class="settings-cell-input"
+              :disabled="!canManageSettings"
+              :placeholder="$t('console.remarkPlaceholder')"
+              @keydown.enter="save(row)"
+            />
+          </template>
+
+          <template #column-enabled="{ row }">
+            <button
+              class="switch"
+              :class="{ on: row.enabled }"
+              :disabled="!canManageSettings"
+              :aria-pressed="row.enabled"
+              :title="row.enabled ? $t('console.enabled') : $t('console.disabled')"
+              @click="toggle(row)"
+            >
+              <span class="switch-knob"></span>
+            </button>
+          </template>
+
+          <template v-if="canManageSettings" #column-actions="{ row }">
+            <div class="row-actions">
+              <button class="row-btn" :title="$t('console.save')" @click="save(row)">
+                <AppIcon name="lucide:save" :size="15" />
+              </button>
+            </div>
+          </template>
+        </AppTable>
       </div>
 
       <Pagination
@@ -130,9 +125,9 @@ import { fetchSettings, updateSetting } from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
-import TableLoading from '@/components/common/TableLoading.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import AppInput from '@/components/common/AppInput.vue'
+import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
@@ -152,11 +147,20 @@ const total = ref(0)
 
 const currentPage = ref(1)
 const pageSize = ref(10)
+const enabledFilter = ref<boolean | null>(null)
+const sortFilter = ref<{ key: string; order: 'asc' | 'desc' | null }>({ key: '', order: null })
+
 const load = async () => {
   loading.value = true
   error.value = ''
   try {
-    const res = await fetchSettings({ page: currentPage.value, pageSize: pageSize.value })
+    const res = await fetchSettings({
+      page: currentPage.value,
+      pageSize: pageSize.value,
+      enabled: enabledFilter.value === null ? undefined : enabledFilter.value,
+      sort: sortFilter.value.order ? sortFilter.value.key : undefined,
+      order: sortFilter.value.order ?? undefined
+    })
     settings.value = res.items
     total.value = res.total
   } catch (err) {
@@ -165,15 +169,66 @@ const load = async () => {
     loading.value = false
   }
 }
+
+// 服务端排序
+function onServerSort(key: string, order: 'asc' | 'desc' | null) {
+  sortFilter.value = { key, order }
+  if (currentPage.value === 1) {
+    load()
+  } else {
+    currentPage.value = 1
+  }
+}
+
+// 服务端筛选：enabled 单选
+function onFilterChange(filters: Record<string, any[]>) {
+  const rawEnabled = filters.enabled?.[0]
+  enabledFilter.value = typeof rawEnabled === 'boolean' ? rawEnabled : null
+  if (currentPage.value === 1) {
+    load()
+  } else {
+    currentPage.value = 1
+  }
+}
+
 watch(currentPage, load)
 watch(pageSize, () => {
   currentPage.value = 1
   load()
 })
 
-
-
 onMounted(load)
+
+const columns = computed<TableColumn[]>(() => [
+  { key: 'key', title: t('console.key'), width: 220, ellipsis: true, sortable: true, className: 'cell-key' },
+  { key: 'value', title: t('console.value'), width: 300 },
+  { key: 'remark', title: t('console.remark'), width: 220 },
+  {
+    key: 'enabled',
+    title: t('console.status'),
+    width: 100,
+    align: 'center',
+    filterable: true,
+    filterType: 'radio',
+    filters: [
+      { text: t('console.enabled'), value: true },
+      { text: t('console.disabled'), value: false }
+    ],
+    // 后端返回 1/0，筛选值是布尔，需宽松比较
+    filterMethod: (v: any, row: SettingItem) => Boolean(row.enabled) === Boolean(v)
+  },
+  ...(canManageSettings.value
+    ? [
+        {
+          key: 'actions',
+          title: t('console.actions'),
+          width: 90,
+          align: 'center',
+          fixed: 'right'
+        } as TableColumn
+      ]
+    : [])
+])
 
 const save = async (s: SettingItem) => {
   if (savingKey.value === s.key) return
@@ -259,14 +314,6 @@ const submitAdd = async () => {
   font-size: 12px;
 }
 
-.page-loading {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-}
-
 .settings-body {
   display: flex;
   flex-direction: column;
@@ -303,121 +350,69 @@ const submitAdd = async () => {
 
 .settings-table-wrap {
   flex: 1;
-  overflow: auto;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  background:
-    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
-    var(--color-glass);
-  backdrop-filter: blur(20px) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(20px) saturate(var(--glass-saturate));
-  box-shadow: inset 0 1px 0 var(--glass-edge);
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--color-primary) 40%, transparent) transparent;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.settings-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+.settings-table-wrap :deep(.app-table-wrapper) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.settings-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 12px 14px;
-  text-align: left;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--color-text-secondary);
-  background: var(--color-glass);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--color-border);
-  white-space: nowrap;
+.settings-table-wrap :deep(.app-table-scroll) {
+  flex: 1;
+  min-height: 0;
 }
 
-.settings-table td {
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-text);
-  white-space: nowrap;
-}
-
-.cell-key {
+:deep(.cell-key) {
   font-family: var(--font-mono);
   color: var(--color-primary);
-  white-space: nowrap;
 }
 
-.cell-empty {
-  text-align: center;
-  color: var(--color-text-secondary);
-  padding: 32px !important;
-}
-
-.value-input {
+:deep(.settings-cell-input) {
   width: 100%;
-  min-width: 220px;
-  height: 34px;
-  padding: 0 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: 13px;
-  outline: none;
-  transition: var(--transition-normal);
-}
-
-.value-input:focus {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 8px var(--color-glow);
-}
-
-.cell-remark .value-input,
-.cell-value .value-input {
-  min-width: 160px;
-}
-
-.cell-status {
-  text-align: center;
+  min-width: 0;
 }
 
 .switch {
-  position: relative;
-  width: 46px;
-  height: 26px;
-  border-radius: 999px;
+  width: 40px;
+  height: 22px;
+  border-radius: 12px;
   border: 1px solid var(--color-border);
   background: var(--color-surface);
+  position: relative;
   cursor: pointer;
-  transition: var(--transition-normal);
-  flex-shrink: 0;
+  transition: var(--transition-fast);
 }
 
-.switch .switch-knob {
+.switch-knob {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--color-text-secondary);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background var(--transition-fast);
+  transition: var(--transition-fast);
 }
 
 .switch.on {
-  border-color: var(--color-primary);
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  border-color: var(--color-primary);
   box-shadow: 0 0 10px var(--color-glow);
 }
 
 .switch.on .switch-knob {
-  transform: translateX(20px);
+  left: 20px;
   background: #fff;
+}
+
+.switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .row-actions {
@@ -461,6 +456,8 @@ const submitAdd = async () => {
 .form-modal {
   position: relative;
   width: min(420px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
   padding: 26px 26px 22px;
   background: var(--color-glass);
   backdrop-filter: blur(20px);
@@ -584,13 +581,11 @@ const submitAdd = async () => {
   cursor: not-allowed;
 }
 
-.confirm-enter-active,
-.confirm-leave-active {
+.confirm-enter-active {
   transition: opacity 0.25s ease;
 }
 
-.confirm-enter-active .form-modal,
-.confirm-leave-active .form-modal {
+.confirm-enter-active .form-modal {
   transition:
     transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
     opacity 0.25s ease;
@@ -604,14 +599,21 @@ const submitAdd = async () => {
   transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
-.confirm-enter-from,
+.confirm-enter-from {
+  opacity: 0;
+}
+
+.confirm-enter-from .form-modal {
+  transform: translateY(16px) scale(0.92);
+  opacity: 0;
+}
+
 .confirm-leave-to {
   opacity: 0;
 }
 
-.confirm-enter-from .form-modal,
 .confirm-leave-to .form-modal {
-  transform: translateY(16px) scale(0.92);
+  transform: translateY(8px) scale(0.96);
   opacity: 0;
 }
 </style>

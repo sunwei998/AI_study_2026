@@ -11,6 +11,7 @@ import { HEAT_PERIODS } from '@/utils/provinceHeat'
 import { useChatStore } from '@/stores/chatStore'
 import { createRafCoalescer } from '@/utils/resize'
 import ChartLoading from '@/components/common/ChartLoading.vue'
+import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 
 echarts.use([BarChart, GridComponent, TooltipComponent, CanvasRenderer])
 
@@ -31,6 +32,27 @@ let resizeObserver: ResizeObserver | null = null
 // 滑动指示条索引（同热点地图右上角周期组件）
 const periodIndex = computed(() => Math.max(0, HEAT_PERIODS.findIndex((p) => p.key === period.value)))
 const limitIndex = computed(() => Math.max(0, HW_LIMITS.indexOf(limit.value)))
+
+// 热词列表（纯展示，无排序/筛选）
+const hwColumns = computed<TableColumn[]>(() => [
+  {
+    key: 'rank',
+    title: t('console.hotWordsRank'),
+    width: 70,
+    align: 'center',
+    className: 'cell-num',
+    formatter: (_row: HotWordItem, _col: TableColumn, _v: unknown, index: number) => String(index + 1)
+  },
+  { key: 'word', title: t('console.hotWordsWord'), width: 300, ellipsis: true },
+  {
+    key: 'count',
+    title: t('console.hotWordsCount'),
+    width: 140,
+    align: 'right',
+    className: 'cell-num',
+    formatter: (row: HotWordItem) => row.count.toLocaleString()
+  }
+])
 
 function cssVar(name: string, fallback: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
@@ -203,22 +225,13 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="chart-card">
-          <table class="hw-table">
-            <thead>
-              <tr>
-                <th>{{ t('console.hotWordsRank') }}</th>
-                <th>{{ t('console.hotWordsWord') }}</th>
-                <th class="hw-num">{{ t('console.hotWordsCount') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, idx) in words" :key="item.word">
-                <td class="hw-rank">{{ idx + 1 }}</td>
-                <td>{{ item.word }}</td>
-                <td class="hw-num">{{ item.count.toLocaleString() }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <AppTable
+            :columns="hwColumns"
+            :data="words"
+            :empty-text="$t('console.hotWordsEmpty')"
+            row-key="word"
+            size="small"
+          />
         </div>
       </template>
     </template>
@@ -369,38 +382,7 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.hw-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.hw-table th {
-  text-align: left;
-  padding: 8px 12px;
-  color: var(--color-text-secondary);
-  border-bottom: 1px solid var(--color-border);
-  font-weight: 600;
-}
-
-.hw-table td {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-text);
-}
-
-.hw-table tr:last-child td {
-  border-bottom: none;
-}
-
-.hw-num {
-  text-align: right;
-  font-family: var(--font-mono);
-}
-
-.hw-rank {
-  width: 48px;
-  color: var(--color-text-secondary);
+:deep(.cell-num) {
   font-family: var(--font-mono);
 }
 </style>
