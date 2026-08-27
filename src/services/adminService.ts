@@ -28,6 +28,9 @@ export interface PaginationParams {
   page?: number
   pageSize?: number
   search?: string
+  username?: string
+  genders?: string[]
+  roles?: string[]
 }
 
 function authHeaders(): Record<string, string> {
@@ -126,6 +129,9 @@ export function fetchAdminUsers(params: PaginationParams = {}): Promise<Paginate
   if (params.page) query.set('page', String(params.page))
   if (params.pageSize) query.set('page_size', String(params.pageSize))
   if (params.search) query.set('search', params.search)
+  if (params.username) query.set('username', params.username)
+  if (params.genders?.length) query.set('gender', params.genders.join(','))
+  if (params.roles?.length) query.set('role', params.roles.join(','))
   const qs = query.toString()
   return request<PaginatedResult<AdminUser>>(`/users${qs ? `?${qs}` : ''}`)
 }

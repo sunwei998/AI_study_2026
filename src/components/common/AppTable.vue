@@ -94,7 +94,7 @@
                   </template>
 
                   <!-- 过滤按钮 -->
-                  <span v-if="col.filterable && col.filters?.length" class="app-table__filter-wrap">
+                  <span v-if="col.filterable" class="app-table__filter-wrap">
                     <button
                       type="button"
                       class="app-table__filter-btn"
@@ -216,7 +216,9 @@
                   @dblclick="onCellDblclick(row, col, ri, $event)"
                 >
                   <slot :name="`column-${col.key}`" :row="row" :index="ri" :value="getCellValue(row, col)" :column="col">
-                    <span v-if="col.ellipsis" class="app-table__ellipsis" :title="String(formatCell(row, col, ri) ?? '')">{{ formatCell(row, col, ri) }}</span>
+                    <AppTooltip v-if="col.ellipsis" :content="String(formatCell(row, col, ri) ?? '')">
+                      <span class="app-table__ellipsis">{{ formatCell(row, col, ri) }}</span>
+                    </AppTooltip>
                     <template v-else>{{ formatCell(row, col, ri) }}</template>
                   </slot>
                 </td>
@@ -300,14 +302,31 @@
             />
           </div>
 
-          <!-- checkbox 组 -->
+          <!-- checkbox 多选（带「全部」） -->
           <div v-if="filterPanel.filterType === 'checkbox'" class="app-table__filter-list">
-            <AppCheckboxGroup
-              :model-value="filterPanel.selected"
-              :options="checkboxOptions"
-              size="small"
-              @update:model-value="onCheckboxGroupChange"
-            />
+            <label class="app-table__filter-item app-table__filter-item--all">
+              <input
+                type="checkbox"
+                :checked="filterPanel.selected.length === 0"
+                @change="onAllFilterChange"
+              />
+              <span class="app-table__filter-label">{{ $t('common.all') }}</span>
+            </label>
+            <label
+              v-for="f in filteredPanelFilters"
+              :key="String(f.value)"
+              class="app-table__filter-item"
+            >
+              <input
+                type="checkbox"
+                :checked="filterPanel.selected.includes(f.value)"
+                @change="onFilterCheck(f.value)"
+              />
+              <span class="app-table__filter-label">{{ f.text }}</span>
+            </label>
+            <div v-if="filteredPanelFilters.length === 0" class="app-table__filter-empty">
+              {{ $t('common.noData') }}
+            </div>
           </div>
 
           <!-- radio 组 -->
@@ -321,13 +340,11 @@
           </div>
 
           <!-- select 下拉 -->
-          <div v-else-if="filterPanel.filterType === 'select'" class="app-table__filter-list">
+          <div v-else-if="filterPanel.filterType === 'select'" class="app-table__filter-select">
             <AppSelect
               :model-value="filterPanel.selected[0] ?? ''"
               :options="selectOptions"
-              size="small"
               :placeholder="filterPanel.placeholder"
-              clearable
               @update:model-value="onSelectChange"
             />
           </div>
@@ -382,7 +399,7 @@ import { useI18n } from 'vue-i18n'
 import AppInput from '@/components/common/AppInput.vue'
 import AppSelect from '@/components/common/AppSelect.vue'
 import AppRadioGroup, { type RadioOption } from '@/components/common/AppRadioGroup.vue'
-import AppCheckboxGroup, { type CheckboxOption } from '@/components/common/AppCheckboxGroup.vue'
+import AppTooltip from '@/components/common/AppTooltip.vue'
 import TableLoading from '@/components/common/TableLoading.vue'
 
 const { t } = useI18n()
@@ -749,10 +766,6 @@ const filteredPanelFilters = computed(() => {
 })
 
 // 各类型 options
-const checkboxOptions = computed<CheckboxOption[]>(() =>
-  filteredPanelFilters.value.map((f) => ({ label: f.text, value: f.value }))
-)
-
 const radioOptions = computed<RadioOption[]>(() =>
   filteredPanelFilters.value.map((f) => ({ label: f.text, value: f.value }))
 )
@@ -762,8 +775,8 @@ const selectOptions = computed(() => [
   ...filteredPanelFilters.value.map((f) => ({ label: f.text, value: f.value }))
 ])
 
-function onCheckboxGroupChange(values: any[]) {
-  filterPanel.value.selected = values
+function onAllFilterChange() {
+  filterPanel.value.selected = []
 }
 
 function onRadioGroupChange(value: any) {
@@ -849,7 +862,10 @@ function closeFilterPanel() {
 }
 
 function onFilterDocClick(e: MouseEvent) {
-  if (filterPanelRef.value && !filterPanelRef.value.contains(e.target as Node)) {
+  const target = e.target as Node
+  // 点击筛选图标本身时交给 toggleFilter 处理（用于再次点击收起），不在此处关闭
+  if ((target as Element | null)?.closest?.('.app-table__filter-wrap')) return
+  if (filterPanelRef.value && !filterPanelRef.value.contains(target)) {
     closeFilterPanel()
   }
 }
@@ -878,8 +894,9 @@ const processedData = computed(() => {
   if (key && order) {
     const col = flatColumns.value.find((c) => c.key === key)
     const dir = order === 'asc' ? 1 : -1
-    if (col?.sorter && typeof col.sorter === 'function') {
-      result.sort((a, b) => col.sorter!(a, b) * dir)
+    const sorter = col?.sorter
+    if (typeof sorter === 'function') {
+      result.sort((a, b) => sorter(a, b) * dir)
     } else {
       result.sort((a, b) => {
         const va = getCellValue(a, col!)
@@ -1658,6 +1675,15 @@ initDefaults()
   overflow-y: auto;
 }
 
+.app-table__filter-select {
+  padding: 2px 0;
+}
+
+.app-table__filter-select :deep(.app-select) {
+  display: block;
+  width: 100%;
+}
+
 .app-table__filter-item {
   display: flex;
   align-items: center;
@@ -1672,6 +1698,13 @@ initDefaults()
 
 .app-table__filter-item:hover {
   background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+.app-table__filter-item--all {
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-primary);
+  font-weight: 600;
 }
 
 .app-table__filter-item input {

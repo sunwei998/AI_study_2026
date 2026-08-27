@@ -10,7 +10,7 @@
       <AppSelect
         :model-value="pageSize"
         :options="sizeOptions"
-        @update:model-value="changePageSize"
+        @update:model-value="(v) => changePageSize(Number(v))"
       />
     </div>
 

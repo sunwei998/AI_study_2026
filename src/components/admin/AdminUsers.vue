@@ -2,90 +2,62 @@
   <div class="admin-users">
     <div v-if="error" class="page-error">{{ error }}</div>
 
-    <div v-if="loading" class="page-loading">
-      <TableLoading :rows="8" :cols="6" :text="$t('common.loading')" />
-    </div>
+    <div v-if="!error" class="users-table-wrap">
+      <AppTable
+        :columns="columns"
+        :data="users"
+        :loading="loading"
+        loading-type="skeleton"
+        :skeleton-rows="8"
+        :empty-text="$t('console.noUsers')"
+        row-key="id"
+        size="small"
+        @filter-change="onFilterChange"
+      >
+        <template #column-username="{ row }">
+          <AppTooltip :content="row.username">
+            <span class="cell-user">
+              <span class="cell-user__name">{{ row.username }}</span>
+              <span v-if="row.id === auth.user?.id" class="self-tag">{{ $t('console.self') }}</span>
+            </span>
+          </AppTooltip>
+        </template>
 
-    <div v-else class="users-table-wrap">
-      <table class="users-table">
-        <thead>
-          <tr>
-            <th>{{ $t('console.username') }}</th>
-            <th>{{ $t('console.role') }}</th>
-            <th>{{ $t('console.birthday') }}</th>
-            <th>{{ $t('console.gender') }}</th>
-            <th>{{ $t('console.enabled') }}</th>
-            <th>{{ $t('console.region') }}</th>
-            <th>{{ $t('console.logins') }}</th>
-            <th>{{ $t('console.totalTokens') }}</th>
-            <th>{{ $t('console.lastSeen') }}</th>
-            <th>{{ $t('console.createdAt') }}</th>
-            <th>{{ $t('console.updatedAt') }}</th>
-            <th>{{ $t('console.updatedBy') }}</th>
-            <th class="actions-th">{{ $t('console.actions') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="u in users" :key="u.id">
-            <td class="cell-user">
-              {{ u.username }}
-              <span v-if="u.id === auth.user?.id" class="self-tag">{{ $t('console.self') }}</span>
-            </td>
-            <td>
-              <span class="role-badge" :class="u.role === 'admin' ? 'role-admin' : 'role-user'">
-                {{ u.role }}
-              </span>
-            </td>
-            <td class="cell-num">{{ u.birthday || '-' }}</td>
-            <td>{{ genderLabel(u.gender) }}</td>
-            <td>
-              <button
-                class="toggle"
-                :class="{ on: u.is_active }"
-                :disabled="u.id === auth.user?.id"
-                :title="u.is_active ? $t('console.disable') : $t('console.enable')"
-                @click="askToggleActive(u)"
-              >
-                <span class="toggle-knob"></span>
-              </button>
-            </td>
-            <td class="cell-region">{{ formatRegion(u) }}</td>
-            <td class="cell-num">{{ u.logins }}</td>
-            <td class="cell-num">{{ formatNum(u.total_tokens) }}</td>
-            <td class="cell-time">{{ formatTime(u.last_seen_at) }}</td>
-            <td class="cell-time">{{ formatTime(u.created_at) }}</td>
-            <td class="cell-time">{{ formatTime(u.updated_at) }}</td>
-            <td class="cell-time">{{ u.updated_by || '-' }}</td>
-            <td class="actions-td">
-              <div class="row-actions">
-                <button class="row-btn" :title="$t('console.roleSwitch')" @click="askToggleRole(u)">
-                  <AppIcon
-                    :name="u.role === 'admin' ? 'lucide:user' : 'lucide:shield'"
-                    :size="15"
-                  />
-                </button>
-                <button
-                  class="row-btn"
-                  :title="$t('console.editProfile')"
-                  @click="openEditRegion(u)"
-                >
-                  <AppIcon name="lucide:pencil" :size="15" />
-                </button>
-                <button
-                  class="row-btn"
-                  :title="$t('console.resetPassword')"
-                  @click="openResetPassword(u)"
-                >
-                  <AppIcon name="lucide:key-round" :size="15" />
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="total === 0">
-            <td colspan="13" class="cell-empty">{{ $t('console.noUsers') }}</td>
-          </tr>
-        </tbody>
-      </table>
+        <template #column-role="{ row }">
+          <span class="role-badge" :class="row.role === 'admin' ? 'role-admin' : 'role-user'">
+            {{ row.role }}
+          </span>
+        </template>
+
+        <template #column-is_active="{ row }">
+          <button
+            class="toggle"
+            :class="{ on: row.is_active }"
+            :disabled="row.id === auth.user?.id"
+            :title="row.is_active ? $t('console.disable') : $t('console.enable')"
+            @click="askToggleActive(row)"
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </template>
+
+        <template #column-actions="{ row }">
+          <div class="row-actions">
+            <button class="row-btn" :title="$t('console.roleSwitch')" @click="askToggleRole(row)">
+              <AppIcon
+                :name="row.role === 'admin' ? 'lucide:user' : 'lucide:shield'"
+                :size="15"
+              />
+            </button>
+            <button class="row-btn" :title="$t('console.editProfile')" @click="openEditRegion(row)">
+              <AppIcon name="lucide:pencil" :size="15" />
+            </button>
+            <button class="row-btn" :title="$t('console.resetPassword')" @click="openResetPassword(row)">
+              <AppIcon name="lucide:key-round" :size="15" />
+            </button>
+          </div>
+        </template>
+      </AppTable>
     </div>
 
     <Pagination
@@ -203,11 +175,12 @@ import { useToast } from '@/composables/useToast'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
-import TableLoading from '@/components/common/TableLoading.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import AppCascader, { type CascaderValue } from '@/components/common/AppCascader.vue'
 import DatePicker from '@/components/common/DatePicker.vue'
 import AppInput from '@/components/common/AppInput.vue'
+import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
+import AppTooltip from '@/components/common/AppTooltip.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -220,11 +193,21 @@ const total = ref(0)
 
 const currentPage = ref(1)
 const pageSize = ref(10)
+const usernameFilter = ref('')
+const genderFilter = ref<string[]>([])
+const roleFilter = ref<string[]>([])
+
 const load = async () => {
   loading.value = true
   error.value = ''
   try {
-    const res = await fetchAdminUsers({ page: currentPage.value, pageSize: pageSize.value })
+    const res = await fetchAdminUsers({
+      page: currentPage.value,
+      pageSize: pageSize.value,
+      username: usernameFilter.value || undefined,
+      genders: genderFilter.value.length ? genderFilter.value : undefined,
+      roles: roleFilter.value.length ? roleFilter.value : undefined
+    })
     users.value = res.items
     total.value = res.total
   } catch (err) {
@@ -233,6 +216,19 @@ const load = async () => {
     loading.value = false
   }
 }
+
+function onFilterChange(filters: Record<string, any[]>) {
+  const username = filters.username?.[0]
+  usernameFilter.value = typeof username === 'string' ? username : ''
+  genderFilter.value = (filters.gender ?? []).map(String)
+  roleFilter.value = (filters.role ?? []).map(String)
+  if (currentPage.value === 1) {
+    load()
+  } else {
+    currentPage.value = 1
+  }
+}
+
 watch(currentPage, load)
 watch(pageSize, () => {
   currentPage.value = 1
@@ -266,6 +262,112 @@ const genderOptions = [
   { value: 'female', label: t('auth.genderFemale') },
   { value: 'other', label: t('auth.genderOther') }
 ]
+
+// AppTable 列定义：用户名/角色支持表头筛选，其余列用 formatter 渲染
+const columns = computed<TableColumn[]>(() => [
+  {
+    key: 'username',
+    title: t('console.username'),
+    width: 160,
+    ellipsis: true,
+    filterable: true,
+    filterType: 'input',
+    filterPlaceholder: t('common.search'),
+    filterMethod: (value: any, row: AdminUser) =>
+      String(row.username ?? '').toLowerCase().includes(String(value ?? '').toLowerCase())
+  },
+  {
+    key: 'role',
+    title: t('console.role'),
+    width: 90,
+    align: 'center',
+    filterable: true,
+    filterType: 'checkbox',
+    filters: [
+      { text: t('console.roleAdmin'), value: 'admin' },
+      { text: t('console.roleUser'), value: 'user' }
+    ]
+  },
+  {
+    key: 'birthday',
+    title: t('console.birthday'),
+    width: 130,
+    ellipsis: true,
+    className: 'cell-num',
+    formatter: (row: AdminUser) => row.birthday || '-'
+  },
+  {
+    key: 'gender',
+    title: t('console.gender'),
+    width: 90,
+    align: 'center',
+    filterable: true,
+    filterType: 'checkbox',
+    filters: [
+      { text: t('auth.genderMale'), value: 'male' },
+      { text: t('auth.genderFemale'), value: 'female' },
+      { text: t('auth.genderOther'), value: 'other' }
+    ],
+    formatter: (row: AdminUser) => genderLabel(row.gender)
+  },
+  { key: 'is_active', title: t('console.enabled'), width: 80, align: 'center' },
+  {
+    key: 'region',
+    title: t('console.region'),
+    width: 140,
+    ellipsis: true,
+    className: 'cell-region',
+    formatter: (row: AdminUser) => formatRegion(row)
+  },
+  {
+    key: 'logins',
+    title: t('console.logins'),
+    width: 70,
+    align: 'right',
+    className: 'cell-num',
+    formatter: (row: AdminUser) => row.logins ?? 0
+  },
+  {
+    key: 'total_tokens',
+    title: t('console.totalTokens'),
+    width: 90,
+    align: 'right',
+    className: 'cell-num',
+    formatter: (row: AdminUser) => formatNum(row.total_tokens)
+  },
+  {
+    key: 'last_seen_at',
+    title: t('console.lastSeen'),
+    width: 180,
+    ellipsis: true,
+    className: 'cell-time',
+    formatter: (row: AdminUser) => formatTime(row.last_seen_at)
+  },
+  {
+    key: 'created_at',
+    title: t('console.createdAt'),
+    width: 180,
+    ellipsis: true,
+    className: 'cell-time',
+    formatter: (row: AdminUser) => formatTime(row.created_at)
+  },
+  {
+    key: 'updated_at',
+    title: t('console.updatedAt'),
+    width: 180,
+    ellipsis: true,
+    className: 'cell-time',
+    formatter: (row: AdminUser) => formatTime(row.updated_at)
+  },
+  {
+    key: 'updated_by',
+    title: t('console.updatedBy'),
+    width: 120,
+    className: 'cell-time',
+    formatter: (row: AdminUser) => row.updated_by || '-'
+  },
+  { key: 'actions', title: t('console.actions'), width: 120, align: 'center', fixed: 'right' }
+])
 
 function genderLabel(gender: string): string {
   if (!gender) return '-'
@@ -453,107 +555,59 @@ const submitRegion = async () => {
   font-size: 12px;
 }
 
-.page-loading {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-}
-
 .users-table-wrap {
   flex: 1;
-  overflow: auto;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  background:
-    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
-    var(--color-glass);
-  backdrop-filter: blur(20px) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(20px) saturate(var(--glass-saturate));
-  box-shadow: inset 0 1px 0 var(--glass-edge), inset 0 -1px 0 rgba(0, 0, 0, 0.08);
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--color-primary) 40%, transparent) transparent;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.users-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+.users-table-wrap :deep(.app-table-wrapper) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.users-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 12px 14px;
-  text-align: left;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--color-text-secondary);
-  background: var(--color-glass);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--color-border);
-  white-space: nowrap;
-}
-
-.users-table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-text);
-  white-space: nowrap;
-}
-
-.users-table th.actions-th,
-.users-table td.actions-td {
-  position: sticky;
-  right: 0;
-  z-index: 2;
-  background: var(--color-surface);
-  border-left: 1px solid var(--color-border);
-  box-shadow: -6px 0 12px rgba(0, 0, 0, 0.18);
-}
-
-.users-table th.actions-th {
-  top: 0;
-  z-index: 3;
-  background: var(--color-glass);
-}
-
-.users-table tbody tr:hover {
-  background: var(--color-glass);
+.users-table-wrap :deep(.app-table-scroll) {
+  flex: 1;
+  min-height: 0;
 }
 
 .cell-user {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
   font-weight: 500;
 }
 
-.cell-num {
+.cell-user__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.users-table-wrap :deep(.cell-num) {
   font-family: var(--font-mono);
   color: var(--color-text-secondary);
 }
 
-.cell-region {
+.users-table-wrap :deep(.cell-region) {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--color-primary);
 }
 
-.cell-time {
+.users-table-wrap :deep(.cell-time) {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--color-text-secondary);
 }
 
-.cell-empty {
-  text-align: center;
-  color: var(--color-text-secondary);
-  padding: 32px !important;
-}
-
 .self-tag {
-  margin-left: 6px;
+  flex-shrink: 0;
   padding: 1px 6px;
   border-radius: 10px;
   font-size: 10px;
