@@ -290,7 +290,6 @@ defineExpose({
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   overflow: hidden;
 }
-
 .app-input:hover {
   border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
 }

@@ -1314,15 +1314,17 @@ initDefaults()
 }
 
 .app-table__th {
-  padding: 12px 14px;
+  padding: 14px 14px;
   text-align: left;
-  font-weight: 600;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
   color: var(--color-text-secondary);
-  background: color-mix(in srgb, var(--color-surface) 85%, transparent);
-  backdrop-filter: blur(12px);
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(12px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(12px) saturate(var(--glass-saturate));
   border-bottom: 1px solid var(--color-border);
   white-space: nowrap;
   user-select: none;
