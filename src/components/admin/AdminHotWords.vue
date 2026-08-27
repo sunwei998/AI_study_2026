@@ -5,13 +5,13 @@ import type { HeatPeriod, HotWordItem } from '@/types/admin'
 import { fetchHotWords } from '@/services/adminService'
 import { HEAT_PERIODS } from '@/utils/provinceHeat'
 import ChartLoading from '@/components/common/ChartLoading.vue'
-import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
+import AppWordCloud from '@/components/common/AppWordCloud.vue'
 
 const { t } = useI18n()
 
 const period = ref<HeatPeriod>('month')
-const limit = ref(20)
-const HW_LIMITS = [10, 20, 50]
+const limit = ref(50)
+const HW_LIMITS = [10, 50, 100]
 const words = ref<HotWordItem[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -20,29 +20,11 @@ const error = ref('')
 const periodIndex = computed(() => Math.max(0, HEAT_PERIODS.findIndex((p) => p.key === period.value)))
 const limitIndex = computed(() => Math.max(0, HW_LIMITS.indexOf(limit.value)))
 
-// 排行榜：最大次数用于计算条形宽度（百分比，有限空间内清晰对比）
-const maxCount = computed(() => Math.max(1, ...words.value.map((d) => d.count)))
+// 词云数据：{ text, weight }
+const cloudWords = computed(() => words.value.map((d) => ({ text: d.word, weight: d.count })))
 
-// 热词列表（纯展示，无排序/筛选）
-const hwColumns = computed<TableColumn[]>(() => [
-  {
-    key: 'rank',
-    title: t('console.hotWordsRank'),
-    width: 70,
-    align: 'center',
-    className: 'cell-num',
-    formatter: (_row: HotWordItem, _col: TableColumn, _v: unknown, index: number) => String(index + 1)
-  },
-  { key: 'word', title: t('console.hotWordsWord'), width: 300, ellipsis: true },
-  {
-    key: 'count',
-    title: t('console.hotWordsCount'),
-    width: 140,
-    align: 'right',
-    className: 'cell-num',
-    formatter: (row: HotWordItem) => row.count.toLocaleString()
-  }
-])
+// 排行榜：最大次数用于计算条形宽度
+const maxCount = computed(() => Math.max(1, ...words.value.map((d) => d.count)))
 
 async function load() {
   loading.value = true
@@ -122,8 +104,15 @@ onMounted(load)
       <div v-if="words.length === 0" class="hw-empty">{{ t('console.hotWordsEmpty') }}</div>
 
       <template v-else>
-        <div class="rank-card">
+        <div class="rank-card cloud-card">
           <h3 class="rank-title">{{ t('console.hotWordsTitle') }}</h3>
+          <div class="cloud-box">
+            <AppWordCloud :words="cloudWords" />
+          </div>
+        </div>
+
+        <div class="rank-card">
+          <h3 class="rank-title">{{ t('console.hotWordsRankTitle') }}</h3>
           <ul class="rank-list">
             <li
               v-for="(d, i) in words"
@@ -144,16 +133,6 @@ onMounted(load)
             </li>
           </ul>
         </div>
-
-        <div class="rank-card">
-          <AppTable
-            :columns="hwColumns"
-            :data="words"
-            :empty-text="$t('console.hotWordsEmpty')"
-            row-key="word"
-            size="small"
-          />
-        </div>
       </template>
     </template>
   </div>
@@ -170,11 +149,23 @@ onMounted(load)
 }
 
 .hw-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(120deg, var(--glass-sheen) 0%, transparent 45%, var(--glass-sheen) 100%),
+    var(--color-glass);
+  backdrop-filter: blur(16px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(16px) saturate(var(--glass-saturate));
+  border: 1px solid var(--color-border);
+  box-shadow: inset 0 1px 0 var(--glass-edge), 0 6px 18px rgba(0, 0, 0, 0.25);
 }
 
 .hw-fields {
@@ -298,6 +289,17 @@ onMounted(load)
   text-shadow: 0 0 12px var(--color-glow);
 }
 
+.cloud-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.cloud-box {
+  width: 100%;
+  height: 420px;
+  flex-shrink: 0;
+}
+
 /* 排行榜：有限空间内最清晰的横向条形对比 */
 .rank-list {
   list-style: none;
@@ -356,7 +358,7 @@ onMounted(load)
 
 .rank-word {
   flex-shrink: 0;
-  width: 120px;
+  width: 140px;
   font-size: 13px;
   color: var(--color-text);
   overflow: hidden;
@@ -395,14 +397,10 @@ onMounted(load)
 
 .rank-count {
   flex-shrink: 0;
-  width: 72px;
+  width: 80px;
   text-align: right;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--color-text-secondary);
-}
-
-:deep(.cell-num) {
-  font-family: var(--font-mono);
 }
 </style>

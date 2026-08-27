@@ -21,7 +21,7 @@
         ref="fileRef"
         type="file"
         class="app-import__input"
-        :accept="accept"
+        :accept="effectiveAccept"
         :multiple="multiple"
         :disabled="disabled"
         @change="onPick"
@@ -42,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/common/AppIcon.vue'
 import { useToast } from '@/composables/useToast'
@@ -56,6 +56,7 @@ const props = withDefaults(
     multiple?: boolean
     disabled?: boolean
     maxSize?: number
+    table?: boolean
   }>(),
   {
     title: '',
@@ -63,7 +64,8 @@ const props = withDefaults(
     accept: '',
     multiple: false,
     disabled: false,
-    maxSize: 0
+    maxSize: 0,
+    table: false
   }
 )
 
@@ -76,8 +78,16 @@ const dragover = ref(false)
 const files = ref<File[]>([])
 const fileRef = ref<HTMLInputElement | null>(null)
 
+// 表格模式：默认接受 CSV/Excel 表格文件
+const effectiveAccept = computed(() => {
+  if (props.accept) return props.accept
+  if (props.table) return '.csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  return ''
+})
+
 function validate(file: File): boolean {
-  if (props.accept && !props.accept.split(',').some((a) => {
+  const acc = effectiveAccept.value
+  if (acc && !acc.split(',').some((a) => {
     const ext = a.trim().replace(/^\*\./, '').toLowerCase()
     return file.name.toLowerCase().endsWith(ext) || a.trim().startsWith(file.type.split('/')[0] + '/')
   })) {

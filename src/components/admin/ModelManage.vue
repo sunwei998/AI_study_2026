@@ -1,10 +1,42 @@
 <template>
   <div class="model-manage">
     <div class="page-toolbar">
-      <AppButton v-if="canManageModels" size="middle" @click="openCreate">
+      <AppButton
+        v-if="canManageModels"
+        size="middle"
+        type="default"
+        :title="$t('console.addModel')"
+        @click="openCreate"
+      >
         <AppIcon name="lucide:plus" :size="15" />
-        {{ $t('console.addModel') }}
       </AppButton>
+      <AppButton
+        v-if="canManageModels"
+        size="middle"
+        type="default"
+        :loading="exporting"
+        :title="$t('console.exportModels')"
+        @click="onExport"
+      >
+        <AppIcon name="lucide:download" :size="15" />
+      </AppButton>
+      <AppButton
+        v-if="canManageModels"
+        size="middle"
+        type="default"
+        :loading="importing"
+        :title="$t('console.importModels')"
+        @click="pickImport"
+      >
+        <AppIcon name="lucide:upload" :size="15" />
+      </AppButton>
+      <input
+        ref="importInputRef"
+        type="file"
+        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        class="hidden-input"
+        @change="onImportFile"
+      />
     </div>
 
     <div v-if="error" class="page-error">{{ error }}</div>
@@ -178,9 +210,11 @@ import type { AdminModel, ModelPayload } from '@/types/admin'
 import {
   createAdminModel,
   deleteAdminModel,
+  exportModelsCsv,
   fetchAdminModel,
   fetchAdminModels,
   fetchSettings,
+  importModelsCsv,
   updateAdminModel
 } from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
@@ -479,6 +513,57 @@ const doDelete = async () => {
     confirmLoading.value = false
   }
 }
+
+// —— 导入 / 导出 ——
+const exporting = ref(false)
+const importing = ref(false)
+const importInputRef = ref<HTMLInputElement | null>(null)
+
+const onExport = async () => {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const blob = await exportModelsCsv()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `models_${Date.now()}.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    showToast(t('console.exportSuccess'), 'success')
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
+  } finally {
+    exporting.value = false
+  }
+}
+
+const pickImport = () => {
+  importInputRef.value?.click()
+}
+
+const onImportFile = async (e: Event) => {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  importing.value = true
+  try {
+    const res = await importModelsCsv(file)
+    if (res.errors?.length) {
+      showToast(t('console.importPartial', { n: res.errors.length }), 'error')
+    } else {
+      showToast(t('console.importSuccess', { created: res.created, updated: res.updated }), 'success')
+    }
+    await load()
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
+  } finally {
+    importing.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -497,6 +582,10 @@ const doDelete = async () => {
   gap: 12px;
   /* 父容器 gap:14px 基础上收紧，让按钮组与表格间距统一为 6px */
   margin-bottom: -8px;
+}
+
+.hidden-input {
+  display: none;
 }
 
 .page-btn {

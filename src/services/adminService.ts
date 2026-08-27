@@ -146,6 +146,44 @@ export function deleteAdminModel(modelId: number): Promise<{ ok: boolean }> {
   return request(`/models/${modelId}`, { method: 'DELETE' })
 }
 
+export function exportModelsCsv(): Promise<Blob> {
+  return fetch(`${API_BASE}/models/export`, { headers: authHeaders() }).then(async (resp) => {
+    if (resp.status === 401) {
+      clearToken()
+      notifyUnauthorized()
+      throw new Error('unauthorized')
+    }
+    if (!resp.ok) throw new Error(await parseError(resp))
+    return resp.blob()
+  })
+}
+
+export interface ModelImportResult {
+  ok: boolean
+  created: number
+  updated: number
+  errors: string[]
+}
+
+export async function importModelsCsv(file: File): Promise<ModelImportResult> {
+  const form = new FormData()
+  form.append('file', file)
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+  const resp = await fetch(`${API_BASE}/models/import`, { method: 'POST', headers, body: form })
+  if (resp.status === 401) {
+    clearToken()
+    notifyUnauthorized()
+    throw new Error('unauthorized')
+  }
+  if (resp.status === 403) {
+    notifyForbidden()
+  }
+  if (!resp.ok) throw new Error(await parseError(resp))
+  return resp.json()
+}
+
 export function fetchAdminUsers(params: PaginationParams = {}): Promise<PaginatedResult<AdminUser>> {
   const query = new URLSearchParams()
   if (params.page) query.set('page', String(params.page))

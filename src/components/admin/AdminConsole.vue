@@ -116,7 +116,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
-type TabKey = 'overview' | 'models' | 'users' | 'map' | 'usage' | 'hot-words' | 'settings' | 'settings-base' | 'settings-search' | 'data' | 'data-import' | 'data-export'
+type TabKey = 'overview' | 'models' | 'users' | 'map' | 'usage' | 'hot-words' | 'settings' | 'settings-base' | 'settings-search' | 'settings-dict' | 'data' | 'data-import' | 'data-export'
 
 const expandedGroups = ref<string[]>(['settings', 'data'])
 
@@ -143,21 +143,22 @@ const tabs = computed(() => [
   { key: 'usage' as TabKey, icon: 'lucide:chart-bar', label: t('console.usage') },
   { key: 'hot-words' as TabKey, icon: 'lucide:trending-up', label: t('console.hotWords') },
   {
-    key: 'settings' as TabKey,
-    icon: 'lucide:sliders-horizontal',
-    label: t('console.settings'),
-    children: [
-      { key: 'settings-base' as TabKey, label: t('console.settingsBase'), path: '/admin/settings/base' },
-      { key: 'settings-search' as TabKey, label: t('console.settingsSearch'), path: '/admin/settings/search' }
-    ]
-  },
-  {
     key: 'data' as TabKey,
     icon: 'lucide:database',
     label: t('console.dataManage'),
     children: [
       { key: 'data-import' as TabKey, label: t('console.importManage'), path: '/admin/data/import' },
       { key: 'data-export' as TabKey, label: t('console.exportManage'), path: '/admin/data/export' }
+    ]
+  },
+  {
+    key: 'settings' as TabKey,
+    icon: 'lucide:sliders-horizontal',
+    label: t('console.settings'),
+    children: [
+      { key: 'settings-base' as TabKey, label: t('console.settingsBase'), path: '/admin/settings/base' },
+      { key: 'settings-search' as TabKey, label: t('console.settingsSearch'), path: '/admin/settings/search' },
+      { key: 'settings-dict' as TabKey, label: t('console.dictConfig'), path: '/admin/settings/dict' }
     ]
   }
 ])

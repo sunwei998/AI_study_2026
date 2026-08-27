@@ -79,6 +79,11 @@ const router = createRouter({
               path: 'search',
               name: 'admin-settings-search',
               component: () => import('@/components/admin/AdminSettingsSearch.vue')
+            },
+            {
+              path: 'dict',
+              name: 'admin-settings-dict',
+              component: () => import('@/components/admin/AdminSettingsDict.vue')
             }
           ]
         },
