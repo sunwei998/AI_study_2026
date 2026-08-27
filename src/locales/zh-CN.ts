@@ -275,6 +275,7 @@ export default {
     editModelSuccess: '保存成功',
     exportModels: '导出',
     importModels: '导入',
+    downloadTemplate: '下载模板',
     exportSuccess: '导出成功',
     importSuccess: '导入完成：新增 {created} 个，更新 {updated} 个',
     importPartial: '导入完成，但有 {n} 行数据有误已跳过',

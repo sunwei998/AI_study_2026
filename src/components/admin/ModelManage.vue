@@ -30,6 +30,16 @@
       >
         <AppIcon name="lucide:upload" :size="15" />
       </AppButton>
+      <AppButton
+        v-if="canManageModels"
+        size="middle"
+        type="default"
+        :loading="templating"
+        :title="$t('console.downloadTemplate')"
+        @click="onDownloadTemplate"
+      >
+        <AppIcon name="lucide:file-down" :size="15" />
+      </AppButton>
       <input
         ref="importInputRef"
         type="file"
@@ -210,6 +220,7 @@ import type { AdminModel, ModelPayload } from '@/types/admin'
 import {
   createAdminModel,
   deleteAdminModel,
+  downloadModelTemplate,
   exportModelsCsv,
   fetchAdminModel,
   fetchAdminModels,
@@ -517,6 +528,7 @@ const doDelete = async () => {
 // —— 导入 / 导出 ——
 const exporting = ref(false)
 const importing = ref(false)
+const templating = ref(false)
 const importInputRef = ref<HTMLInputElement | null>(null)
 
 const onExport = async () => {
@@ -542,6 +554,26 @@ const onExport = async () => {
 
 const pickImport = () => {
   importInputRef.value?.click()
+}
+
+const onDownloadTemplate = async () => {
+  if (templating.value) return
+  templating.value = true
+  try {
+    const blob = await downloadModelTemplate()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'models_template.xlsx'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
+  } finally {
+    templating.value = false
+  }
 }
 
 const onImportFile = async (e: Event) => {

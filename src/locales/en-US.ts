@@ -280,6 +280,7 @@ export default {
     editModelSuccess: 'Saved',
     exportModels: 'Export',
     importModels: 'Import',
+    downloadTemplate: 'Download Template',
     exportSuccess: 'Exported',
     importSuccess: 'Import done: {created} created, {updated} updated',
     importPartial: 'Import done, {n} invalid rows skipped',

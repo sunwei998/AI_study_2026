@@ -158,6 +158,18 @@ export function exportModelsCsv(): Promise<Blob> {
   })
 }
 
+export function downloadModelTemplate(): Promise<Blob> {
+  return fetch(`${API_BASE}/models/template`, { headers: authHeaders() }).then(async (resp) => {
+    if (resp.status === 401) {
+      clearToken()
+      notifyUnauthorized()
+      throw new Error('unauthorized')
+    }
+    if (!resp.ok) throw new Error(await parseError(resp))
+    return resp.blob()
+  })
+}
+
 export interface ModelImportResult {
   ok: boolean
   created: number
