@@ -249,3 +249,63 @@ export interface AdminOverview {
   age_dist: UsageDistItem[]
   gender_dist: UsageDistItem[]
 }
+
+// ============ 通用维表（dim_tables / dim_values） ============
+
+export interface DimTable {
+  id: number
+  code: string
+  name: string
+  description: string
+  sort_order: number
+  value_count: number
+  created_at: number | null
+  updated_at: number | null
+  updated_by: string
+}
+
+export interface DimValue {
+  id: number
+  table_id: number
+  code: string
+  name: string
+  sort_order: number
+  enabled: boolean
+  remark: string
+  created_at: number | null
+  updated_at: number | null
+}
+
+export interface DimValueList {
+  items: DimValue[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface DimTableCreate {
+  code: string
+  name: string
+  description?: string
+}
+
+export interface DimValueCreate {
+  code: string
+  name: string
+  sort_order?: number
+  enabled?: boolean
+  remark?: string
+}
+
+export interface DimValueUpdate {
+  code?: string
+  name?: string
+  sort_order?: number
+  enabled?: boolean
+  remark?: string
+}
+
+export interface DimOption {
+  code: string
+  name: string
+}

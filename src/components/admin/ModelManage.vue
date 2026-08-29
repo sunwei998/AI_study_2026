@@ -224,7 +224,7 @@ import {
   exportModelsCsv,
   fetchAdminModel,
   fetchAdminModels,
-  fetchSettings,
+  fetchDimValuesByCode,
   importModelsCsv,
   updateAdminModel
 } from '@/services/adminService'
@@ -253,7 +253,7 @@ const loading = ref(true)
 const error = ref('')
 const total = ref(0)
 
-// 模型提供方数据字典：默认取本地字典，若后台 settings.model_providers 已配置则覆盖
+// 模型提供方数据字典：默认取本地字典，若后台「通用维表」model_provider 已配置则覆盖
 const providers = ref<ModelProvider[]>(DEFAULT_PROVIDERS)
 
 const currentPage = ref(1)
@@ -267,7 +267,7 @@ const load = async () => {
   loading.value = true
   error.value = ''
   try {
-    const [res, settings] = await Promise.all([
+    const [res, dimValues] = await Promise.all([
       fetchAdminModels({
         page: currentPage.value,
         pageSize: pageSize.value,
@@ -277,20 +277,15 @@ const load = async () => {
         sort: sortFilter.value.order ? sortFilter.value.key : undefined,
         order: sortFilter.value.order ?? undefined
       }),
-      fetchSettings({ search: 'model_providers' })
+      fetchDimValuesByCode('model_provider')
     ])
     models.value = res.items
     total.value = res.total
-    const row = settings.items.find((s) => s.key === 'model_providers')
-    if (row?.value) {
-      try {
-        const parsed = JSON.parse(row.value) as unknown
-        if (Array.isArray(parsed)) {
-          providers.value = parsed as ModelProvider[]
-        }
-      } catch {
-        // JSON 解析失败时保留默认字典
-      }
+    // 维表返回启用取值（[{code,name}]），映射为 {id,name}；为空时回退本地默认字典
+    if (dimValues.length) {
+      providers.value = dimValues.map((d) => ({ id: d.code, name: d.name }))
+    } else {
+      providers.value = DEFAULT_PROVIDERS
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')

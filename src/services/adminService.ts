@@ -4,6 +4,13 @@ import type {
   AdminStats,
   AdminUsage,
   AdminUser,
+  DimOption,
+  DimTable,
+  DimTableCreate,
+  DimValue,
+  DimValueCreate,
+  DimValueList,
+  DimValueUpdate,
   HeatPeriod,
   HotWordItem,
   ModelPayload,
@@ -255,6 +262,78 @@ export function fetchSettings(params: PaginationParams = {}): Promise<PaginatedR
 
 export function updateSetting(key: string, patch: SettingPatch): Promise<{ ok: boolean }> {
   return request(`/settings/${encodeURIComponent(key)}`, { method: 'PATCH', body: JSON.stringify(patch) })
+}
+
+// ============ 通用维表（dim_tables / dim_values） ============
+
+export function fetchDimTables(): Promise<DimTable[]> {
+  return request<DimTable[]>('/dim-tables')
+}
+
+export function createDimTable(payload: DimTableCreate): Promise<DimTable> {
+  return request<DimTable>('/dim-tables', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function updateDimTable(
+  tableId: number,
+  payload: { name?: string; description?: string; sort_order?: number }
+): Promise<{ ok: boolean }> {
+  return request(`/dim-tables/${tableId}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export function deleteDimTable(tableId: number): Promise<{ ok: boolean }> {
+  return request(`/dim-tables/${tableId}`, { method: 'DELETE' })
+}
+
+export interface DimValueQuery {
+  page?: number
+  pageSize?: number
+  search?: string
+  enabled?: boolean
+  sort?: string
+  order?: 'asc' | 'desc'
+}
+
+export function fetchDimValues(tableId: number, params: DimValueQuery = {}): Promise<PaginatedResult<DimValue>> {
+  const query = new URLSearchParams()
+  if (params.page) query.set('page', String(params.page))
+  if (params.pageSize) query.set('page_size', String(params.pageSize))
+  if (params.search) query.set('search', params.search)
+  if (params.enabled !== undefined && params.enabled !== null) {
+    query.set('enabled', params.enabled ? 'true' : 'false')
+  }
+  if (params.sort) query.set('sort', params.sort)
+  if (params.order) query.set('order', params.order)
+  const qs = query.toString()
+  return request<DimValueList>(`/dim-tables/${tableId}/values${qs ? `?${qs}` : ''}`).then((res) => ({
+    items: res.items.map((r) => ({ ...r, enabled: !!r.enabled })),
+    total: res.total,
+    page: res.page,
+    pageSize: res.pageSize
+  }))
+}
+
+export function createDimValue(tableId: number, payload: DimValueCreate): Promise<{ ok: boolean }> {
+  return request(`/dim-tables/${tableId}/values`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function updateDimValue(
+  tableId: number,
+  valueId: number,
+  payload: DimValueUpdate
+): Promise<{ ok: boolean }> {
+  return request(`/dim-tables/${tableId}/values/${valueId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export function deleteDimValue(tableId: number, valueId: number): Promise<{ ok: boolean }> {
+  return request(`/dim-tables/${tableId}/values/${valueId}`, { method: 'DELETE' })
+}
+
+export function fetchDimValuesByCode(code: string): Promise<DimOption[]> {
+  return request<DimOption[]>(`/dim-tables/by-code/${encodeURIComponent(code)}/values`)
 }
 
 export function fetchHotWords(period: HeatPeriod = 'month', limit = 20): Promise<HotWordItem[]> {
