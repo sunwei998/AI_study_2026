@@ -92,6 +92,9 @@ export interface ThemeConfig {
   glow: string
   glassEdge: string
   glassSheen: string
+  success: string
+  warning: string
+  danger: string
 }
 
 export interface ApiConfig {

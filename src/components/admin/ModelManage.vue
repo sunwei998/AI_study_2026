@@ -4,6 +4,7 @@
 
     <div v-if="!error" class="model-table-wrap">
       <AppTable
+        ref="tableRef"
         :columns="columns"
         :data="models"
         :loading="loading"
@@ -52,6 +53,15 @@
             @click="onDownloadTemplate"
           >
             <AppIcon name="lucide:file-down" :size="15" />
+          </AppButton>
+          <!-- 重置：清除所有筛选与排序、分页回到默认后重新查询 -->
+          <AppButton
+            size="middle"
+            type="default"
+            :title="$t('console.resetFilters')"
+            @click="onReset"
+          >
+            <AppIcon name="lucide:rotate-ccw" :size="15" />
           </AppButton>
         </template>
 
@@ -137,11 +147,23 @@
             <form class="form-body" @submit.prevent="submitForm">
               <label class="form-field">
                 <span class="form-label">model_key</span>
-                <AppInput v-model="form.model_key" type="text" :placeholder="'Qwen/Qwen2.5-7B'" />
+                <AppInput
+                  v-model="form.model_key"
+                  type="text"
+                  :placeholder="'Qwen/Qwen2.5-7B'"
+                  @blur="onKeyBlur"
+                />
+                <span v-if="keyError" class="form-error">{{ keyError }}</span>
               </label>
               <label class="form-field">
                 <span class="form-label">{{ $t('console.name') }}</span>
-                <AppInput v-model="form.name" type="text" :placeholder="$t('console.namePlaceholder')" />
+                <AppInput
+                  v-model="form.name"
+                  type="text"
+                  :placeholder="$t('console.namePlaceholder')"
+                  @blur="onNameBlur"
+                />
+                <span v-if="nameError" class="form-error">{{ nameError }}</span>
               </label>
               <div class="form-row">
                 <label class="form-field">
@@ -209,7 +231,7 @@
       :max-count="5"
       :max-size="10 * 1024 * 1024"
       :processor="processImportFile"
-      @done="load"
+      @done="onImportDone"
     />
   </div>
 </template>
@@ -219,6 +241,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AdminModel, ModelPayload } from '@/types/admin'
 import {
+  checkModelUniqueness,
   createAdminModel,
   deleteAdminModel,
   downloadModelTemplate,
@@ -231,7 +254,7 @@ import {
 } from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
-import AppImport from '@/components/common/AppImport.vue'
+import AppImport, { type ImportSummary } from '@/components/common/AppImport.vue'
 import AppExport from '@/components/common/AppExport.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
@@ -265,6 +288,29 @@ const enabledFilter = ref<boolean | null>(null)
 const freeFilter = ref<boolean | null>(null)
 const providerFilter = ref<string[]>([])
 const sortFilter = ref<{ key: string; order: 'asc' | 'desc' | null }>({ key: '', order: null })
+
+// 表格实例：用于重置表头筛选/排序高亮
+const tableRef = ref<InstanceType<typeof AppTable> | null>(null)
+// 重置进行中标志：避免重置分页时触发 watch 导致重复请求
+let resetting = false
+
+/** 重置：清除全部筛选与排序，分页回默认值，重新查询 */
+function onReset() {
+  resetting = true
+  try {
+    enabledFilter.value = null
+    freeFilter.value = null
+    providerFilter.value = []
+    sortFilter.value = { key: '', order: null }
+    pageSize.value = 10
+    currentPage.value = 1
+    // 清除表格内部表头筛选/排序高亮
+    tableRef.value?.resetState()
+  } finally {
+    resetting = false
+  }
+  load()
+}
 
 const load = async () => {
   loading.value = true
@@ -321,10 +367,14 @@ function onFilterChange(filters: Record<string, any[]>) {
   }
 }
 
-watch(currentPage, load)
+watch(currentPage, () => {
+  if (!resetting) load()
+})
 watch(pageSize, () => {
-  currentPage.value = 1
-  load()
+  if (!resetting) {
+    currentPage.value = 1
+    load()
+  }
 })
 
 onMounted(load)
@@ -454,6 +504,8 @@ const openCreate = () => {
   editingId.value = null
   form.value = emptyForm()
   formError.value = ''
+  keyError.value = ''
+  nameError.value = ''
   formVisible.value = true
 }
 
@@ -461,6 +513,8 @@ const openEdit = async (m: AdminModel) => {
   formMode.value = 'edit'
   editingId.value = m.id
   formError.value = ''
+  keyError.value = ''
+  nameError.value = ''
   formVisible.value = true
   try {
     const detail = await fetchAdminModel(m.id)
@@ -471,13 +525,57 @@ const openEdit = async (m: AdminModel) => {
   }
 }
 
+// —— 失焦轻量查重：model_key 同供应商内唯一；name 全局唯一（编辑排除自身）——
+const keyError = ref('')
+const nameError = ref('')
+
+async function onKeyBlur() {
+  keyError.value = ''
+  const key = form.value.model_key.trim()
+  if (!key || /\s/.test(key)) return // 空值/含空白交给必填与后端 422 提示
+  try {
+    const r = await checkModelUniqueness({
+      model_key: key,
+      provider: form.value.provider,
+      exclude_id: editingId.value ?? 0
+    })
+    if (r.model_key_exists) keyError.value = t('console.modelKeyExists')
+  } catch {
+    /* 网络异常不阻塞输入 */
+  }
+}
+
+async function onNameBlur() {
+  nameError.value = ''
+  const name = form.value.name.trim()
+  if (!name) return
+  try {
+    const r = await checkModelUniqueness({ name, exclude_id: editingId.value ?? 0 })
+    if (r.name_exists) nameError.value = t('console.modelNameExists')
+  } catch {
+    /* 网络异常不阻塞输入 */
+  }
+}
+
+watch(
+  () => form.value.model_key,
+  () => (keyError.value = '')
+)
+watch(
+  () => form.value.name,
+  () => (nameError.value = '')
+)
+
 const submitForm = async () => {
   if (formSubmitting.value) return
   formError.value = ''
-  if (!form.value.model_key.trim() || !form.value.name.trim()) {
+  form.value.model_key = form.value.model_key.trim()
+  form.value.name = form.value.name.trim()
+  if (!form.value.model_key || !form.value.name) {
     formError.value = t('console.fillRequired')
     return
   }
+  if (keyError.value || nameError.value) return
   formSubmitting.value = true
   try {
     if (formMode.value === 'create') {
@@ -569,13 +667,42 @@ const onDownloadTemplate = async () => {
   }
 }
 
-// AppImport 逐文件处理器：成功返回详情文案，部分行出错返回 warn 提示
+// AppImport 逐文件处理器：返回详情文案 + 计数，供弹框状态与全局提示汇总
 const processImportFile = async (file: File) => {
   const res = await importModelsCsv(file)
   if (res.errors?.length) {
-    return { message: t('console.importPartial', { n: res.errors.length }), warn: true }
+    return {
+      message: t('console.importPartial', { n: res.errors.length }),
+      warn: true,
+      created: res.created,
+      updated: res.updated
+    }
   }
-  return t('console.importSuccess', { created: res.created, updated: res.updated })
+  return {
+    message: t('console.importSuccess', { created: res.created, updated: res.updated }),
+    created: res.created,
+    updated: res.updated
+  }
+}
+
+// 导入结束：全局提示；成功/部分成功 → page 置 1 刷新列表
+function onImportDone(s: ImportSummary) {
+  if (s.failed === 0 && s.warn === 0) {
+    showToast(t('console.importSuccess', { created: s.created, updated: s.updated }), 'success')
+  } else if (s.failed === 0) {
+    showToast(t('console.importPartialDone', { created: s.created, updated: s.updated }), 'info')
+  } else if (s.success + s.warn > 0) {
+    showToast(
+      t('console.importMixedDone', { created: s.created, updated: s.updated, failed: s.failed }),
+      'error'
+    )
+  } else {
+    showToast(t('console.importAllFailed', { failed: s.failed }), 'error')
+  }
+  if (s.success + s.warn > 0) {
+    if (currentPage.value !== 1) currentPage.value = 1 // watch 触发 load
+    else load()
+  }
 }
 </script>
 

@@ -2,6 +2,7 @@ import type { MessageRole, ModelInfo, ChatSession, SessionPatch, ChatStreamMeta,
 import { i18n } from '@/locales'
 import { clearToken, getToken } from './token'
 import { notifyUnauthorized } from './unauthorized'
+import { withAcceptLanguage } from './headers'
 import { notifyForbidden } from './forbidden'
 
 export interface ChatHistoryItem {
@@ -56,7 +57,7 @@ function authHeaders(): Record<string, string> {
   if (token) {
     headers.Authorization = `Bearer ${token}`
   }
-  return headers
+  return withAcceptLanguage(headers)
 }
 
 /**
@@ -100,7 +101,7 @@ function parseStreamLine(
  * 读取模型列表（后端 models 表，管理员可在控制台配置）
  */
 export async function fetchModels(): Promise<ModelInfo[]> {
-  const resp = await fetch(`${API_BASE}/models`)
+  const resp = await fetch(`${API_BASE}/models`, { headers: withAcceptLanguage() })
   if (!resp.ok) {
     throw new Error(i18n.global.t('api.failed'))
   }
@@ -225,7 +226,7 @@ export async function fetchSessionMessages(
  * 对话页推荐词：直接取用户提问高频词 TOP N（不分中英文，语言切换不影响）
  */
 export async function fetchChatHotWords(limit = 4): Promise<ChatHotWord[]> {
-  const resp = await fetch(`${API_BASE}/hot-words?limit=${limit}`)
+  const resp = await fetch(`${API_BASE}/hot-words?limit=${limit}`, { headers: withAcceptLanguage() })
   if (!resp.ok) {
     throw new Error(i18n.global.t('api.failed'))
   }

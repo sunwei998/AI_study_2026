@@ -132,10 +132,28 @@ function render() {
 
   if (modelRef.value) {
     const byModel = usage.value.by_model.slice(0, 10)
+    const labelOf = (m: (typeof byModel)[number]) => m.name || m.model_key
+    const provOf = new Map(byModel.map((m) => [labelOf(m), m.provider]))
     const chart = echarts.init(modelRef.value)
     chart.setOption({
       color: [c.primary],
-      tooltip: { trigger: 'axis', backgroundColor: cssVar('--color-surface', '#0e1430'), borderColor: c.line, textStyle: { color: cssVar('--color-text', '#e6f1ff') } },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: cssVar('--color-surface', '#0e1430'),
+        borderColor: c.line,
+        textStyle: { color: cssVar('--color-text', '#e6f1ff') },
+        formatter: (params: unknown) => {
+          const arr = Array.isArray(params) ? params : [params]
+          const head = arr[0] as { name: string; marker?: string; value: number }
+          const prov = provOf.get(head.name)
+          const lines = [`<b>${head.name}</b>`]
+          if (prov) lines.push(`<span style="opacity:.65;font-size:10px">${prov}</span>`)
+          for (const it of arr as { marker?: string; value: number }[]) {
+            lines.push(`${it.marker ?? ''} Tokens ${formatTokens(it.value)}`)
+          }
+          return lines.join('<br/>')
+        }
+      },
       grid: { left: 10, right: 40, top: 20, bottom: 60 },
       xAxis: {
         type: 'value',
@@ -145,7 +163,7 @@ function render() {
       yAxis: {
         type: 'category',
         inverse: true,
-        data: byModel.map((m) => m.model_key),
+        data: byModel.map(labelOf),
         axisLabel: { ...baseTextStyle, width: 150, overflow: 'truncate' },
         axisLine
       },

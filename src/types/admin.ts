@@ -99,6 +99,8 @@ export interface UsageByUser {
 
 export interface UsageByModel {
   model_key: string
+  name: string
+  provider: string
   requests: number
   prompt: number
   completion: number
@@ -138,6 +140,9 @@ export interface HotWordItem {
 
 export type TransferType = 'import' | 'export'
 
+/** 导入导出记录状态：导入含 success/partial/failed，导出含 success/failed */
+export type TransferStatus = 'success' | 'partial' | 'failed'
+
 export interface TransferRecord {
   id: number
   type: TransferType
@@ -150,6 +155,7 @@ export interface TransferRecord {
   remark: string
   created_at: number
   has_file: boolean
+  status?: TransferStatus
 }
 
 export interface RegionTopUser {
@@ -208,6 +214,8 @@ export interface OverviewNewUsers {
 
 export interface OverviewTopModel {
   model_key: string
+  name: string
+  provider: string
   requests: number
   total: number
 }

@@ -16,7 +16,10 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     grid: 'rgba(0, 229, 255, 0.07)',
     glow: 'rgba(0, 229, 255, 0.4)',
     glassEdge: 'rgba(255, 255, 255, 0.18)',
-    glassSheen: 'rgba(0, 229, 255, 0.05)'
+    glassSheen: 'rgba(0, 229, 255, 0.05)',
+    success: '#00e676',
+    warning: '#ffb74d',
+    danger: '#ff5b6a'
   },
   light: {
     name: 'light',
@@ -33,7 +36,10 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     grid: 'rgba(79, 70, 229, 0.04)',
     glow: 'rgba(79, 70, 229, 0.12)',
     glassEdge: 'rgba(255, 255, 255, 0.8)',
-    glassSheen: 'rgba(255, 255, 255, 0.5)'
+    glassSheen: 'rgba(255, 255, 255, 0.5)',
+    success: '#16a34a',
+    warning: '#d97706',
+    danger: '#dc2626'
   },
   neon: {
     name: 'neon',
@@ -50,7 +56,10 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     grid: 'rgba(0, 255, 136, 0.07)',
     glow: 'rgba(0, 255, 136, 0.4)',
     glassEdge: 'rgba(255, 255, 255, 0.16)',
-    glassSheen: 'rgba(0, 255, 136, 0.06)'
+    glassSheen: 'rgba(0, 255, 136, 0.06)',
+    success: '#00ff88',
+    warning: '#ffd166',
+    danger: '#ff2ea6'
   },
   magenta: {
     name: 'magenta',
@@ -67,7 +76,10 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     grid: 'rgba(255, 45, 149, 0.07)',
     glow: 'rgba(255, 45, 149, 0.4)',
     glassEdge: 'rgba(255, 255, 255, 0.16)',
-    glassSheen: 'rgba(255, 45, 149, 0.06)'
+    glassSheen: 'rgba(255, 45, 149, 0.06)',
+    success: '#3ddc97',
+    warning: '#ffb74d',
+    danger: '#ff4d5e'
   },
   midnight: {
     name: 'midnight',
@@ -84,7 +96,10 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     grid: 'rgba(179, 136, 255, 0.08)',
     glow: 'rgba(179, 136, 255, 0.42)',
     glassEdge: 'rgba(255, 255, 255, 0.16)',
-    glassSheen: 'rgba(179, 136, 255, 0.07)'
+    glassSheen: 'rgba(179, 136, 255, 0.07)',
+    success: '#69f0ae',
+    warning: '#ffca6c',
+    danger: '#ff7d9c'
   },
   amber: {
     name: 'amber',
@@ -101,7 +116,10 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     grid: 'rgba(255, 183, 77, 0.08)',
     glow: 'rgba(255, 183, 77, 0.4)',
     glassEdge: 'rgba(255, 255, 255, 0.15)',
-    glassSheen: 'rgba(255, 183, 77, 0.06)'
+    glassSheen: 'rgba(255, 183, 77, 0.06)',
+    success: '#66bb6a',
+    warning: '#ff6d00',
+    danger: '#e53935'
   },
   mint: {
     name: 'mint',
@@ -118,7 +136,10 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     grid: 'rgba(0, 230, 118, 0.07)',
     glow: 'rgba(0, 230, 118, 0.4)',
     glassEdge: 'rgba(255, 255, 255, 0.16)',
-    glassSheen: 'rgba(0, 230, 118, 0.06)'
+    glassSheen: 'rgba(0, 230, 118, 0.06)',
+    success: '#00c853',
+    warning: '#ffb300',
+    danger: '#ff5252'
   },
   sand: {
     name: 'sand',
@@ -135,7 +156,10 @@ export const themes: Record<ThemeType, ThemeConfig> = {
     grid: 'rgba(122, 79, 31, 0.06)',
     glow: 'rgba(122, 79, 31, 0.25)',
     glassEdge: 'rgba(255, 255, 255, 0.9)',
-    glassSheen: 'rgba(255, 255, 255, 0.5)'
+    glassSheen: 'rgba(255, 255, 255, 0.5)',
+    success: '#2e7d32',
+    warning: '#b26a00',
+    danger: '#b3261e'
   }
 }
 
@@ -157,4 +181,7 @@ export function applyTheme(theme: ThemeType): void {
   root.style.setProperty('--color-glow', config.glow)
   root.style.setProperty('--glass-edge', config.glassEdge)
   root.style.setProperty('--glass-sheen', config.glassSheen)
+  root.style.setProperty('--color-success', config.success)
+  root.style.setProperty('--color-warning', config.warning)
+  root.style.setProperty('--color-danger', config.danger)
 }

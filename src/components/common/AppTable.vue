@@ -52,7 +52,7 @@
                 </span>
               </label>
             </th>
-            <th v-if="showIndex" class="app-table__th app-table__th--index" :rowspan="2" :style="stickyStyle('left', selection ? 44 : 0)">#</th>
+            <th v-if="showIndex" class="app-table__th app-table__th--index" :rowspan="2" :style="stickyStyle('left', selection ? 44 : 0)">{{ indexLabel }}</th>
             <template v-for="col in leafHeaders" :key="col.key">
               <th
                 v-if="col.children?.length"
@@ -67,6 +67,24 @@
           </tr>
           <!-- 列表头 -->
           <tr>
+            <th
+              v-if="selection && !hasGroupHeader"
+              class="app-table__th app-table__th--selection"
+              :style="stickyStyle('left', 0)"
+            >
+              <label v-if="selection === 'multiple'" class="app-table__checkbox" :class="{ 'is-checked': allChecked, 'is-indeterminate': indeterminate }">
+                <input type="checkbox" :checked="allChecked" :indeterminate="indeterminate" @change="toggleAll" />
+                <span class="app-table__checkbox-box">
+                  <svg v-if="indeterminate" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round">
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                  <svg v-else-if="allChecked" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </span>
+              </label>
+            </th>
+            <th v-if="showIndex && !hasGroupHeader" class="app-table__th app-table__th--index" :style="stickyStyle('left', selection ? 44 : 0)">{{ indexLabel }}</th>
             <template v-for="col in flatColumns" :key="col.key">
               <th
                 class="app-table__th"
@@ -434,6 +452,8 @@ import AppTooltip from '@/components/common/AppTooltip.vue'
 import TableLoading from '@/components/common/TableLoading.vue'
 
 const { t } = useI18n()
+
+const indexLabel = computed(() => t('common.serialNumber'))
 
 // ============ 类型定义 ============
 export interface TableFilter {
@@ -892,6 +912,17 @@ function clearFilter(columnKeys?: string[]) {
   emit('change', currentSort.value, activeFilters.value)
 }
 
+/**
+ * 静默重置：清除内部排序与筛选状态，不触发任何事件。
+ * 用于「重置按钮」场景——由调用方自行管理过滤/排序业务状态并重新查询，
+ * 这里只负责让表头高亮（排序箭头 / 过滤漏斗）回到初始态。
+ */
+function resetState() {
+  innerSort.value = { key: '', order: null }
+  innerFilters.value = {}
+  filterPanel.value.visible = false
+}
+
 function closeFilterPanel() {
   filterPanel.value.visible = false
   document.removeEventListener('click', onFilterDocClick, true)
@@ -1243,6 +1274,7 @@ defineExpose({
   toggleAllSelection,
   clearSort,
   clearFilter,
+  resetState,
   sort,
   setCurrentRow,
   toggleExpand,

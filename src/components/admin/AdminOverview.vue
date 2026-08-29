@@ -491,14 +491,31 @@ function renderTopModels(): void {
   if (!modelRef.value) return
   const c = axisColors()
   const rows = overview.value!.by_model.slice(0, 8).reverse()
+  const labelOf = (m: (typeof rows)[number]) => m.name || m.model_key
+  const provOf = new Map(rows.map((m) => [labelOf(m), m.provider]))
   const chart = echarts.init(modelRef.value)
   chart.setOption({
-    tooltip: { ...baseTooltip(c.line), trigger: 'axis', axisPointer: { type: 'shadow' } },
+    tooltip: {
+      ...baseTooltip(c.line),
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params: unknown) => {
+        const arr = Array.isArray(params) ? params : [params]
+        const head = arr[0] as { name: string; marker?: string; value: number }
+        const prov = provOf.get(head.name)
+        const lines = [`<b>${head.name}</b>`]
+        if (prov) lines.push(`<span style="opacity:.65;font-size:10px">${prov}</span>`)
+        for (const it of arr as { marker?: string; value: number }[]) {
+          lines.push(`${it.marker ?? ''} Tokens ${fmtTokens(it.value)}`)
+        }
+        return lines.join('<br/>')
+      }
+    },
     grid: { left: 12, right: 46, top: 8, bottom: 8 },
     xAxis: { type: 'value', axisLabel: { color: c.text, formatter: (v: number) => fmtTokens(v) }, splitLine: { lineStyle: { color: c.line, opacity: 0.3 } } },
     yAxis: {
       type: 'category',
-      data: rows.map((m) => m.model_key),
+      data: rows.map(labelOf),
       axisLabel: { color: c.text, width: 120, overflow: 'truncate' },
       axisLine: { show: false },
       axisTick: { show: false }

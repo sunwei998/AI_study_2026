@@ -162,9 +162,20 @@ import AppLoading from '@/components/common/AppLoading.vue'
 import { useToast } from '@/composables/useToast'
 import { formatFileSize } from '@/utils/download'
 
-/** 单文件处理结果：字符串 = 成功详情；warn = 部分成功 */
-export type ImportProcessorResult = string | { message: string; warn?: boolean }
+/** 单文件处理结果：字符串 = 成功详情；warn = 部分成功；created/updated 供全局提示汇总 */
+export type ImportProcessorResult =
+  | string
+  | { message: string; warn?: boolean; created?: number; updated?: number }
 export type ImportProcessor = (file: File) => Promise<ImportProcessorResult>
+
+/** 一次导入结束后的汇总（供父组件做全局提示与列表刷新决策） */
+export interface ImportSummary {
+  success: number
+  warn: number
+  failed: number
+  created: number
+  updated: number
+}
 
 interface ImportItem {
   file: File
@@ -202,7 +213,7 @@ const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
   (e: 'confirm', files: File[]): void
   (e: 'change', files: File[]): void
-  (e: 'done'): void
+  (e: 'done', summary: ImportSummary): void
 }>()
 
 const { t } = useI18n()
@@ -384,6 +395,8 @@ async function start() {
     return
   }
   processing.value = true
+  let created = 0
+  let updated = 0
   for (const item of ready) {
     item.status = 'uploading'
     item.message = ''
@@ -392,6 +405,10 @@ async function start() {
       const isWarn = typeof res === 'object' && res.warn === true
       item.status = isWarn ? 'warn' : 'success'
       item.message = typeof res === 'string' ? res : res.message
+      if (typeof res === 'object') {
+        created += res.created ?? 0
+        updated += res.updated ?? 0
+      }
     } catch (err) {
       item.status = 'error'
       item.message = err instanceof Error ? err.message : t('common.errorOccurred')
@@ -399,7 +416,12 @@ async function start() {
   }
   processing.value = false
   processedOnce.value = true
-  emit('done')
+  const success = items.value.filter((i) => i.status === 'success').length
+  const warn = items.value.filter((i) => i.status === 'warn').length
+  const failed = items.value.filter((i) => i.status === 'error').length
+  emit('done', { success, warn, failed, created, updated })
+  // 成功 / 部分失败 → 关闭弹框（全局提示由父组件负责）；全部失败 → 保持打开查看错误
+  if (failed < items.value.length) emit('update:visible', false)
 }
 
 function tryClose() {

@@ -25,6 +25,7 @@ import { clearToken, getToken } from './token'
 import { notifyUnauthorized } from './unauthorized'
 import { i18n } from '@/locales'
 import { notifyForbidden } from './forbidden'
+import { withAcceptLanguage } from './headers'
 
 const API_BASE = '/api/admin'
 
@@ -56,7 +57,7 @@ function authHeaders(): Record<string, string> {
   if (token) {
     headers.Authorization = `Bearer ${token}`
   }
-  return headers
+  return withAcceptLanguage(headers)
 }
 
 async function parseError(resp: Response): Promise<string> {
@@ -194,6 +195,7 @@ export async function importModelsCsv(file: File): Promise<ModelImportResult> {
   const headers: Record<string, string> = {}
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
+  withAcceptLanguage(headers)
   const resp = await fetch(`${API_BASE}/models/import`, { method: 'POST', headers, body: form })
   if (resp.status === 401) {
     clearToken()
@@ -205,6 +207,26 @@ export async function importModelsCsv(file: File): Promise<ModelImportResult> {
   }
   if (!resp.ok) throw new Error(await parseError(resp))
   return resp.json()
+}
+
+export interface ModelUniquenessResult {
+  model_key_exists: boolean
+  name_exists: boolean
+}
+
+/** 失焦轻量查重：model_key 与 name 均为同供应商内唯一；exclude_id 编辑时排除自身 */
+export function checkModelUniqueness(params: {
+  model_key?: string
+  name?: string
+  provider?: string
+  exclude_id?: number
+}): Promise<ModelUniquenessResult> {
+  const q = new URLSearchParams()
+  if (params.model_key) q.set('model_key', params.model_key)
+  if (params.name) q.set('name', params.name)
+  if (params.provider) q.set('provider', params.provider)
+  if (params.exclude_id) q.set('exclude_id', String(params.exclude_id))
+  return request<ModelUniquenessResult>(`/models/check?${q.toString()}`)
 }
 
 export function fetchAdminUsers(params: PaginationParams = {}): Promise<PaginatedResult<AdminUser>> {
@@ -266,6 +288,31 @@ export function fetchSettings(params: PaginationParams = {}): Promise<PaginatedR
 
 export function updateSetting(key: string, patch: SettingPatch): Promise<{ ok: boolean }> {
   return request(`/settings/${encodeURIComponent(key)}`, { method: 'PATCH', body: JSON.stringify(patch) })
+}
+
+export interface SettingLogItem {
+  id: number
+  setting_key: string
+  content: string
+  operator: string
+  created_at: number
+}
+
+export function deleteSetting(key: string): Promise<{ ok: boolean }> {
+  return request(`/settings/${encodeURIComponent(key)}`, { method: 'DELETE' })
+}
+
+export function fetchSettingLogs(
+  key: string,
+  params: { page?: number; pageSize?: number } = {}
+): Promise<PaginatedResult<SettingLogItem>> {
+  const query = new URLSearchParams()
+  if (params.page) query.set('page', String(params.page))
+  if (params.pageSize) query.set('page_size', String(params.pageSize))
+  const qs = query.toString()
+  return request<PaginatedResult<SettingLogItem>>(
+    `/settings/${encodeURIComponent(key)}/logs${qs ? `?${qs}` : ''}`
+  )
 }
 
 // ============ 通用维表（dim_tables / dim_values） ============

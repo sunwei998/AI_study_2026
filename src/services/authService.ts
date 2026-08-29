@@ -1,6 +1,7 @@
 import type { AuthUser, ProfileUpdatePayload } from '@/types/admin'
 import { clearToken, getToken } from './token'
 import { notifyUnauthorized } from './unauthorized'
+import { withAcceptLanguage } from './headers'
 
 const API_BASE = '/api'
 
@@ -10,7 +11,7 @@ function bearerHeaders(): Record<string, string> {
   if (token) {
     headers.Authorization = `Bearer ${token}`
   }
-  return headers
+  return withAcceptLanguage(headers)
 }
 
 async function parseError(resp: Response): Promise<string> {
@@ -25,7 +26,7 @@ async function parseError(resp: Response): Promise<string> {
 export async function login(username: string, password: string): Promise<{ token: string; user: AuthUser }> {
   const resp = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: withAcceptLanguage({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ username, password })
   })
   if (!resp.ok) {
@@ -40,7 +41,7 @@ export async function register(
 ): Promise<{ token: string; user: AuthUser }> {
   const resp = await fetch(`${API_BASE}/auth/register`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: withAcceptLanguage({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ username, password })
   })
   if (!resp.ok) {
@@ -50,7 +51,9 @@ export async function register(
 }
 
 export async function checkUsername(username: string): Promise<boolean> {
-  const resp = await fetch(`${API_BASE}/auth/check-username?username=${encodeURIComponent(username)}`)
+  const resp = await fetch(`${API_BASE}/auth/check-username?username=${encodeURIComponent(username)}`, {
+    headers: withAcceptLanguage()
+  })
   if (!resp.ok) {
     throw new Error(await parseError(resp))
   }

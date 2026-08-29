@@ -548,12 +548,33 @@ const openEditTable = (tb: DimTable) => {
 const submitTable = async () => {
   if (tableForm.value.submitting) return
   const f = tableForm.value
-  if (!f.code.trim() && !f.isEdit) {
-    f.error = t('console.dimTable.tableCodeRequired')
-    return
+  // 维表编码：新建时必填 + 格式 + 长度（编辑时编码不可改，不校验）
+  if (!f.isEdit) {
+    if (!f.code.trim()) {
+      f.error = t('console.dimTable.tableCodeRequired')
+      return
+    }
+    if (f.code.trim().length > 64) {
+      f.error = t('console.dimTable.codeTooLong')
+      return
+    }
+    if (!CODE_RE.test(f.code.trim())) {
+      f.error = t('console.dimTable.codeFormat')
+      return
+    }
   }
+  // 维表名称：必填 + 长度
   if (!f.name.trim()) {
     f.error = t('console.dimTable.tableNameRequired')
+    return
+  }
+  if (f.name.trim().length > 128) {
+    f.error = t('console.dimTable.nameTooLong')
+    return
+  }
+  // 说明：长度限制
+  if (f.description.trim().length > 255) {
+    f.error = t('console.dimTable.tableDescTooLong')
     return
   }
   f.submitting = true

@@ -76,6 +76,18 @@
               <button class="row-btn" :title="$t('console.save')" @click="save(row)">
                 <AppIcon name="lucide:save" :size="15" />
               </button>
+              <button class="row-btn" :title="$t('console.logs')" @click="openLogs(row)">
+                <AppIcon name="lucide:history" :size="15" />
+              </button>
+              <button
+                class="row-btn row-btn--danger"
+                :class="{ 'is-disabled': row.enabled }"
+                :disabled="row.enabled"
+                :title="row.enabled ? $t('console.disableBeforeDeleteSetting') : $t('console.delete')"
+                @click="remove(row)"
+              >
+                <AppIcon name="lucide:trash-2" :size="15" />
+              </button>
             </div>
           </template>
         </AppTable>
@@ -124,6 +136,46 @@
           </div>
         </Transition>
       </Teleport>
+
+      <Teleport to="body">
+        <Transition name="confirm" appear>
+          <div v-if="logsVisible" class="form-overlay" @click.self="closeLogs">
+            <div class="form-modal form-modal--logs" role="dialog" aria-modal="true">
+              <span class="form-accent-line"></span>
+              <h3 class="form-title">{{ $t('console.settingLogsTitle') }}</h3>
+              <div class="logs-subtitle">{{ logsKey }}</div>
+
+              <div class="logs-table">
+                <AppTable
+                  :columns="logColumns"
+                  :data="logs"
+                  :loading="logsLoading"
+                  loading-type="skeleton"
+                  :skeleton-rows="5"
+                  :empty-text="$t('console.noLogs')"
+                  row-key="id"
+                  size="small"
+                  :current-page="logsPage"
+                  :page-size="logsPageSize"
+                  show-index
+                  :max-height="360"
+                />
+                <Pagination
+                  :total="logsTotal"
+                  v-model:page="logsPage"
+                  v-model:page-size="logsPageSize"
+                />
+              </div>
+
+              <div class="form-actions">
+                <button type="button" class="form-btn form-btn--ghost" @click="closeLogs">
+                  {{ $t('confirm.close') }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </Transition>
+      </Teleport>
     </div>
   </div>
 </template>
@@ -132,8 +184,15 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SettingItem } from '@/types/admin'
-import { fetchSettings, updateSetting } from '@/services/adminService'
+import {
+  deleteSetting,
+  fetchSettingLogs,
+  fetchSettings,
+  updateSetting,
+  type SettingLogItem
+} from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
+import { formatDateTime } from '@/utils/format'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import Pagination from '@/components/common/Pagination.vue'
@@ -148,10 +207,12 @@ const { showToast } = useToast()
 const auth = useAuthStore()
 
 // ============ 行内编辑校验 ============
+// key 只能英文+下划线、长度 < 64；value 长度 < 5000；remark 长度 ≤ 255
+const KEY_RE = /^[A-Za-z_]+$/
 const validateRow = (s: SettingItem) => {
   const e: Partial<Record<'value' | 'remark', string>> = {}
   // value 允许为空（部分设置项可空），仅限长度
-  if (String(s.value ?? '').length > 2000) e.value = t('console.valueTooLong')
+  if (String(s.value ?? '').length >= 5000) e.value = t('console.valueTooLong')
   if (String(s.remark ?? '').length > 255) e.remark = t('console.remarkTooLong')
   return e
 }
@@ -289,6 +350,72 @@ const toggle = async (s: SettingItem) => {
   }
 }
 
+const remove = async (s: SettingItem) => {
+  if (s.enabled) return
+  if (!window.confirm(t('console.deleteSettingConfirm', { key: s.key }))) return
+  try {
+    await deleteSetting(s.key)
+    showToast(t('console.deleted'), 'success')
+    await load()
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : t('common.errorOccurred')
+  }
+}
+
+// ============ 操作日志 ============
+const logsVisible = ref(false)
+const logsLoading = ref(false)
+const logsKey = ref('')
+const logs = ref<SettingLogItem[]>([])
+const logsTotal = ref(0)
+const logsPage = ref(1)
+const logsPageSize = ref(10)
+
+const logColumns = computed<TableColumn[]>(() => [
+  { key: 'content', title: t('console.logContent'), width: 320 },
+  { key: 'operator', title: t('console.operator'), width: 120 },
+  { key: 'created_at', title: t('console.operateTime'), width: 180, formatter: (row) => formatDateTime(row.created_at) },
+])
+
+const loadLogs = async () => {
+  if (!logsKey.value) return
+  logsLoading.value = true
+  try {
+    const res = await fetchSettingLogs(logsKey.value, {
+      page: logsPage.value,
+      pageSize: logsPageSize.value,
+    })
+    logs.value = res.items
+    logsTotal.value = res.total
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : t('common.errorOccurred')
+  } finally {
+    logsLoading.value = false
+  }
+}
+
+const openLogs = (s: SettingItem) => {
+  logsKey.value = s.key
+  logsPage.value = 1
+  logsPageSize.value = 10
+  logs.value = []
+  logsTotal.value = 0
+  logsVisible.value = true
+  void loadLogs()
+}
+
+const closeLogs = () => {
+  logsVisible.value = false
+  logsKey.value = ''
+  logs.value = []
+}
+
+watch(logsPage, loadLogs)
+watch(logsPageSize, () => {
+  logsPage.value = 1
+  loadLogs()
+})
+
 const addVisible = ref(false)
 const addSubmitting = ref(false)
 const addError = ref('')
@@ -308,8 +435,26 @@ const submitAdd = async () => {
   if (addSubmitting.value) return
   addError.value = ''
   const key = newKey.value.trim()
+  // 键名：必填 + 格式 + 长度
   if (!key) {
     addError.value = t('console.keyRequired')
+    return
+  }
+  if (key.length >= 64) {
+    addError.value = t('console.keyTooLong')
+    return
+  }
+  if (!KEY_RE.test(key)) {
+    addError.value = t('console.keyFormat')
+    return
+  }
+  // 配置值 / 备注：长度限制
+  if (String(newValue.value ?? '').length >= 5000) {
+    addError.value = t('console.valueTooLong')
+    return
+  }
+  if (String(newRemark.value ?? '').trim().length > 255) {
+    addError.value = t('console.remarkTooLong')
     return
   }
   addSubmitting.value = true
@@ -466,6 +611,26 @@ const submitAdd = async () => {
   box-shadow: 0 0 8px var(--color-glow);
 }
 
+.row-btn--danger:hover {
+  color: #ff5b6a;
+  border-color: #ff5b6a;
+  box-shadow: 0 0 8px rgba(255, 77, 94, 0.4);
+}
+
+.row-btn.is-disabled,
+.row-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  filter: saturate(0.4);
+}
+
+.row-btn.is-disabled:hover,
+.row-btn:disabled:hover {
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+  box-shadow: none;
+}
+
 .form-overlay {
   position: fixed;
   inset: 0;
@@ -513,6 +678,25 @@ const submitAdd = async () => {
   letter-spacing: 0.1em;
   color: var(--color-text);
   text-shadow: 0 0 16px var(--color-glow);
+}
+
+.form-modal--logs {
+  width: min(780px, 100%);
+}
+
+.logs-subtitle {
+  margin: -10px 0 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-primary);
+  text-shadow: 0 0 12px var(--color-glow);
+  word-break: break-all;
+}
+
+.logs-table {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .form-body {

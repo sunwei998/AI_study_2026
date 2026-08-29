@@ -11,6 +11,9 @@
   --color-overlay: rgba(7, 10, 26, 0.45);
   --color-grid: rgba(0, 229, 255, 0.07);
   --color-glow: rgba(0, 229, 255, 0.4);
+  --color-success: #00e676;
+  --color-warning: #ffb74d;
+  --color-danger: #ff5b6a;
 
   --font-display: 'Orbitron', 'Rajdhani', 'Segoe UI', sans-serif;
   --font-body: 'Rajdhani', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei',

@@ -2,11 +2,12 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TransferRecord, TransferType } from '@/types/admin'
-import { downloadTransfer, fetchTransfers } from '@/services/adminService'
+import { downloadTransfer, exportModelsCsv, fetchTransfers } from '@/services/adminService'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import AppTag, { type AppTagStatus } from '@/components/common/AppTag.vue'
 import Pagination from '@/components/common/Pagination.vue'
-import { formatFileSize } from '@/utils/download'
+import { downloadBlob, formatFileSize } from '@/utils/download'
 import { useToast } from '@/composables/useToast'
 
 const props = defineProps<{ type: TransferType }>()
@@ -30,6 +31,25 @@ function formatTime(ts: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
+// 记录状态 → AppTag 状态/文案：导入 success/partial/failed，导出 success/failed
+function statusTag(row: TransferRecord): { status: AppTagStatus; label: string } {
+  switch (row.status) {
+    case 'success':
+      return { status: 'success', label: t('console.statusSuccess') }
+    case 'partial':
+      return { status: 'warning', label: t('console.statusPartial') }
+    case 'failed':
+      return { status: 'error', label: t('console.statusFailed') }
+    default:
+      return { status: 'none', label: t('console.statusUnknown') }
+  }
+}
+
+// 失败/部分失败的导入记录：下载文件带错误分析列
+function hasErrors(row: TransferRecord): boolean {
+  return isImport.value && (row.status === 'failed' || row.status === 'partial')
+}
+
 const columns = computed<TableColumn[]>(() => [
   {
     key: 'filename',
@@ -42,6 +62,13 @@ const columns = computed<TableColumn[]>(() => [
     title: t('console.transferOperator'),
     width: 140,
     formatter: (row: TransferRecord) => row.username || '-'
+  },
+  {
+    key: 'status',
+    title: t('console.transferStatus'),
+    width: 110,
+    align: 'center',
+    formatter: (row: TransferRecord) => statusTag(row).label
   },
   {
     key: 'file_size',
@@ -95,16 +122,35 @@ watch(
 )
 
 const downloading = ref<number | null>(null)
+
+// 导入：服务端保留源文件，可下载；导出：不存产物，始终可重新生成
+function canDownload(row: TransferRecord): boolean {
+  return isImport.value ? row.has_file : true
+}
+
 async function onDownload(row: TransferRecord) {
-  if (!row.has_file || downloading.value !== null) return
+  if (!canDownload(row) || downloading.value !== null) return
   downloading.value = row.id
   try {
-    await downloadTransfer(row.id, row.filename)
+    if (isImport.value) {
+      await downloadTransfer(row.id, row.filename)
+    } else {
+      const blob = await exportModelsCsv()
+      downloadBlob(row.filename, blob)
+    }
   } catch (err) {
     showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
   } finally {
     downloading.value = null
   }
+}
+
+function downloadTitle(row: TransferRecord): string {
+  if (isImport.value) {
+    if (!row.has_file) return t('console.noSourceFile')
+    return hasErrors(row) ? t('console.downloadWithErrors') : t('console.downloadFile')
+  }
+  return t('console.downloadRegenerate')
 }
 
 load()
@@ -132,12 +178,18 @@ load()
           </span>
         </template>
 
+        <template #column-status="{ row }">
+          <AppTag :status="statusTag(row).status" size="small">
+            {{ statusTag(row).label }}
+          </AppTag>
+        </template>
+
         <template #column-actions="{ row }">
           <button
             class="row-btn"
-            :class="{ 'is-disabled': !row.has_file }"
-            :title="row.has_file ? $t('console.downloadFile') : $t('console.noSourceFile')"
-            :disabled="!row.has_file || downloading !== null"
+            :class="{ 'is-disabled': !canDownload(row) }"
+            :title="downloadTitle(row)"
+            :disabled="!canDownload(row) || downloading !== null"
             @click="onDownload(row)"
           >
             <AppIcon
