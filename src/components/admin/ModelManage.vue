@@ -146,7 +146,7 @@
 
             <form class="form-body" @submit.prevent="submitForm">
               <label class="form-field">
-                <span class="form-label">model_key</span>
+                <span class="form-label">{{ $t('console.modelKey') }}</span>
                 <AppInput
                   v-model="form.model_key"
                   type="text"
@@ -156,7 +156,7 @@
                 <span v-if="keyError" class="form-error">{{ keyError }}</span>
               </label>
               <label class="form-field">
-                <span class="form-label">{{ $t('console.name') }}</span>
+                <span class="form-label">{{ $t('console.nameZh') }}</span>
                 <AppInput
                   v-model="form.name"
                   type="text"
@@ -164,6 +164,16 @@
                   @blur="onNameBlur"
                 />
                 <span v-if="nameError" class="form-error">{{ nameError }}</span>
+              </label>
+              <label class="form-field">
+                <span class="form-label">{{ $t('console.nameEn') }}</span>
+                <AppInput
+                  v-model="form.name_en"
+                  type="text"
+                  :placeholder="$t('console.nameEnPlaceholder')"
+                  @blur="onNameEnBlur"
+                />
+                <span v-if="nameEnError" class="form-error">{{ nameEnError }}</span>
               </label>
               <div class="form-row">
                 <label class="form-field">
@@ -248,7 +258,6 @@ import {
   exportModelsCsv,
   fetchAdminModel,
   fetchAdminModels,
-  fetchDimValuesByCode,
   importModelsCsv,
   updateAdminModel
 } from '@/services/adminService'
@@ -262,10 +271,15 @@ import Pagination from '@/components/common/Pagination.vue'
 import AppInput from '@/components/common/AppInput.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
-import { DEFAULT_PROVIDERS, type ModelProvider } from '@/config/models'
+import { useProviders } from '@/composables/useProviders'
 import { useToast } from '@/composables/useToast'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+/** 名称按语言环境渲染：英文优先 name_en，缺失回退中文名称 */
+function displayName(m: { name: string; name_en?: string }): string {
+  return locale.value === 'en' ? m.name_en || m.name : m.name
+}
 const { showToast } = useToast()
 const auth = useAuthStore()
 
@@ -279,8 +293,8 @@ const loading = ref(true)
 const error = ref('')
 const total = ref(0)
 
-// 模型提供方数据字典：默认取本地字典，若后台「通用维表」model_provider 已配置则覆盖
-const providers = ref<ModelProvider[]>(DEFAULT_PROVIDERS)
+// 模型提供方数据字典：维表接口（按语言返回 name）优先，未配置时回退本地默认字典
+const { providers, providerName } = useProviders()
 
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -316,26 +330,17 @@ const load = async () => {
   loading.value = true
   error.value = ''
   try {
-    const [res, dimValues] = await Promise.all([
-      fetchAdminModels({
-        page: currentPage.value,
-        pageSize: pageSize.value,
-        enabled: enabledFilter.value === null ? undefined : enabledFilter.value,
-        free: freeFilter.value === null ? undefined : freeFilter.value,
-        providers: providerFilter.value.length ? providerFilter.value : undefined,
-        sort: sortFilter.value.order ? sortFilter.value.key : undefined,
-        order: sortFilter.value.order ?? undefined
-      }),
-      fetchDimValuesByCode('model_provider')
-    ])
+    const res = await fetchAdminModels({
+      page: currentPage.value,
+      pageSize: pageSize.value,
+      enabled: enabledFilter.value === null ? undefined : enabledFilter.value,
+      free: freeFilter.value === null ? undefined : freeFilter.value,
+      providers: providerFilter.value.length ? providerFilter.value : undefined,
+      sort: sortFilter.value.order ? sortFilter.value.key : undefined,
+      order: sortFilter.value.order ?? undefined
+    })
     models.value = res.items
     total.value = res.total
-    // 维表返回启用取值（[{code,name}]），映射为 {id,name}；为空时回退本地默认字典
-    if (dimValues.length) {
-      providers.value = dimValues.map((d) => ({ id: d.code, name: d.name }))
-    } else {
-      providers.value = DEFAULT_PROVIDERS
-    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
@@ -394,14 +399,22 @@ const columns = computed<TableColumn[]>(() => [
     // 后端返回 1/0，筛选值是布尔，需宽松比较
     filterMethod: (v: any, row: AdminModel) => Boolean(row.enabled) === Boolean(v)
   },
-  { key: 'model_key', title: 'model_key', width: 210, ellipsis: true, sortable: true, className: 'cell-key' },
-  { key: 'name', title: t('console.name'), width: 150, ellipsis: true, sortable: true },
+  { key: 'model_key', title: t('console.modelKey'), width: 210, ellipsis: true, sortable: true, className: 'cell-key' },
+  {
+    key: 'name',
+    title: t('console.name'),
+    width: 150,
+    ellipsis: true,
+    sortable: true,
+    formatter: (row: AdminModel) => displayName(row)
+  },
   {
     key: 'provider',
     title: t('console.provider'),
     width: 120,
     ellipsis: true,
     sortable: true,
+    formatter: (row: AdminModel) => providerName(row.provider),
     filterable: true,
     filterType: 'checkbox',
     filters: providers.value.map((p) => ({ text: p.name, value: p.id }))
@@ -470,6 +483,7 @@ function emptyForm(): ModelPayload {
   return {
     model_key: '',
     name: '',
+    name_en: '',
     provider: 'openai',
     free: false,
     vision: false,
@@ -480,15 +494,11 @@ function emptyForm(): ModelPayload {
   }
 }
 
-function providerName(id: string): string {
-  const p = providers.value.find((x) => x.id === id)
-  return p?.name ?? id
-}
-
 function toPayload(m: AdminModel): ModelPayload {
   return {
     model_key: m.model_key,
     name: m.name,
+    name_en: m.name_en,
     provider: m.provider,
     free: m.free,
     vision: m.vision,
@@ -506,6 +516,7 @@ const openCreate = () => {
   formError.value = ''
   keyError.value = ''
   nameError.value = ''
+  nameEnError.value = ''
   formVisible.value = true
 }
 
@@ -515,6 +526,7 @@ const openEdit = async (m: AdminModel) => {
   formError.value = ''
   keyError.value = ''
   nameError.value = ''
+  nameEnError.value = ''
   formVisible.value = true
   try {
     const detail = await fetchAdminModel(m.id)
@@ -525,9 +537,12 @@ const openEdit = async (m: AdminModel) => {
   }
 }
 
-// —— 失焦轻量查重：model_key 同供应商内唯一；name 全局唯一（编辑排除自身）——
+// —— 失焦轻量查重：model_key 同提供商内唯一；name / name_en 全局唯一（编辑排除自身）——
 const keyError = ref('')
 const nameError = ref('')
+const nameEnError = ref('')
+
+const CJK_RE = /[㐀-䶿一-鿿]/
 
 async function onKeyBlur() {
   keyError.value = ''
@@ -557,6 +572,26 @@ async function onNameBlur() {
   }
 }
 
+async function onNameEnBlur() {
+  nameEnError.value = ''
+  const nameEn = form.value.name_en.trim()
+  if (!nameEn) return
+  if (CJK_RE.test(nameEn)) {
+    nameEnError.value = t('console.nameEnHasChinese')
+    return
+  }
+  if (nameEn.length > 100) {
+    nameEnError.value = t('console.nameEnTooLong')
+    return
+  }
+  try {
+    const r = await checkModelUniqueness({ name_en: nameEn, exclude_id: editingId.value ?? 0 })
+    if (r.name_en_exists) nameEnError.value = t('console.nameEnExists')
+  } catch {
+    /* 网络异常不阻塞输入 */
+  }
+}
+
 watch(
   () => form.value.model_key,
   () => (keyError.value = '')
@@ -565,17 +600,22 @@ watch(
   () => form.value.name,
   () => (nameError.value = '')
 )
+watch(
+  () => form.value.name_en,
+  () => (nameEnError.value = '')
+)
 
 const submitForm = async () => {
   if (formSubmitting.value) return
   formError.value = ''
   form.value.model_key = form.value.model_key.trim()
   form.value.name = form.value.name.trim()
+  form.value.name_en = form.value.name_en.trim()
   if (!form.value.model_key || !form.value.name) {
     formError.value = t('console.fillRequired')
     return
   }
-  if (keyError.value || nameError.value) return
+  if (keyError.value || nameError.value || nameEnError.value) return
   formSubmitting.value = true
   try {
     if (formMode.value === 'create') {

@@ -113,6 +113,20 @@
             />
           </template>
 
+          <template v-if="isModelProvider" #column-name_en="{ row }">
+            <AppInput
+              v-model="row.name_en"
+              type="text"
+              size="small"
+              class="dim-cell-input"
+              :disabled="!canManageSettings"
+              :error="!!fieldError(row.id, 'name_en')"
+              :title="fieldError(row.id, 'name_en') || undefined"
+              @blur="check(row)"
+              @keydown.enter="save(row)"
+            />
+          </template>
+
           <template #column-sort_order="{ row }">
             <AppInput
               v-model="row.sort_order"
@@ -238,6 +252,10 @@
                 <span class="form-label">{{ t('console.dimTable.name') }}</span>
                 <input v-model="valueForm.name" type="text" class="form-input" :placeholder="t('console.dimTable.valueNamePlaceholder')" />
               </label>
+              <label v-if="isModelProvider" class="form-field">
+                <span class="form-label">{{ t('console.dimTable.nameEn') }}</span>
+                <input v-model="valueForm.name_en" type="text" class="form-input" :placeholder="t('console.dimTable.nameEnPlaceholder')" />
+              </label>
               <label class="form-field">
                 <span class="form-label">{{ t('console.dimTable.sort') }}</span>
                 <input v-model="valueForm.sort_order" type="text" class="form-input" inputmode="numeric" />
@@ -314,6 +332,8 @@ const tables = ref<DimTable[]>([])
 const loadingTables = ref(true)
 const selectedId = ref<number | null>(null)
 const selected = computed(() => tables.value.find((tb) => tb.id === selectedId.value) || null)
+// 仅模型提供商维表展示英文名称列并做英文名校验
+const isModelProvider = computed(() => selected.value?.code === 'model_provider')
 
 const values = ref<DimValue[]>([])
 const loadingValues = ref(false)
@@ -392,6 +412,9 @@ watch(pageSize, () => {
 const columns = computed<TableColumn[]>(() => [
   { key: 'code', title: t('console.dimTable.code'), width: 200, ellipsis: true, sortable: true, className: 'cell-code' },
   { key: 'name', title: t('console.dimTable.name'), width: 240, ellipsis: true, sortable: true },
+  ...(isModelProvider.value
+    ? [{ key: 'name_en', title: t('console.dimTable.nameEn'), width: 200, ellipsis: true, sortable: true }]
+    : []),
   { key: 'sort_order', title: t('console.dimTable.sort'), width: 90, align: 'center', sortable: true },
   {
     key: 'enabled',
@@ -423,13 +446,25 @@ const columns = computed<TableColumn[]>(() => [
 // ============ 行内编辑校验 ============
 const CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/
 const SORT_RE = /^\d{1,6}$/
+// 英文名称禁止出现汉字（CJK 统一表意文字）
+const CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/
+
+/** 模型提供商维表的英文名校验：必填 + 不允许中文 */
+const validateNameEn = (v: unknown): string | undefined => {
+  if (!isModelProvider.value) return undefined
+  const val = String(v ?? '').trim()
+  if (!val) return t('console.dimTable.nameEnRequired')
+  if (val.length > 128) return t('console.dimTable.nameTooLong')
+  if (CJK_RE.test(val)) return t('console.dimTable.nameEnNoChinese')
+  return undefined
+}
 
 /** 排序值收敛为 number；非法（字母/中文/负数/小数/超长/空）返回 null，调用方据此拒绝提交 */
 const parseSort = (v: unknown): number | null =>
   SORT_RE.test(String(v ?? '').trim()) ? Number(v) : null
 
 const validateRow = (row: DimValue) => {
-  const e: Partial<Record<'code' | 'name' | 'sort_order' | 'remark', string>> = {}
+  const e: Partial<Record<'code' | 'name' | 'name_en' | 'sort_order' | 'remark', string>> = {}
   const code = String(row.code ?? '').trim()
   const name = String(row.name ?? '').trim()
   if (!code) e.code = t('console.dimTable.codeRequired')
@@ -437,6 +472,8 @@ const validateRow = (row: DimValue) => {
   else if (!CODE_RE.test(code)) e.code = t('console.dimTable.codeFormat')
   if (!name) e.name = t('console.dimTable.nameRequired')
   else if (name.length > 128) e.name = t('console.dimTable.nameTooLong')
+  const nameEnErr = validateNameEn(row.name_en)
+  if (nameEnErr) e.name_en = nameEnErr
   if (!SORT_RE.test(String(row.sort_order ?? '').trim())) e.sort_order = t('console.dimTable.sortInvalid')
   if (String(row.remark ?? '').length > 255) e.remark = t('console.dimTable.remarkTooLong')
   return e
@@ -458,6 +495,7 @@ const save = async (row: DimValue) => {
     await updateDimValue(selectedId.value, row.id, {
       code: String(row.code).trim(),
       name: String(row.name).trim(),
+      name_en: String(row.name_en ?? '').trim(),
       sort_order: parseSort(row.sort_order)!,
       enabled: row.enabled,
       remark: String(row.remark ?? '')
@@ -618,6 +656,7 @@ const valueForm = ref({
   visible: false,
   code: '',
   name: '',
+  name_en: '',
   sort_order: '0',
   enabled: true,
   remark: '',
@@ -630,6 +669,7 @@ const openNewValue = () => {
     visible: true,
     code: '',
     name: '',
+    name_en: '',
     sort_order: '0',
     enabled: true,
     remark: '',
@@ -661,6 +701,11 @@ const submitValue = async () => {
     f.error = t('console.dimTable.nameTooLong')
     return
   }
+  const nameEnErr = validateNameEn(f.name_en)
+  if (nameEnErr) {
+    f.error = nameEnErr
+    return
+  }
   if (!SORT_RE.test(String(f.sort_order ?? '').trim())) {
     f.error = t('console.dimTable.sortInvalid')
     return
@@ -675,6 +720,7 @@ const submitValue = async () => {
     await createDimValue(selectedId.value, {
       code: f.code.trim(),
       name: f.name.trim(),
+      name_en: String(f.name_en ?? '').trim(),
       sort_order: Number(String(f.sort_order).trim()),
       enabled: f.enabled,
       remark: f.remark.trim()

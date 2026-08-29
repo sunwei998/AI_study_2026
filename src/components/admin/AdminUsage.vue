@@ -20,6 +20,16 @@
         </section>
       </div>
       <div class="chart-grid">
+        <section class="chart-card">
+          <h3 class="chart-title">{{ $t('console.byProviderUsage') }}</h3>
+          <div ref="provRoseRef" class="chart-box"></div>
+        </section>
+        <section class="chart-card">
+          <h3 class="chart-title">{{ $t('console.byCity') }}</h3>
+          <div ref="cityTreeRef" class="chart-box"></div>
+        </section>
+      </div>
+      <div class="chart-grid">
         <section class="chart-card gauge-card">
           <AppGauge
             :value="gaugeValue"
@@ -46,7 +56,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts/core'
-import { BarChart, LineChart } from 'echarts/charts'
+import { BarChart, LineChart, PieChart, TreemapChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { useI18n } from 'vue-i18n'
@@ -57,10 +67,12 @@ import { createRafCoalescer } from '@/utils/resize'
 import AppLoading from '@/components/common/AppLoading.vue'
 import ChartLoading from '@/components/common/ChartLoading.vue'
 import AppGauge from '@/components/common/AppGauge.vue'
+import { useProviders } from '@/composables/useProviders'
 
-echarts.use([BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
+echarts.use([BarChart, LineChart, PieChart, TreemapChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 
 const { t, locale } = useI18n()
+const { providerName } = useProviders()
 const chatStore = useChatStore()
 
 const usage = ref<AdminUsage | null>(null)
@@ -70,6 +82,8 @@ const error = ref('')
 const dailyRef = ref<HTMLDivElement | null>(null)
 const modelRef = ref<HTMLDivElement | null>(null)
 const userRef = ref<HTMLDivElement | null>(null)
+const provRoseRef = ref<HTMLDivElement | null>(null)
+const cityTreeRef = ref<HTMLDivElement | null>(null)
 const rootRef = ref<HTMLDivElement | null>(null)
 
 let charts: echarts.ECharts[] = []
@@ -92,6 +106,19 @@ function dayToLabel(day: number): string {
   const d = new Date(day * 86400000)
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+function pieColors(): string[] {
+  return [
+    cssVar('--color-primary', '#00e5ff'),
+    cssVar('--color-accent', '#7c5cff'),
+    '#ffb74d',
+    '#ff5b6a',
+    '#34d399',
+    '#60a5fa',
+    '#e879f9',
+    '#94a3b8'
+  ]
 }
 
 function render() {
@@ -132,7 +159,8 @@ function render() {
 
   if (modelRef.value) {
     const byModel = usage.value.by_model.slice(0, 10)
-    const labelOf = (m: (typeof byModel)[number]) => m.name || m.model_key
+    const labelOf = (m: (typeof byModel)[number]) =>
+      locale.value === 'en' ? m.name_en || m.name || m.model_key : m.name || m.model_key
     const provOf = new Map(byModel.map((m) => [labelOf(m), m.provider]))
     const chart = echarts.init(modelRef.value)
     chart.setOption({
@@ -147,7 +175,7 @@ function render() {
           const head = arr[0] as { name: string; marker?: string; value: number }
           const prov = provOf.get(head.name)
           const lines = [`<b>${head.name}</b>`]
-          if (prov) lines.push(`<span style="opacity:.65;font-size:10px">${prov}</span>`)
+          if (prov) lines.push(`<span style="opacity:.65;font-size:10px">${providerName(prov)}</span>`)
           for (const it of arr as { marker?: string; value: number }[]) {
             lines.push(`${it.marker ?? ''} Tokens ${formatTokens(it.value)}`)
           }
@@ -204,6 +232,110 @@ function render() {
           data: byUser.map((u) => u.total),
           itemStyle: { borderRadius: [0, 4, 4, 0] },
           label: { show: true, position: 'right', color: c.text, fontSize: 10, formatter: (p: { value: number }) => formatTokens(p.value) }
+        }
+      ]
+    })
+    charts.push(chart)
+  }
+
+  // 按提供商用量：南丁格尔玫瑰图（半径编码 tokens），主题调色板
+  if (provRoseRef.value) {
+    const rows = usage.value.by_provider.slice(0, 10)
+    const totalAll = rows.reduce((s, r) => s + r.total, 0) || 1
+    const chart = echarts.init(provRoseRef.value)
+    chart.setOption({
+      color: pieColors(),
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: cssVar('--color-surface', '#0e1430'),
+        borderColor: c.line,
+        textStyle: { color: cssVar('--color-text', '#e6f1ff') },
+        formatter: (p: { dataIndex: number }) => {
+          const d = rows[p.dataIndex]
+          if (!d) return ''
+          const pct = ((d.total / totalAll) * 100).toFixed(1)
+          return [
+            `<b>${providerName(d.provider)}</b>`,
+            `Tokens ${formatTokens(d.total)}（${pct}%）`,
+            `${t('console.requests')} ${d.requests.toLocaleString()}`
+          ].join('<br/>')
+        }
+      },
+      series: [
+        {
+          type: 'pie',
+          roseType: 'area',
+          radius: ['16%', '72%'],
+          center: ['50%', '50%'],
+          itemStyle: { borderColor: 'rgba(8,8,18,0.6)', borderWidth: 1, borderRadius: 4 },
+          label: { color: c.text, fontSize: 10 },
+          emphasis: { label: { fontWeight: 'bold' } },
+          data: rows.map((r) => ({ name: providerName(r.provider), value: r.total }))
+        }
+      ]
+    })
+    charts.push(chart)
+  }
+
+  // 按地区用量：省 > 市 两级矩形树图，市级聚合
+  if (cityTreeRef.value) {
+    const rows = usage.value.by_city
+    const byProv = new Map<string, typeof rows>()
+    for (const r of rows) {
+      const arr = byProv.get(r.province) ?? []
+      arr.push(r)
+      byProv.set(r.province, arr)
+    }
+    const data = [...byProv.entries()]
+      .map(([prov, cities]) => ({
+        name: prov,
+        children: cities.map((ct) => ({
+          name: ct.city,
+          value: ct.total,
+          requests: ct.requests,
+          province: prov
+        }))
+      }))
+      .sort((a, b) => (b.children.reduce((s, x) => s + x.value, 0)) - (a.children.reduce((s, x) => s + x.value, 0)))
+    const chart = echarts.init(cityTreeRef.value)
+    chart.setOption({
+      color: pieColors(),
+      tooltip: {
+        backgroundColor: cssVar('--color-surface', '#0e1430'),
+        borderColor: c.line,
+        textStyle: { color: cssVar('--color-text', '#e6f1ff') },
+        formatter: (p: { data: { name: string; value: number; requests?: number; province?: string; children?: unknown[] } }) => {
+          const d = p.data
+          if (d.children) {
+            return [`<b>${d.name}</b>`, `Tokens ${formatTokens(d.value)}`].join('<br/>')
+          }
+          return [
+            `<b>${d.name}</b>`,
+            `<span style="opacity:.65;font-size:10px">${d.province ?? ''}</span>`,
+            `Tokens ${formatTokens(d.value)}`,
+            `${t('console.requests')} ${Number(d.requests ?? 0).toLocaleString()}`
+          ].join('<br/>')
+        }
+      },
+      series: [
+        {
+          type: 'treemap',
+          width: '100%',
+          height: '100%',
+          roam: false,
+          nodeClick: false,
+          breadcrumb: { show: false },
+          label: { color: '#e6f1ff', fontSize: 10, formatter: '{b}' },
+          itemStyle: {
+            borderColor: cssVar('--color-background', '#070a1a'),
+            borderWidth: 2,
+            gapWidth: 1
+          },
+          levels: [
+            { itemStyle: { borderWidth: 2, gapWidth: 2 } },
+            { itemStyle: { gapWidth: 1 }, colorSaturation: [0.35, 0.62] }
+          ],
+          data
         }
       ]
     })

@@ -44,10 +44,10 @@
         </section>
         <section class="ov-panel">
           <h3 class="ov-panel-title">
-            <AppIcon name="lucide:pie-chart" :size="16" />
-            {{ $t('console.byAge') }}
+            <AppIcon name="lucide:boxes" :size="16" />
+            {{ $t('console.byProvider') }}
           </h3>
-          <div ref="ageRef" class="ov-chart ov-chart--donut"></div>
+          <div ref="provDistRef" class="ov-chart ov-chart--donut"></div>
         </section>
         <section class="ov-panel">
           <h3 class="ov-panel-title">
@@ -131,10 +131,12 @@ import ChartLoading from '@/components/common/ChartLoading.vue'
 import { avatarSrc } from '@/utils/avatar'
 import { createDebounced, createRafCoalescer } from '@/utils/resize'
 import cloud from 'd3-cloud'
+import { useProviders } from '@/composables/useProviders'
 
 echarts.use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, LegendComponent, LegendScrollComponent, CanvasRenderer])
 
 const { t, locale } = useI18n()
+const { providerName } = useProviders()
 const chatStore = useChatStore()
 
 const overview = ref<AdminOverview | null>(null)
@@ -159,7 +161,7 @@ const wcPeriodIndex = computed(() => Math.max(0, WC_PERIODS.findIndex((p) => p.k
 const trendRef = ref<HTMLDivElement | null>(null)
 const hourRef = ref<HTMLDivElement | null>(null)
 const modelRef = ref<HTMLDivElement | null>(null)
-const ageRef = ref<HTMLDivElement | null>(null)
+const provDistRef = ref<HTMLDivElement | null>(null)
 const provRef = ref<HTMLDivElement | null>(null)
 
 let charts: echarts.ECharts[] = []
@@ -345,21 +347,6 @@ function pieColors(): string[] {
   ]
 }
 
-const ageBuckets: Record<string, string> = {
-  '0-17': 'age0_17',
-  '18-24': 'age18_24',
-  '25-34': 'age25_34',
-  '35-44': 'age35_44',
-  '45-54': 'age45_54',
-  '55-64': 'age55_64',
-  '65+': 'age65'
-}
-
-function ageLabel(key: string): string {
-  const k = ageBuckets[key]
-  return k ? t(`console.${k}`) : t('console.unknown')
-}
-
 function baseTooltip(borderColor: string): Record<string, unknown> {
   return {
     backgroundColor: cssVar('--color-surface', '#0e1430'),
@@ -491,7 +478,8 @@ function renderTopModels(): void {
   if (!modelRef.value) return
   const c = axisColors()
   const rows = overview.value!.by_model.slice(0, 8).reverse()
-  const labelOf = (m: (typeof rows)[number]) => m.name || m.model_key
+  const labelOf = (m: (typeof rows)[number]) =>
+    locale.value === 'en' ? m.name_en || m.name || m.model_key : m.name || m.model_key
   const provOf = new Map(rows.map((m) => [labelOf(m), m.provider]))
   const chart = echarts.init(modelRef.value)
   chart.setOption({
@@ -504,7 +492,7 @@ function renderTopModels(): void {
         const head = arr[0] as { name: string; marker?: string; value: number }
         const prov = provOf.get(head.name)
         const lines = [`<b>${head.name}</b>`]
-        if (prov) lines.push(`<span style="opacity:.65;font-size:10px">${prov}</span>`)
+        if (prov) lines.push(`<span style="opacity:.65;font-size:10px">${providerName(prov)}</span>`)
         for (const it of arr as { marker?: string; value: number }[]) {
           lines.push(`${it.marker ?? ''} Tokens ${fmtTokens(it.value)}`)
         }
@@ -617,7 +605,12 @@ function renderAll(): void {
   renderTrend()
   renderHourly()
   renderTopModels()
-  renderDonut(ageRef.value, overview.value!.age_dist, ageLabel, true)
+  renderDonut(
+    provDistRef.value,
+    overview.value!.by_provider.map((p) => ({ key: p.provider, count: p.requests })),
+    (k) => providerName(k),
+    true
+  )
   renderTopProvinces()
 }
 

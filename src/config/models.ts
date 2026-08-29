@@ -3,30 +3,33 @@ import type { ModelInfo } from '@/types/chat'
 // 模型提供方数据字典（默认值；可通过后台「系统设置」的 model_providers 键覆盖）
 export interface ModelProvider {
   id: string
+  /** 中文名 */
   name: string
+  /** 英文名 */
+  nameEn: string
 }
 
 export const DEFAULT_PROVIDERS: ModelProvider[] = [
-  { id: 'openai', name: 'OpenAI' },
-  { id: 'anthropic', name: 'Anthropic Claude' },
-  { id: 'google', name: 'Google Gemini' },
-  { id: 'deepseek', name: 'DeepSeek' },
-  { id: 'qwen', name: '通义千问 Qwen' },
-  { id: 'zhipu', name: '智谱 GLM' },
-  { id: 'moonshot', name: 'Moonshot Kimi' },
-  { id: 'doubao', name: '豆包 Doubao' },
-  { id: 'baidu', name: '百度文心 ERNIE' },
-  { id: 'tencent', name: '腾讯混元 Hunyuan' },
-  { id: 'minimax', name: 'MiniMax' },
-  { id: 'mistral', name: 'Mistral' },
-  { id: 'meta', name: 'Meta Llama' },
-  { id: 'groq', name: 'Groq' },
-  { id: 'openrouter', name: 'OpenRouter' },
-  { id: 'cohere', name: 'Cohere' },
-  { id: 'xai', name: 'xAI Grok' },
-  { id: 'stepfun', name: '阶跃星辰 StepFun' },
-  { id: 'siliconflow', name: '硅基流动 SiliconFlow' },
-  { id: 'ollama', name: 'Ollama' }
+  { id: 'openai', name: 'OpenAI', nameEn: 'OpenAI' },
+  { id: 'anthropic', name: 'Anthropic Claude', nameEn: 'Anthropic Claude' },
+  { id: 'google', name: 'Google Gemini', nameEn: 'Google Gemini' },
+  { id: 'deepseek', name: 'DeepSeek', nameEn: 'DeepSeek' },
+  { id: 'qwen', name: '通义千问', nameEn: 'Qwen' },
+  { id: 'zhipu', name: '智谱', nameEn: 'GLM' },
+  { id: 'moonshot', name: 'Moonshot Kimi', nameEn: 'Moonshot Kimi' },
+  { id: 'doubao', name: '豆包', nameEn: 'Doubao' },
+  { id: 'baidu', name: '百度文心', nameEn: 'ERNIE' },
+  { id: 'tencent', name: '腾讯混元', nameEn: 'Hunyuan' },
+  { id: 'minimax', name: 'MiniMax', nameEn: 'MiniMax' },
+  { id: 'mistral', name: 'Mistral', nameEn: 'Mistral' },
+  { id: 'meta', name: 'Meta Llama', nameEn: 'Meta Llama' },
+  { id: 'groq', name: 'Groq', nameEn: 'Groq' },
+  { id: 'openrouter', name: 'OpenRouter', nameEn: 'OpenRouter' },
+  { id: 'cohere', name: 'Cohere', nameEn: 'Cohere' },
+  { id: 'xai', name: 'xAI Grok', nameEn: 'xAI Grok' },
+  { id: 'stepfun', name: '阶跃星辰', nameEn: 'StepFun' },
+  { id: 'siliconflow', name: '硅基流动', nameEn: 'SiliconFlow' },
+  { id: 'ollama', name: 'Ollama', nameEn: 'Ollama' }
 ]
 
 // 模型列表：来自硅基流动实测（可用对话模型），free 标记依据官方价格页

@@ -29,6 +29,7 @@ export interface AdminModel {
   id: number
   model_key: string
   name: string
+  name_en: string
   provider: string
   free: boolean
   vision: boolean
@@ -70,6 +71,7 @@ export interface AdminUser {
 export interface ModelPayload {
   model_key: string
   name: string
+  name_en: string
   provider: string
   free: boolean
   vision: boolean
@@ -100,6 +102,7 @@ export interface UsageByUser {
 export interface UsageByModel {
   model_key: string
   name: string
+  name_en: string
   provider: string
   requests: number
   prompt: number
@@ -118,9 +121,24 @@ export interface UsageDistItem {
   count: number
 }
 
+export interface UsageByProvider {
+  provider: string
+  requests: number
+  total: number
+}
+
+export interface UsageByCity {
+  province: string
+  city: string
+  requests: number
+  total: number
+}
+
 export interface AdminUsage {
   by_user: UsageByUser[]
   by_model: UsageByModel[]
+  by_provider: UsageByProvider[]
+  by_city: UsageByCity[]
   daily: UsageDaily[]
   age_dist: UsageDistItem[]
   gender_dist: UsageDistItem[]
@@ -215,6 +233,13 @@ export interface OverviewNewUsers {
 export interface OverviewTopModel {
   model_key: string
   name: string
+  name_en: string
+  provider: string
+  requests: number
+  total: number
+}
+
+export interface OverviewByProvider {
   provider: string
   requests: number
   total: number
@@ -251,6 +276,7 @@ export interface AdminOverview {
   hourly: OverviewHourly[]
   new_users: OverviewNewUsers[]
   by_model: OverviewTopModel[]
+  by_provider: OverviewByProvider[]
   top_users: OverviewTopUser[]
   top_provinces: OverviewTopProvince[]
   recent_users: OverviewRecentUser[]
@@ -277,6 +303,7 @@ export interface DimValue {
   table_id: number
   code: string
   name: string
+  name_en: string
   sort_order: number
   enabled: boolean
   remark: string
@@ -300,6 +327,7 @@ export interface DimTableCreate {
 export interface DimValueCreate {
   code: string
   name: string
+  name_en?: string
   sort_order?: number
   enabled?: boolean
   remark?: string
@@ -308,6 +336,7 @@ export interface DimValueCreate {
 export interface DimValueUpdate {
   code?: string
   name?: string
+  name_en?: string
   sort_order?: number
   enabled?: boolean
   remark?: string

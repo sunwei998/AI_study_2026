@@ -212,18 +212,21 @@ export async function importModelsCsv(file: File): Promise<ModelImportResult> {
 export interface ModelUniquenessResult {
   model_key_exists: boolean
   name_exists: boolean
+  name_en_exists: boolean
 }
 
-/** 失焦轻量查重：model_key 与 name 均为同供应商内唯一；exclude_id 编辑时排除自身 */
+/** 失焦轻量查重：model_key 同提供商内唯一；name / name_en 全局唯一；exclude_id 编辑时排除自身 */
 export function checkModelUniqueness(params: {
   model_key?: string
   name?: string
+  name_en?: string
   provider?: string
   exclude_id?: number
 }): Promise<ModelUniquenessResult> {
   const q = new URLSearchParams()
   if (params.model_key) q.set('model_key', params.model_key)
   if (params.name) q.set('name', params.name)
+  if (params.name_en) q.set('name_en', params.name_en)
   if (params.provider) q.set('provider', params.provider)
   if (params.exclude_id) q.set('exclude_id', String(params.exclude_id))
   return request<ModelUniquenessResult>(`/models/check?${q.toString()}`)
