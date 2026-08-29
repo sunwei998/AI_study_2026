@@ -386,6 +386,61 @@ export function deleteDimValue(tableId: number, valueId: number): Promise<{ ok: 
   return request(`/dim-tables/${tableId}/values/${valueId}`, { method: 'DELETE' })
 }
 
+/** 导出某维表全部取值为 xlsx */
+export function exportDimValues(tableId: number): Promise<Blob> {
+  return fetch(`${API_BASE}/dim-tables/${tableId}/export`, { headers: authHeaders() }).then(async (resp) => {
+    if (resp.status === 401) {
+      clearToken()
+      notifyUnauthorized()
+      throw new Error('unauthorized')
+    }
+    if (!resp.ok) throw new Error(await parseError(resp))
+    return resp.blob()
+  })
+}
+
+/** 下载某维表的导入模板 xlsx */
+export function downloadDimTemplate(tableId: number): Promise<Blob> {
+  return fetch(`${API_BASE}/dim-tables/${tableId}/template`, { headers: authHeaders() }).then(async (resp) => {
+    if (resp.status === 401) {
+      clearToken()
+      notifyUnauthorized()
+      throw new Error('unauthorized')
+    }
+    if (!resp.ok) throw new Error(await parseError(resp))
+    return resp.blob()
+  })
+}
+
+export interface DimImportResult {
+  ok: boolean
+  created: number
+  updated: number
+  errors: string[]
+}
+
+/** 从 xlsx 批量导入维表取值（同表 code 已存在则更新，否则新增） */
+export async function importDimValues(tableId: number, file: File): Promise<DimImportResult> {
+  const form = new FormData()
+  form.append('file', file)
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+  withAcceptLanguage(headers)
+  const resp = await fetch(`${API_BASE}/dim-tables/${tableId}/import`, {
+    method: 'POST',
+    headers,
+    body: form
+  })
+  if (resp.status === 401) {
+    clearToken()
+    notifyUnauthorized()
+    throw new Error('unauthorized')
+  }
+  if (!resp.ok) throw new Error(await parseError(resp))
+  return resp.json()
+}
+
 export function fetchDimValuesByCode(code: string): Promise<DimOption[]> {
   return request<DimOption[]>(`/dim-tables/by-code/${encodeURIComponent(code)}/values`)
 }

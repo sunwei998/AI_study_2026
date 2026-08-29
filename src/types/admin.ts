@@ -304,6 +304,7 @@ export interface DimValue {
   code: string
   name: string
   name_en: string
+  api_key: string
   sort_order: number
   enabled: boolean
   remark: string
@@ -328,6 +329,7 @@ export interface DimValueCreate {
   code: string
   name: string
   name_en?: string
+  api_key?: string
   sort_order?: number
   enabled?: boolean
   remark?: string
@@ -337,6 +339,7 @@ export interface DimValueUpdate {
   code?: string
   name?: string
   name_en?: string
+  api_key?: string
   sort_order?: number
   enabled?: boolean
   remark?: string

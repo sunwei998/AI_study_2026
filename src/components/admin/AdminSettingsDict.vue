@@ -44,6 +44,7 @@
     <section class="dim-main">
       <div class="dim-table-wrap">
         <AppTable
+          ref="tableRef"
           :key="selectedId || 'none'"
           :columns="columns"
           :data="values"
@@ -73,7 +74,7 @@
             <p v-else class="dim-title-desc">{{ t('console.dimTable.newTableDesc') }}</p>
           </template>
 
-          <!-- 标题栏右侧：新增取值 -->
+          <!-- 标题栏右侧：新增 / 导出 / 导入 / 模板 / 重置 -->
           <template v-if="selected && canManageSettings" #table-title-right>
             <AppButton
               size="middle"
@@ -82,6 +83,41 @@
               @click="openNewValue"
             >
               <AppIcon name="lucide:plus" :size="15" />
+            </AppButton>
+            <AppExport
+              icon-only
+              size="middle"
+              format="XLSX"
+              :count="total"
+              :file-prefix="`dim_${selected.code}`"
+              :loading="exporting"
+              :button-title="t('common.export')"
+              @export="onExport"
+            />
+            <AppButton
+              size="middle"
+              type="default"
+              :title="t('common.import')"
+              @click="importVisible = true"
+            >
+              <AppIcon name="lucide:upload" :size="15" />
+            </AppButton>
+            <AppButton
+              size="middle"
+              type="default"
+              :loading="templating"
+              :title="t('console.downloadTemplate')"
+              @click="onDownloadTemplate"
+            >
+              <AppIcon name="lucide:file-down" :size="15" />
+            </AppButton>
+            <AppButton
+              size="middle"
+              type="default"
+              :title="t('console.resetFilters')"
+              @click="onReset"
+            >
+              <AppIcon name="lucide:rotate-ccw" :size="15" />
             </AppButton>
           </template>
 
@@ -122,6 +158,21 @@
               :disabled="!canManageSettings"
               :error="!!fieldError(row.id, 'name_en')"
               :title="fieldError(row.id, 'name_en') || undefined"
+              @blur="check(row)"
+              @keydown.enter="save(row)"
+            />
+          </template>
+
+          <template v-if="isModelProvider" #column-api_key="{ row }">
+            <AppInput
+              v-model="row.api_key"
+              type="text"
+              size="small"
+              class="dim-cell-input dim-cell-input--key"
+              :disabled="!canManageSettings"
+              :placeholder="t('console.dimTable.apiKeyPlaceholder')"
+              :error="!!fieldError(row.id, 'api_key')"
+              :title="fieldError(row.id, 'api_key') || row.api_key || undefined"
               @blur="check(row)"
               @keydown.enter="save(row)"
             />
@@ -190,6 +241,18 @@
       />
     </section>
 
+    <!-- 批量导入取值 -->
+    <AppImport
+      v-model:visible="importVisible"
+      :title="t('common.import')"
+      table
+      multiple
+      :max-count="5"
+      :max-size="10 * 1024 * 1024"
+      :processor="processImportFile"
+      @done="onImportDone"
+    />
+
     <!-- 新建/编辑维表弹窗 -->
     <Teleport to="body">
       <Transition name="confirm" appear>
@@ -256,6 +319,10 @@
                 <span class="form-label">{{ t('console.dimTable.nameEn') }}</span>
                 <input v-model="valueForm.name_en" type="text" class="form-input" :placeholder="t('console.dimTable.nameEnPlaceholder')" />
               </label>
+              <label v-if="isModelProvider" class="form-field">
+                <span class="form-label">{{ t('console.dimTable.apiKey') }}</span>
+                <input v-model="valueForm.api_key" type="text" class="form-input" :placeholder="t('console.dimTable.apiKeyPlaceholder')" autocomplete="off" />
+              </label>
               <label class="form-field">
                 <span class="form-label">{{ t('console.dimTable.sort') }}</span>
                 <input v-model="valueForm.sort_order" type="text" class="form-input" inputmode="numeric" />
@@ -305,8 +372,11 @@ import {
   createDimValue,
   deleteDimTable,
   deleteDimValue,
+  downloadDimTemplate,
+  exportDimValues,
   fetchDimTables,
   fetchDimValues,
+  importDimValues,
   updateDimTable,
   updateDimValue
 } from '@/services/adminService'
@@ -316,6 +386,8 @@ import AppIcon from '@/components/common/AppIcon.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import AppInput from '@/components/common/AppInput.vue'
 import AppButton from '@/components/common/AppButton.vue'
+import AppExport from '@/components/common/AppExport.vue'
+import AppImport, { type ImportSummary } from '@/components/common/AppImport.vue'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import { useToast } from '@/composables/useToast'
 import { useRowValidation } from '@/composables/useRowValidation'
@@ -342,6 +414,10 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const enabledFilter = ref<boolean | null>(null)
 const sortFilter = ref<{ key: string; order: 'asc' | 'desc' | null }>({ key: '', order: null })
+// 表格实例：重置时清空表头筛选/排序高亮
+const tableRef = ref<InstanceType<typeof AppTable> | null>(null)
+// 重置进行中标志：避免重置分页时触发 watch 导致重复请求
+let resetting = false
 
 const loadTables = async () => {
   loadingTables.value = true
@@ -403,8 +479,26 @@ function onFilterChange(filters: Record<string, any[]>) {
   loadValues()
 }
 
-watch(currentPage, loadValues)
+/** 重置：清除启用筛选与排序、分页回默认，重新查询 */
+function onReset() {
+  resetting = true
+  try {
+    enabledFilter.value = null
+    sortFilter.value = { key: '', order: null }
+    pageSize.value = 10
+    currentPage.value = 1
+    tableRef.value?.resetState()
+  } finally {
+    resetting = false
+  }
+  loadValues()
+}
+
+watch(currentPage, () => {
+  if (!resetting) loadValues()
+})
 watch(pageSize, () => {
+  if (resetting) return
   currentPage.value = 1
   loadValues()
 })
@@ -413,7 +507,10 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'code', title: t('console.dimTable.code'), width: 200, ellipsis: true, sortable: true, className: 'cell-code' },
   { key: 'name', title: t('console.dimTable.name'), width: 240, ellipsis: true, sortable: true },
   ...(isModelProvider.value
-    ? [{ key: 'name_en', title: t('console.dimTable.nameEn'), width: 200, ellipsis: true, sortable: true }]
+    ? [
+        { key: 'name_en', title: t('console.dimTable.nameEn'), width: 180, ellipsis: true, sortable: true } as TableColumn,
+        { key: 'api_key', title: t('console.dimTable.apiKey'), width: 220, ellipsis: true, className: 'cell-apikey' } as TableColumn
+      ]
     : []),
   { key: 'sort_order', title: t('console.dimTable.sort'), width: 90, align: 'center', sortable: true },
   {
@@ -464,7 +561,7 @@ const parseSort = (v: unknown): number | null =>
   SORT_RE.test(String(v ?? '').trim()) ? Number(v) : null
 
 const validateRow = (row: DimValue) => {
-  const e: Partial<Record<'code' | 'name' | 'name_en' | 'sort_order' | 'remark', string>> = {}
+  const e: Partial<Record<'code' | 'name' | 'name_en' | 'api_key' | 'sort_order' | 'remark', string>> = {}
   const code = String(row.code ?? '').trim()
   const name = String(row.name ?? '').trim()
   if (!code) e.code = t('console.dimTable.codeRequired')
@@ -474,6 +571,9 @@ const validateRow = (row: DimValue) => {
   else if (name.length > 128) e.name = t('console.dimTable.nameTooLong')
   const nameEnErr = validateNameEn(row.name_en)
   if (nameEnErr) e.name_en = nameEnErr
+  if (isModelProvider.value && String(row.api_key ?? '').length > 512) {
+    e.api_key = t('console.dimTable.apiKeyTooLong')
+  }
   if (!SORT_RE.test(String(row.sort_order ?? '').trim())) e.sort_order = t('console.dimTable.sortInvalid')
   if (String(row.remark ?? '').length > 255) e.remark = t('console.dimTable.remarkTooLong')
   return e
@@ -496,6 +596,7 @@ const save = async (row: DimValue) => {
       code: String(row.code).trim(),
       name: String(row.name).trim(),
       name_en: String(row.name_en ?? '').trim(),
+      api_key: String(row.api_key ?? '').trim(),
       sort_order: parseSort(row.sort_order)!,
       enabled: row.enabled,
       remark: String(row.remark ?? '')
@@ -657,6 +758,7 @@ const valueForm = ref({
   code: '',
   name: '',
   name_en: '',
+  api_key: '',
   sort_order: '0',
   enabled: true,
   remark: '',
@@ -670,6 +772,7 @@ const openNewValue = () => {
     code: '',
     name: '',
     name_en: '',
+    api_key: '',
     sort_order: '0',
     enabled: true,
     remark: '',
@@ -706,6 +809,10 @@ const submitValue = async () => {
     f.error = nameEnErr
     return
   }
+  if (isModelProvider.value && String(f.api_key ?? '').length > 512) {
+    f.error = t('console.dimTable.apiKeyTooLong')
+    return
+  }
   if (!SORT_RE.test(String(f.sort_order ?? '').trim())) {
     f.error = t('console.dimTable.sortInvalid')
     return
@@ -721,6 +828,7 @@ const submitValue = async () => {
       code: f.code.trim(),
       name: f.name.trim(),
       name_en: String(f.name_en ?? '').trim(),
+      api_key: String(f.api_key ?? '').trim(),
       sort_order: Number(String(f.sort_order).trim()),
       enabled: f.enabled,
       remark: f.remark.trim()
@@ -735,6 +843,88 @@ const submitValue = async () => {
     f.error = msg.includes('已存在') ? t('console.dimTable.valueDuplicate') : msg
   } finally {
     f.submitting = false
+  }
+}
+
+// ============ 导入 / 导出 / 模板 ============
+const exporting = ref(false)
+const templating = ref(false)
+const importVisible = ref(false)
+
+/** 触发浏览器下载一个 Blob */
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+const onExport = async () => {
+  if (exporting.value || !selectedId.value || !selected.value) return
+  exporting.value = true
+  try {
+    const blob = await exportDimValues(selectedId.value)
+    downloadBlob(blob, `dim_${selected.value.code}_${Date.now()}.xlsx`)
+    showToast(t('console.exportSuccess'), 'success')
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
+  } finally {
+    exporting.value = false
+  }
+}
+
+const onDownloadTemplate = async () => {
+  if (templating.value || !selectedId.value || !selected.value) return
+  templating.value = true
+  try {
+    const blob = await downloadDimTemplate(selectedId.value)
+    downloadBlob(blob, `dim_${selected.value.code}_template.xlsx`)
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
+  } finally {
+    templating.value = false
+  }
+}
+
+const processImportFile = async (file: File) => {
+  if (!selectedId.value) throw new Error('no table selected')
+  const res = await importDimValues(selectedId.value, file)
+  if (res.errors?.length) {
+    return {
+      message: t('console.importPartial', { n: res.errors.length }),
+      warn: true,
+      created: res.created,
+      updated: res.updated
+    }
+  }
+  return {
+    message: t('console.importSuccess', { created: res.created, updated: res.updated }),
+    created: res.created,
+    updated: res.updated
+  }
+}
+
+async function onImportDone(s: ImportSummary) {
+  if (s.failed === 0 && s.warn === 0) {
+    showToast(t('console.importSuccess', { created: s.created, updated: s.updated }), 'success')
+  } else if (s.failed === 0) {
+    showToast(t('console.importPartialDone', { created: s.created, updated: s.updated }), 'info')
+  } else if (s.success + s.warn > 0) {
+    showToast(
+      t('console.importMixedDone', { created: s.created, updated: s.updated, failed: s.failed }),
+      'error'
+    )
+  } else {
+    showToast(t('console.importAllFailed', { failed: s.failed }), 'error')
+  }
+  if (s.success + s.warn > 0) {
+    await refreshTableCount()
+    currentPage.value = 1
+    await loadValues()
   }
 }
 
@@ -965,6 +1155,18 @@ loadTables().then(loadValues)
 :deep(.cell-code) {
   font-family: var(--font-mono);
   color: var(--color-primary);
+}
+
+:deep(.cell-apikey) {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+:deep(.dim-cell-input--key input) {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  -webkit-text-security: none;
 }
 
 :deep(.dim-cell-input) {
