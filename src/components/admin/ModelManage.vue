@@ -1,53 +1,13 @@
 <template>
   <div class="model-manage">
-    <div class="page-toolbar">
-      <AppButton
-        v-if="canManageModels"
-        size="middle"
-        type="default"
-        :title="$t('console.addModel')"
-        @click="openCreate"
-      >
-        <AppIcon name="lucide:plus" :size="15" />
-      </AppButton>
-      <AppButton
-        v-if="canManageModels"
-        size="middle"
-        type="default"
-        :loading="exporting"
-        :title="$t('console.exportModels')"
-        @click="onExport"
-      >
-        <AppIcon name="lucide:download" :size="15" />
-      </AppButton>
-      <AppButton
-        v-if="canManageModels"
-        size="middle"
-        type="default"
-        :loading="importing"
-        :title="$t('console.importModels')"
-        @click="pickImport"
-      >
-        <AppIcon name="lucide:upload" :size="15" />
-      </AppButton>
-      <AppButton
-        v-if="canManageModels"
-        size="middle"
-        type="default"
-        :loading="templating"
-        :title="$t('console.downloadTemplate')"
-        @click="onDownloadTemplate"
-      >
-        <AppIcon name="lucide:file-down" :size="15" />
-      </AppButton>
-      <input
-        ref="importInputRef"
-        type="file"
-        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        class="hidden-input"
-        @change="onImportFile"
-      />
-    </div>
+    <!-- 导入用的隐藏文件选择框（操作按钮已并入表格标题栏右侧） -->
+    <input
+      ref="importInputRef"
+      type="file"
+      accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      class="hidden-input"
+      @change="onImportFile"
+    />
 
     <div v-if="error" class="page-error">{{ error }}</div>
 
@@ -65,6 +25,45 @@
         :sort-method="onServerSort"
         @filter-change="onFilterChange"
       >
+        <!-- 操作按钮作为表格附属物，位于表格标题栏右侧 -->
+        <template v-if="canManageModels" #table-title-right>
+          <AppButton
+            size="middle"
+            type="default"
+            :title="$t('console.addModel')"
+            @click="openCreate"
+          >
+            <AppIcon name="lucide:plus" :size="15" />
+          </AppButton>
+          <AppButton
+            size="middle"
+            type="default"
+            :loading="exporting"
+            :title="$t('console.exportModels')"
+            @click="onExport"
+          >
+            <AppIcon name="lucide:download" :size="15" />
+          </AppButton>
+          <AppButton
+            size="middle"
+            type="default"
+            :loading="importing"
+            :title="$t('console.importModels')"
+            @click="pickImport"
+          >
+            <AppIcon name="lucide:upload" :size="15" />
+          </AppButton>
+          <AppButton
+            size="middle"
+            type="default"
+            :loading="templating"
+            :title="$t('console.downloadTemplate')"
+            @click="onDownloadTemplate"
+          >
+            <AppIcon name="lucide:file-down" :size="15" />
+          </AppButton>
+        </template>
+
         <template #column-enabled="{ row }">
           <button
             class="toggle"
@@ -602,14 +601,6 @@ const onImportFile = async (e: Event) => {
   min-height: 0;
 }
 
-.page-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  /* 父容器 gap:14px 基础上收紧，让按钮组与表格间距统一为 6px */
-  margin-bottom: -8px;
-}
 
 .hidden-input {
   display: none;
@@ -1016,10 +1007,6 @@ const onImportFile = async (e: Event) => {
 @media (max-width: 640px) {
   .form-row {
     flex-direction: column;
-  }
-
-  .page-toolbar {
-    justify-content: stretch;
   }
 }
 </style>

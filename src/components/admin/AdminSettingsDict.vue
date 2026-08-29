@@ -42,24 +42,6 @@
 
     <!-- 右侧取值维护 -->
     <section class="dim-main">
-      <div v-if="selected" class="dim-main__head">
-        <div class="dim-main__titles">
-          <h3 class="dim-main__name">{{ selected.name }}</h3>
-          <p v-if="selected.description" class="dim-main__desc">{{ selected.description }}</p>
-        </div>
-        <code class="dim-main__code">{{ selected.code }}</code>
-      </div>
-      <div v-else class="dim-main__head dim-main__head--empty">
-        <p class="dim-main__placeholder">{{ t('console.dimTable.newTableDesc') }}</p>
-      </div>
-
-      <div class="dim-toolbar">
-        <AppButton v-if="canManageSettings && selected" size="middle" @click="openNewValue">
-          <AppIcon name="lucide:plus" :size="15" />
-          {{ t('console.dimTable.new') }}
-        </AppButton>
-      </div>
-
       <div class="dim-table-wrap">
         <AppTable
           :key="selectedId || 'none'"
@@ -75,6 +57,34 @@
           :sort-method="onServerSort"
           @filter-change="onFilterChange"
         >
+          <!-- 标题栏左侧：维表名称 / 编码 / 说明，与表格连成一体 -->
+          <template #table-title-left>
+            <template v-if="selected">
+              <h3 class="dim-title-name" :title="selected.name">{{ selected.name }}</h3>
+              <code class="dim-title-code">{{ selected.code }}</code>
+              <p
+                v-if="selected.description"
+                class="dim-title-desc"
+                :title="selected.description"
+              >
+                {{ selected.description }}
+              </p>
+            </template>
+            <p v-else class="dim-title-desc">{{ t('console.dimTable.newTableDesc') }}</p>
+          </template>
+
+          <!-- 标题栏右侧：新增取值 -->
+          <template v-if="selected && canManageSettings" #table-title-right>
+            <AppButton
+              size="middle"
+              type="default"
+              :title="t('console.dimTable.new')"
+              @click="openNewValue"
+            >
+              <AppIcon name="lucide:plus" :size="15" />
+            </AppButton>
+          </template>
+
           <template #column-code="{ row }">
             <AppInput
               v-model="row.code"
@@ -82,6 +92,9 @@
               size="small"
               class="dim-cell-input"
               :disabled="!canManageSettings"
+              :error="!!fieldError(row.id, 'code')"
+              :title="fieldError(row.id, 'code') || undefined"
+              @blur="check(row)"
               @keydown.enter="save(row)"
             />
           </template>
@@ -93,6 +106,9 @@
               size="small"
               class="dim-cell-input"
               :disabled="!canManageSettings"
+              :error="!!fieldError(row.id, 'name')"
+              :title="fieldError(row.id, 'name') || undefined"
+              @blur="check(row)"
               @keydown.enter="save(row)"
             />
           </template>
@@ -104,6 +120,9 @@
               size="small"
               class="dim-cell-input dim-cell-input--num"
               :disabled="!canManageSettings"
+              :error="!!fieldError(row.id, 'sort_order')"
+              :title="fieldError(row.id, 'sort_order') || undefined"
+              @blur="check(row)"
               @keydown.enter="save(row)"
             />
           </template>
@@ -116,6 +135,9 @@
               class="dim-cell-input"
               :disabled="!canManageSettings"
               :placeholder="t('console.remark')"
+              :error="!!fieldError(row.id, 'remark')"
+              :title="fieldError(row.id, 'remark') || undefined"
+              @blur="check(row)"
               @keydown.enter="save(row)"
             />
           </template>
@@ -278,6 +300,7 @@ import AppInput from '@/components/common/AppInput.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import { useToast } from '@/composables/useToast'
+import { useRowValidation } from '@/composables/useRowValidation'
 
 const { t } = useI18n()
 const { showToast } = useToast()
@@ -397,19 +420,50 @@ const columns = computed<TableColumn[]>(() => [
     : [])
 ])
 
+// ============ 行内编辑校验 ============
+const CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/
+const SORT_RE = /^\d{1,6}$/
+
+/** 排序值收敛为 number；非法（字母/中文/负数/小数/超长/空）返回 null，调用方据此拒绝提交 */
+const parseSort = (v: unknown): number | null =>
+  SORT_RE.test(String(v ?? '').trim()) ? Number(v) : null
+
+const validateRow = (row: DimValue) => {
+  const e: Partial<Record<'code' | 'name' | 'sort_order' | 'remark', string>> = {}
+  const code = String(row.code ?? '').trim()
+  const name = String(row.name ?? '').trim()
+  if (!code) e.code = t('console.dimTable.codeRequired')
+  else if (code.length > 64) e.code = t('console.dimTable.codeTooLong')
+  else if (!CODE_RE.test(code)) e.code = t('console.dimTable.codeFormat')
+  if (!name) e.name = t('console.dimTable.nameRequired')
+  else if (name.length > 128) e.name = t('console.dimTable.nameTooLong')
+  if (!SORT_RE.test(String(row.sort_order ?? '').trim())) e.sort_order = t('console.dimTable.sortInvalid')
+  if (String(row.remark ?? '').length > 255) e.remark = t('console.dimTable.remarkTooLong')
+  return e
+}
+
+const { errors: rowErrors, fieldError, clearRow, check } = useRowValidation(validateRow)
+
 const savingId = ref<number | null>(null)
 const save = async (row: DimValue) => {
   if (savingId.value === row.id || !selectedId.value) return
+  // 校验不过就不发请求：绝不把脏数据写进库（原 `Number(x) || 0` 会把非法值静默存成 0）
+  const firstError = check(row)
+  if (firstError) {
+    showToast(firstError, 'error')
+    return
+  }
   savingId.value = row.id
   try {
     await updateDimValue(selectedId.value, row.id, {
-      code: row.code,
-      name: row.name,
-      sort_order: Number(row.sort_order) || 0,
+      code: String(row.code).trim(),
+      name: String(row.name).trim(),
+      sort_order: parseSort(row.sort_order)!,
       enabled: row.enabled,
-      remark: row.remark
+      remark: String(row.remark ?? '')
     })
     showToast(t('console.saved'), 'success')
+    clearRow(row.id)
     await loadValues()
   } catch (err) {
     showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
@@ -570,8 +624,28 @@ const submitValue = async () => {
     f.error = t('console.dimTable.codeRequired')
     return
   }
+  if (f.code.trim().length > 64) {
+    f.error = t('console.dimTable.codeTooLong')
+    return
+  }
+  if (!CODE_RE.test(f.code.trim())) {
+    f.error = t('console.dimTable.codeFormat')
+    return
+  }
   if (!f.name.trim()) {
     f.error = t('console.dimTable.nameRequired')
+    return
+  }
+  if (f.name.trim().length > 128) {
+    f.error = t('console.dimTable.nameTooLong')
+    return
+  }
+  if (!SORT_RE.test(String(f.sort_order ?? '').trim())) {
+    f.error = t('console.dimTable.sortInvalid')
+    return
+  }
+  if (f.remark.trim().length > 255) {
+    f.error = t('console.dimTable.remarkTooLong')
     return
   }
   f.submitting = true
@@ -580,7 +654,7 @@ const submitValue = async () => {
     await createDimValue(selectedId.value, {
       code: f.code.trim(),
       name: f.name.trim(),
-      sort_order: Number(f.sort_order) || 0,
+      sort_order: Number(String(f.sort_order).trim()),
       enabled: f.enabled,
       remark: f.remark.trim()
     })
@@ -761,37 +835,28 @@ loadTables().then(loadValues)
   min-height: 0;
 }
 
-.dim-main__head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.dim-main__head--empty {
-  align-items: center;
-}
-
-.dim-main__name {
+/* 表格标题栏内容：名称 / 编码 / 说明（左），操作按钮（右，由 AppTable 负责排版） */
+.dim-title-name {
   margin: 0;
+  flex: 0 1 auto;
+  min-width: 0;
   font-family: var(--font-display);
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   color: var(--color-text);
-  text-shadow: 0 0 16px var(--color-glow);
+  text-shadow: 0 0 14px var(--color-glow);
+  /* 过长时省略，避免把编码和右侧按钮挤出去 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.dim-main__desc {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.dim-main__code {
+.dim-title-code {
+  flex: none;
   font-family: var(--font-mono);
-  font-size: 12px;
-  padding: 4px 10px;
+  font-size: 11px;
+  padding: 2px 8px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
@@ -799,16 +864,16 @@ loadTables().then(loadValues)
   white-space: nowrap;
 }
 
-.dim-main__placeholder {
+.dim-title-desc {
   margin: 0;
-  font-size: 13px;
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 400;
   color: var(--color-text-secondary);
-}
-
-.dim-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: -8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dim-table-wrap {
@@ -840,7 +905,7 @@ loadTables().then(loadValues)
   min-width: 0;
 }
 
-:deep(.dim-cell-input--num) {
+:deep(.dim-cell-input--num input) {
   text-align: center;
 }
 

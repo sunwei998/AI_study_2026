@@ -106,6 +106,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore'
+import { useConsoleLayout } from '@/composables/useConsoleLayout'
 import ThemeSwitcher from '@/components/chat/ThemeSwitcher.vue'
 import LanguageSwitcher from '@/components/chat/LanguageSwitcher.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
@@ -120,20 +121,9 @@ type TabKey = 'overview' | 'models' | 'users' | 'map' | 'usage' | 'hot-words' | 
 
 const expandedGroups = ref<string[]>(['settings', 'data'])
 
-// 侧边栏收起/展开（仅 PC 端生效；移动端始终只显示图标，见样式中的媒体查询）
-const collapsed = ref(false)
-try {
-  if (localStorage.getItem('adminConsoleCollapsed') === '1') collapsed.value = true
-} catch {
-  // 忽略读取失败
-}
-watch(collapsed, (v) => {
-  try {
-    localStorage.setItem('adminConsoleCollapsed', v ? '1' : '0')
-  } catch {
-    // 忽略写入失败
-  }
-})
+// 侧边栏收起/展开（仅 PC 端生效；移动端始终只显示图标）
+// 状态提升到 useConsoleLayout，页内二级 tab 据此决定是否显示，localStorage 持久化随之移入
+const { collapsed, isMobile } = useConsoleLayout()
 
 const tabs = computed(() => [
   { key: 'overview' as TabKey, icon: 'lucide:layout-dashboard', label: t('console.overview') },
@@ -169,13 +159,12 @@ const isChildActive = (path: string) => route.path === path || route.path === `$
 
 // 移动端分组气泡当前打开的分组 key（点击一级图标弹出二级菜单）
 const flyoutOpen = ref<string | null>(null)
-const isMobileDevice = () => document.documentElement.dataset.device === 'mobile'
 
 const toggleGroup = (key: string) => {
   // PC 收起态：分组只支持悬停气泡，点击图标本身不做任何反应
-  if (collapsed.value && !isMobileDevice()) return
+  if (collapsed.value && !isMobile.value) return
   // 移动端：点击一级图标弹出/收起二级菜单气泡
-  if (isMobileDevice()) {
+  if (isMobile.value) {
     flyoutOpen.value = flyoutOpen.value === key ? null : key
     return
   }

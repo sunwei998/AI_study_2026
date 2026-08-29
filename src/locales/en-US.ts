@@ -102,6 +102,7 @@ export default {
   api: {
     noKey: 'No API key configured. Set VITE_LLM_API_KEY in .env.local',
     requestFailed: 'Request failed ({status})',
+    validationFailed: 'Invalid input, please check and retry',
     failed: 'Unable to get AI reply, please check the API connection',
     noStream: 'Response does not support streaming',
     streamFailed: 'Failed to get streaming reply',
@@ -374,6 +375,8 @@ export default {
     save: 'Save',
     noSettings: 'No settings',
     keyRequired: 'Key is required',
+    valueTooLong: 'Value must be 2000 characters or fewer',
+    remarkTooLong: 'Remark must be 255 characters or fewer',
     hotWords: 'Hot Words',
     hotWordsTitle: 'Top User Query Words',
     hotWordsRankTitle: 'Word Ranking',
@@ -410,6 +413,11 @@ export default {
       codeRequired: 'Code is required',
       nameRequired: 'Name is required',
       valueDuplicate: 'Code already exists in this table',
+      sortInvalid: 'Sort order must be an integer between 0 and 999999',
+      codeFormat: 'Code may contain only letters, digits, underscore, dot and hyphen, and must start with a letter or digit',
+      codeTooLong: 'Code must be 64 characters or fewer',
+      nameTooLong: 'Name must be 128 characters or fewer',
+      remarkTooLong: 'Remark must be 255 characters or fewer',
       empty: 'No values in this table',
       deleteValueConfirm: 'Delete this value?'
     },

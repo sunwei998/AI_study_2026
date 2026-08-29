@@ -10,9 +10,22 @@
       }
     ]"
   >
-    <!-- 标题栏 -->
-    <div v-if="title || $slots.title" class="app-table__title-bar">
-      <slot name="title">{{ title }}</slot>
+    <!--
+      标题栏：左侧标题 + 右侧操作区，视觉上属于表格卡片的一部分。
+      table-title-left / table-title-right 两个子插槽可单独使用，
+      操作按钮放右侧即可与表格连成一体，无需在外部另起一行工具栏。
+    -->
+    <div
+      v-if="title || $slots.title || $slots['table-title-left'] || $slots['table-title-right']"
+      class="app-table__title-bar"
+    >
+      <div class="app-table__title-left">
+        <slot name="title">{{ title }}</slot>
+        <slot name="table-title-left" />
+      </div>
+      <div v-if="$slots['table-title-right']" class="app-table__title-right">
+        <slot name="table-title-right" />
+      </div>
     </div>
 
     <div ref="scrollRef" class="app-table-scroll" :style="scrollStyle">
@@ -1258,13 +1271,34 @@ initDefaults()
   border: 1px solid var(--color-border);
 }
 
-/* 标题栏 */
+/* 标题栏：左侧标题 + 右侧操作区，两者均可选 */
 .app-table__title-bar {
-  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  /* 8px 纵向内边距：既给按钮留呼吸感，又不至于让标题栏过高
+     （按钮 38px 时整条 56px；无左侧标题的页面也不会比原外部工具栏高太多） */
+  padding: 8px 16px;
   border-bottom: 1px solid var(--color-border);
+}
+
+.app-table__title-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  /* 字体样式只作用于左侧，避免右侧按钮被加粗 */
   font-weight: 600;
   font-size: 14px;
   color: var(--color-text);
+}
+
+.app-table__title-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
 }
 
 /* 滚动区 */

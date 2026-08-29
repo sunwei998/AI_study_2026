@@ -23,6 +23,7 @@ import type {
 } from '@/types/admin'
 import { clearToken, getToken } from './token'
 import { notifyUnauthorized } from './unauthorized'
+import { i18n } from '@/locales'
 import { notifyForbidden } from './forbidden'
 
 const API_BASE = '/api/admin'
@@ -61,7 +62,10 @@ function authHeaders(): Record<string, string> {
 async function parseError(resp: Response): Promise<string> {
   try {
     const body = await resp.json()
-    return body?.detail || `HTTP ${resp.status}`
+    const d = body?.detail
+    // Pydantic 422 的 detail 是数组，直接透传会变成 [object Object]，统一转成友好文案
+    if (Array.isArray(d)) return i18n.global.t('api.validationFailed')
+    return typeof d === 'string' ? d : `HTTP ${resp.status}`
   } catch {
     return `HTTP ${resp.status}`
   }

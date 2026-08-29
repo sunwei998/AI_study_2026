@@ -97,6 +97,7 @@ export default {
   api: {
     noKey: '未配置 API Key，请在 .env.local 中设置 VITE_LLM_API_KEY',
     requestFailed: '请求失败 ({status})',
+    validationFailed: '提交内容不合法，请检查后重试',
     failed: '无法获取AI回复，请检查API连接',
     noStream: '响应不支持流式读取',
     streamFailed: '流式获取回复失败',
@@ -369,6 +370,8 @@ export default {
     save: '保存',
     noSettings: '暂无设置',
     keyRequired: '请输入键名',
+    valueTooLong: '配置值长度不能超过 2000 个字符',
+    remarkTooLong: '备注长度不能超过 255 个字符',
     hotWords: '热词分析',
     hotWordsTitle: '用户提问高频词',
     hotWordsRankTitle: '高频词排行',
@@ -405,6 +408,11 @@ export default {
       codeRequired: '请输入编码',
       nameRequired: '请输入名称',
       valueDuplicate: '该编码在当前维表已存在',
+      sortInvalid: '排序值必须是 0-999999 的整数',
+      codeFormat: '编码只能包含字母、数字、下划线、点和连字符，且以字母或数字开头',
+      codeTooLong: '编码长度不能超过 64 个字符',
+      nameTooLong: '名称长度不能超过 128 个字符',
+      remarkTooLong: '备注长度不能超过 255 个字符',
       empty: '该维表暂无取值',
       deleteValueConfirm: '确定删除该取值吗？'
     },

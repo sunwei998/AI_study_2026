@@ -3,13 +3,6 @@
     <div v-if="error" class="page-error">{{ error }}</div>
 
     <div class="settings-body">
-      <div class="settings-toolbar">
-        <AppButton v-if="canManageSettings" size="middle" @click="openAdd">
-          <AppIcon name="lucide:plus" :size="15" />
-          {{ $t('console.addSetting') }}
-        </AppButton>
-      </div>
-
       <div class="settings-table-wrap">
         <AppTable
           :columns="columns"
@@ -24,6 +17,18 @@
           :sort-method="onServerSort"
           @filter-change="onFilterChange"
         >
+          <!-- 新增按钮作为表格附属物，位于表格标题栏右侧 -->
+          <template v-if="canManageSettings" #table-title-right>
+            <AppButton
+              size="middle"
+              type="default"
+              :title="$t('console.addSetting')"
+              @click="openAdd"
+            >
+              <AppIcon name="lucide:plus" :size="15" />
+            </AppButton>
+          </template>
+
           <template #column-value="{ row }">
             <AppInput
               v-model="row.value"
@@ -31,6 +36,9 @@
               size="small"
               class="settings-cell-input"
               :disabled="!canManageSettings"
+              :error="!!fieldError(row.key, 'value')"
+              :title="fieldError(row.key, 'value') || undefined"
+              @blur="check(row)"
               @keydown.enter="save(row)"
             />
           </template>
@@ -43,6 +51,9 @@
               class="settings-cell-input"
               :disabled="!canManageSettings"
               :placeholder="$t('console.remarkPlaceholder')"
+              :error="!!fieldError(row.key, 'remark')"
+              :title="fieldError(row.key, 'remark') || undefined"
+              @blur="check(row)"
               @keydown.enter="save(row)"
             />
           </template>
@@ -130,10 +141,22 @@ import AppInput from '@/components/common/AppInput.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import { useToast } from '@/composables/useToast'
+import { useRowValidation } from '@/composables/useRowValidation'
 
 const { t } = useI18n()
 const { showToast } = useToast()
 const auth = useAuthStore()
+
+// ============ 行内编辑校验 ============
+const validateRow = (s: SettingItem) => {
+  const e: Partial<Record<'value' | 'remark', string>> = {}
+  // value 允许为空（部分设置项可空），仅限长度
+  if (String(s.value ?? '').length > 2000) e.value = t('console.valueTooLong')
+  if (String(s.remark ?? '').length > 255) e.remark = t('console.remarkTooLong')
+  return e
+}
+
+const { errors: rowErrors, fieldError, clearRow, check } = useRowValidation(validateRow)
 
 /** 系统设置权限：超级管理员 / 系统管理员 */
 const canManageSettings = computed(
@@ -233,11 +256,18 @@ const columns = computed<TableColumn[]>(() => [
 
 const save = async (s: SettingItem) => {
   if (savingKey.value === s.key) return
+  // 校验不过就不发请求
+  const firstError = check(s)
+  if (firstError) {
+    showToast(firstError, 'error')
+    return
+  }
   savingKey.value = s.key
   error.value = ''
   try {
-    await updateSetting(s.key, { value: s.value, remark: s.remark })
+    await updateSetting(s.key, { value: s.value ?? '', remark: s.remark ?? '' })
     showToast(t('console.saved'), 'success')
+    clearRow(s.key)
     await load()
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
@@ -321,15 +351,6 @@ const submitAdd = async () => {
   gap: 14px;
   flex: 1;
   min-height: 0;
-}
-
-.settings-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  /* 离顶部 tab 稍远一点 */
-  margin-top: 10px;
-  /* 父容器 gap:14px 基础上收紧，让按钮组与表格间距统一为 6px */
-  margin-bottom: -8px;
 }
 
 .page-btn {
