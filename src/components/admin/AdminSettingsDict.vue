@@ -169,8 +169,8 @@
               type="text"
               size="small"
               class="dim-cell-input dim-cell-input--key"
-              :disabled="!canManageSettings"
-              :placeholder="t('console.dimTable.apiKeyPlaceholder')"
+              :disabled="!canManageSettings || row.code === 'ollama'"
+              :placeholder="row.code === 'ollama' ? t('console.dimTable.ollamaNoKey') : t('console.dimTable.apiKeyPlaceholder')"
               :error="!!fieldError(row.id, 'api_key')"
               :title="fieldError(row.id, 'api_key') || row.api_key || undefined"
               @blur="check(row)"
@@ -571,8 +571,14 @@ const validateRow = (row: DimValue) => {
   else if (name.length > 128) e.name = t('console.dimTable.nameTooLong')
   const nameEnErr = validateNameEn(row.name_en)
   if (nameEnErr) e.name_en = nameEnErr
-  if (isModelProvider.value && String(row.api_key ?? '').length > 512) {
-    e.api_key = t('console.dimTable.apiKeyTooLong')
+  if (isModelProvider.value) {
+    const keyVal = String(row.api_key ?? '')
+    if (keyVal.length > 512) {
+      e.api_key = t('console.dimTable.apiKeyTooLong')
+    } else if (row.enabled && needsApiKey(row.code) && !keyVal.trim()) {
+      // 启用状态下（ollama 豁免）必须有密钥，否则不允许保存
+      e.api_key = t('console.dimTable.apiKeyRequiredToEnable')
+    }
   }
   if (!SORT_RE.test(String(row.sort_order ?? '').trim())) e.sort_order = t('console.dimTable.sortInvalid')
   if (String(row.remark ?? '').length > 255) e.remark = t('console.dimTable.remarkTooLong')
@@ -611,9 +617,18 @@ const save = async (row: DimValue) => {
   }
 }
 
+/** 该提供商是否需要 API 密钥才能启用（ollama 本地部署豁免） */
+const needsApiKey = (code: unknown) =>
+  isModelProvider.value && String(code ?? '').trim() !== 'ollama'
+
 const toggle = async (row: DimValue) => {
   if (!selectedId.value) return
   const next = !row.enabled
+  // 打开启用前：非 ollama 提供商必须已填写 API 密钥（前端先拦截，后端也兜底）
+  if (next && needsApiKey(row.code) && !String(row.api_key ?? '').trim()) {
+    showToast(t('console.dimTable.apiKeyRequiredToEnable'), 'error')
+    return
+  }
   row.enabled = next
   try {
     await updateDimValue(selectedId.value, row.id, { enabled: next })
@@ -809,9 +824,16 @@ const submitValue = async () => {
     f.error = nameEnErr
     return
   }
-  if (isModelProvider.value && String(f.api_key ?? '').length > 512) {
-    f.error = t('console.dimTable.apiKeyTooLong')
-    return
+  if (isModelProvider.value) {
+    if (String(f.api_key ?? '').length > 512) {
+      f.error = t('console.dimTable.apiKeyTooLong')
+      return
+    }
+    // 新增即启用时（ollama 豁免），必须填写 API 密钥
+    if (f.enabled && needsApiKey(f.code) && !String(f.api_key ?? '').trim()) {
+      f.error = t('console.dimTable.apiKeyRequiredToEnable')
+      return
+    }
   }
   if (!SORT_RE.test(String(f.sort_order ?? '').trim())) {
     f.error = t('console.dimTable.sortInvalid')

@@ -26,7 +26,31 @@
         </section>
         <section class="chart-card">
           <h3 class="chart-title">{{ $t('console.byCity') }}</h3>
-          <div ref="cityTreeRef" class="chart-box"></div>
+          <div class="rank-list">
+            <div
+              v-for="(item, idx) in cityRank"
+              :key="`${item.province}-${item.city}`"
+              class="rank-item"
+              :class="[`rank-item--${idx + 1}`, { 'is-top': idx < 3 }]"
+            >
+              <div class="rank-badge">
+                <span class="rank-badge__num">{{ idx + 1 }}</span>
+              </div>
+              <div class="rank-main">
+                <div class="rank-head">
+                  <span class="rank-name" :title="item.city">{{ item.city }}</span>
+                  <span class="rank-prov" :title="item.province">{{ item.province }}</span>
+                  <span class="rank-value">{{ formatTokens(item.total) }}</span>
+                </div>
+                <div class="rank-track">
+                  <div class="rank-fill" :style="{ width: item.percent + '%' }">
+                    <span class="rank-fill__shine"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p v-if="!cityRank.length" class="rank-empty">{{ $t('common.noData') }}</p>
+          </div>
         </section>
       </div>
       <div class="chart-grid">
@@ -56,8 +80,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts/core'
-import { BarChart, LineChart, PieChart, TreemapChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import { BarChart, LineChart, PieChart } from 'echarts/charts'
+import { GridComponent, LegendComponent, TitleComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { useI18n } from 'vue-i18n'
 import type { AdminUsage } from '@/types/admin'
@@ -69,7 +93,7 @@ import ChartLoading from '@/components/common/ChartLoading.vue'
 import AppGauge from '@/components/common/AppGauge.vue'
 import { useProviders } from '@/composables/useProviders'
 
-echarts.use([BarChart, LineChart, PieChart, TreemapChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
+echarts.use([BarChart, LineChart, PieChart, GridComponent, TitleComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 
 const { t, locale } = useI18n()
 const { providerName } = useProviders()
@@ -83,7 +107,6 @@ const dailyRef = ref<HTMLDivElement | null>(null)
 const modelRef = ref<HTMLDivElement | null>(null)
 const userRef = ref<HTMLDivElement | null>(null)
 const provRoseRef = ref<HTMLDivElement | null>(null)
-const cityTreeRef = ref<HTMLDivElement | null>(null)
 const rootRef = ref<HTMLDivElement | null>(null)
 
 let charts: echarts.ECharts[] = []
@@ -119,6 +142,19 @@ function pieColors(): string[] {
     '#e879f9',
     '#94a3b8'
   ]
+}
+
+// #rgb / #rrggbb → rgba()，供 ECharts 扇区同色渐变使用；非 hex 原样返回
+function withAlpha(color: string, alpha: number): string {
+  let hex = color.trim()
+  if (hex.startsWith('#')) {
+    if (hex.length === 4) hex = '#' + hex.slice(1).split('').map((x) => x + x).join('')
+    const r = parseInt(hex.slice(1, 3), 16)
+    const g = parseInt(hex.slice(3, 5), 16)
+    const b = parseInt(hex.slice(5, 7), 16)
+    if ([r, g, b].every((n) => !Number.isNaN(n))) return `rgba(${r},${g},${b},${alpha})`
+  }
+  return color
 }
 
 function render() {
@@ -238,16 +274,33 @@ function render() {
     charts.push(chart)
   }
 
-  // 按提供商用量：南丁格尔玫瑰图（半径编码 tokens），主题调色板
+  // 按提供商用量：渐变环形图（中心总量 + 底部占比图例 + 悬浮发光）
   if (provRoseRef.value) {
-    const rows = usage.value.by_provider.slice(0, 10)
+    const rows = usage.value.by_provider.slice(0, 8)
     const totalAll = rows.reduce((s, r) => s + r.total, 0) || 1
+    const palette = pieColors()
+    const surface = cssVar('--color-surface', '#0e1430')
+    const ringData = rows.map((r, i) => {
+      const col = palette[i % palette.length]
+      return {
+        name: providerName(r.provider),
+        value: r.total,
+        itemStyle: {
+          borderRadius: 7,
+          borderColor: surface,
+          borderWidth: 2,
+          color: new echarts.graphic.LinearGradient(0, 0, 1, 1, [
+            { offset: 0, color: withAlpha(col, 0.95) },
+            { offset: 1, color: withAlpha(col, 0.45) }
+          ])
+        }
+      }
+    })
     const chart = echarts.init(provRoseRef.value)
     chart.setOption({
-      color: pieColors(),
       tooltip: {
         trigger: 'item',
-        backgroundColor: cssVar('--color-surface', '#0e1430'),
+        backgroundColor: surface,
         borderColor: c.line,
         textStyle: { color: cssVar('--color-text', '#e6f1ff') },
         formatter: (p: { dataIndex: number }) => {
@@ -261,87 +314,63 @@ function render() {
           ].join('<br/>')
         }
       },
-      series: [
-        {
-          type: 'pie',
-          roseType: 'area',
-          radius: ['16%', '72%'],
-          center: ['50%', '50%'],
-          itemStyle: { borderColor: 'rgba(8,8,18,0.6)', borderWidth: 1, borderRadius: 4 },
-          label: { color: c.text, fontSize: 10 },
-          emphasis: { label: { fontWeight: 'bold' } },
-          data: rows.map((r) => ({ name: providerName(r.provider), value: r.total }))
-        }
-      ]
-    })
-    charts.push(chart)
-  }
-
-  // 按地区用量：省 > 市 两级矩形树图，市级聚合
-  if (cityTreeRef.value) {
-    const rows = usage.value.by_city
-    const byProv = new Map<string, typeof rows>()
-    for (const r of rows) {
-      const arr = byProv.get(r.province) ?? []
-      arr.push(r)
-      byProv.set(r.province, arr)
-    }
-    const data = [...byProv.entries()]
-      .map(([prov, cities]) => ({
-        name: prov,
-        children: cities.map((ct) => ({
-          name: ct.city,
-          value: ct.total,
-          requests: ct.requests,
-          province: prov
-        }))
-      }))
-      .sort((a, b) => (b.children.reduce((s, x) => s + x.value, 0)) - (a.children.reduce((s, x) => s + x.value, 0)))
-    const chart = echarts.init(cityTreeRef.value)
-    chart.setOption({
-      color: pieColors(),
-      tooltip: {
-        backgroundColor: cssVar('--color-surface', '#0e1430'),
-        borderColor: c.line,
-        textStyle: { color: cssVar('--color-text', '#e6f1ff') },
-        formatter: (p: { data: { name: string; value: number; requests?: number; province?: string; children?: unknown[] } }) => {
-          const d = p.data
-          if (d.children) {
-            return [`<b>${d.name}</b>`, `Tokens ${formatTokens(d.value)}`].join('<br/>')
-          }
-          return [
-            `<b>${d.name}</b>`,
-            `<span style="opacity:.65;font-size:10px">${d.province ?? ''}</span>`,
-            `Tokens ${formatTokens(d.value)}`,
-            `${t('console.requests')} ${Number(d.requests ?? 0).toLocaleString()}`
-          ].join('<br/>')
+      title: {
+        text: formatTokens(totalAll),
+        subtext: locale.value === 'en' ? 'Total Tokens' : '总 Tokens',
+        left: 'center',
+        top: '35%',
+        itemGap: 4,
+        textStyle: {
+          color: cssVar('--color-text', '#e6f1ff'),
+          fontSize: 22,
+          fontWeight: 700,
+          fontFamily: cssVar('--font-mono', 'monospace')
+        },
+        subtextStyle: { color: c.text, fontSize: 10 }
+      },
+      legend: {
+        bottom: 2,
+        left: 'center',
+        icon: 'roundRect',
+        itemWidth: 10,
+        itemHeight: 10,
+        itemGap: 12,
+        textStyle: { ...baseTextStyle, fontSize: 10 },
+        formatter: (name: string) => {
+          const hit = rows.find((r) => providerName(r.provider) === name)
+          const pct = hit ? ((hit.total / totalAll) * 100).toFixed(0) : ''
+          return `${name}  ${pct}%`
         }
       },
       series: [
         {
-          type: 'treemap',
-          width: '100%',
-          height: '100%',
-          roam: false,
-          nodeClick: false,
-          breadcrumb: { show: false },
-          label: { color: '#e6f1ff', fontSize: 10, formatter: '{b}' },
-          itemStyle: {
-            borderColor: cssVar('--color-background', '#070a1a'),
-            borderWidth: 2,
-            gapWidth: 1
+          type: 'pie',
+          radius: ['54%', '76%'],
+          center: ['50%', '45%'],
+          label: { show: false },
+          labelLine: { show: false },
+          emphasis: {
+            scale: true,
+            scaleSize: 6,
+            itemStyle: { shadowBlur: 20, shadowColor: withAlpha(c.primary, 0.55) }
           },
-          levels: [
-            { itemStyle: { borderWidth: 2, gapWidth: 2 } },
-            { itemStyle: { gapWidth: 1 }, colorSaturation: [0.35, 0.62] }
-          ],
-          data
+          data: ringData
         }
       ]
     })
     charts.push(chart)
   }
 }
+
+// 按地区用量榜单：市级 tokens 降序 TOP10，进度条按榜首归一化
+const cityRank = computed(() => {
+  const rows = [...(usage.value?.by_city ?? [])].sort((a, b) => b.total - a.total).slice(0, 10)
+  const max = rows[0]?.total || 1
+  return rows.map((r) => ({
+    ...r,
+    percent: Math.max(3, Math.round((r.total / max) * 100))
+  }))
+})
 
 // 码表数据：今日 Token 消耗（最近一天）+ 量程 + 速率说明
 const gaugeValue = computed(() => {
@@ -505,6 +534,165 @@ onBeforeUnmount(() => {
 .chart-box {
   width: 100%;
   height: 300px;
+}
+
+/* —— 地区用量榜单 —— */
+.rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  height: 300px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.rank-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: rankRise 0.5s ease both;
+}
+
+@keyframes rankRise {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.rank-badge {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  border: 1px solid var(--color-border);
+}
+
+.rank-item--1 .rank-badge {
+  color: #04101f;
+  border: none;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  box-shadow: 0 0 14px var(--color-glow);
+}
+
+.rank-item--2 .rank-badge {
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.rank-item--3 .rank-badge {
+  color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+}
+
+.rank-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.rank-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.rank-name {
+  flex: none;
+  max-width: 38%;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rank-prov {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rank-value {
+  flex: none;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.rank-item--1 .rank-value {
+  color: var(--color-primary);
+  text-shadow: 0 0 10px var(--color-glow);
+}
+
+.rank-track {
+  position: relative;
+  height: 6px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+}
+
+.rank-fill {
+  position: relative;
+  height: 100%;
+  border-radius: 99px;
+  overflow: hidden;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 45%, transparent);
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.rank-item--1 .rank-fill {
+  box-shadow: 0 0 12px var(--color-glow);
+}
+
+.rank-fill__shine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 45%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  animation: rankShine 2.6s ease-in-out infinite;
+}
+
+@keyframes rankShine {
+  0% {
+    transform: translateX(-120%);
+  }
+  60%,
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+.rank-empty {
+  margin: auto;
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 
 .gauge-card {
