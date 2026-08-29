@@ -1,14 +1,5 @@
 <template>
   <div class="model-manage">
-    <!-- 导入用的隐藏文件选择框（操作按钮已并入表格标题栏右侧） -->
-    <input
-      ref="importInputRef"
-      type="file"
-      accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      class="hidden-input"
-      @change="onImportFile"
-    />
-
     <div v-if="error" class="page-error">{{ error }}</div>
 
     <div v-if="!error" class="model-table-wrap">
@@ -35,21 +26,21 @@
           >
             <AppIcon name="lucide:plus" :size="15" />
           </AppButton>
-          <AppButton
+          <AppExport
+            icon-only
             size="middle"
-            type="default"
+            format="XLSX"
+            :count="total"
+            file-prefix="models"
             :loading="exporting"
-            :title="$t('console.exportModels')"
-            @click="onExport"
-          >
-            <AppIcon name="lucide:download" :size="15" />
-          </AppButton>
+            :button-title="$t('console.exportModels')"
+            @export="onExport"
+          />
           <AppButton
             size="middle"
             type="default"
-            :loading="importing"
             :title="$t('console.importModels')"
-            @click="pickImport"
+            @click="importVisible = true"
           >
             <AppIcon name="lucide:upload" :size="15" />
           </AppButton>
@@ -209,6 +200,17 @@
       @confirm="doDelete"
       @cancel="confirmVisible = false"
     />
+
+    <AppImport
+      v-model:visible="importVisible"
+      :title="$t('console.importModels')"
+      table
+      multiple
+      :max-count="5"
+      :max-size="10 * 1024 * 1024"
+      :processor="processImportFile"
+      @done="load"
+    />
   </div>
 </template>
 
@@ -229,6 +231,8 @@ import {
 } from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import AppImport from '@/components/common/AppImport.vue'
+import AppExport from '@/components/common/AppExport.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import Pagination from '@/components/common/Pagination.vue'
@@ -521,9 +525,8 @@ const doDelete = async () => {
 
 // —— 导入 / 导出 ——
 const exporting = ref(false)
-const importing = ref(false)
 const templating = ref(false)
-const importInputRef = ref<HTMLInputElement | null>(null)
+const importVisible = ref(false)
 
 const onExport = async () => {
   if (exporting.value) return
@@ -546,10 +549,6 @@ const onExport = async () => {
   }
 }
 
-const pickImport = () => {
-  importInputRef.value?.click()
-}
-
 const onDownloadTemplate = async () => {
   if (templating.value) return
   templating.value = true
@@ -570,25 +569,13 @@ const onDownloadTemplate = async () => {
   }
 }
 
-const onImportFile = async (e: Event) => {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
-  importing.value = true
-  try {
-    const res = await importModelsCsv(file)
-    if (res.errors?.length) {
-      showToast(t('console.importPartial', { n: res.errors.length }), 'error')
-    } else {
-      showToast(t('console.importSuccess', { created: res.created, updated: res.updated }), 'success')
-    }
-    await load()
-  } catch (err) {
-    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
-  } finally {
-    importing.value = false
+// AppImport 逐文件处理器：成功返回详情文案，部分行出错返回 warn 提示
+const processImportFile = async (file: File) => {
+  const res = await importModelsCsv(file)
+  if (res.errors?.length) {
+    return { message: t('console.importPartial', { n: res.errors.length }), warn: true }
   }
+  return t('console.importSuccess', { created: res.created, updated: res.updated })
 }
 </script>
 
@@ -599,11 +586,6 @@ const onImportFile = async (e: Event) => {
   gap: 14px;
   height: 100%;
   min-height: 0;
-}
-
-
-.hidden-input {
-  display: none;
 }
 
 .page-btn {
