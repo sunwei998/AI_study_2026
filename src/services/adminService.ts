@@ -46,6 +46,12 @@ export interface PaginationParams {
   isActive?: boolean
   enabled?: boolean
   free?: boolean
+  vision?: boolean
+  supportsSearch?: boolean
+  name?: string
+  modelKey?: string
+  statuses?: string[]
+  usernames?: string[]
   providers?: string[]
   sort?: string
   order?: 'asc' | 'desc'
@@ -102,11 +108,19 @@ export function fetchAdminModels(params: PaginationParams = {}): Promise<Paginat
   if (params.page) query.set('page', String(params.page))
   if (params.pageSize) query.set('page_size', String(params.pageSize))
   if (params.search) query.set('search', params.search)
+  if (params.name) query.set('name', params.name)
+  if (params.modelKey) query.set('model_key', params.modelKey)
   if (params.enabled !== undefined && params.enabled !== null) {
     query.set('enabled', params.enabled ? 'true' : 'false')
   }
   if (params.free !== undefined && params.free !== null) {
     query.set('free', params.free ? 'true' : 'false')
+  }
+  if (params.vision !== undefined && params.vision !== null) {
+    query.set('vision', params.vision ? 'true' : 'false')
+  }
+  if (params.supportsSearch !== undefined && params.supportsSearch !== null) {
+    query.set('supports_search', params.supportsSearch ? 'true' : 'false')
   }
   if (params.providers?.length) query.set('provider', params.providers.join(','))
   if (params.sort) query.set('sort', params.sort)
@@ -261,6 +275,10 @@ export function resetUserPassword(userId: number, password: string): Promise<{ o
   return request(`/users/${userId}/reset-password`, { method: 'POST', body: JSON.stringify({ password }) })
 }
 
+export function deleteUser(userId: number): Promise<{ ok: boolean }> {
+  return request(`/users/${userId}`, { method: 'DELETE' })
+}
+
 export function fetchUsage(): Promise<AdminUsage> {
   return request('/usage')
 }
@@ -303,6 +321,94 @@ export interface SettingLogItem {
 
 export function deleteSetting(key: string): Promise<{ ok: boolean }> {
   return request(`/settings/${encodeURIComponent(key)}`, { method: 'DELETE' })
+}
+
+export function exportSettings(): Promise<Blob> {
+  return fetch(`${API_BASE}/settings/export`, { headers: authHeaders() }).then(async (resp) => {
+    if (resp.status === 401) {
+      clearToken()
+      notifyUnauthorized()
+      throw new Error('unauthorized')
+    }
+    if (!resp.ok) throw new Error(await parseError(resp))
+    return resp.blob()
+  })
+}
+
+export function downloadSettingsTemplate(): Promise<Blob> {
+  return fetch(`${API_BASE}/settings/template`, { headers: authHeaders() }).then(async (resp) => {
+    if (resp.status === 401) {
+      clearToken()
+      notifyUnauthorized()
+      throw new Error('unauthorized')
+    }
+    if (!resp.ok) throw new Error(await parseError(resp))
+    return resp.blob()
+  })
+}
+
+export interface SettingsImportResult {
+  ok: boolean
+  created: number
+  updated: number
+  errors: string[]
+}
+
+export async function importSettings(file: File): Promise<SettingsImportResult> {
+  const form = new FormData()
+  form.append('file', file)
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+  withAcceptLanguage(headers)
+  const resp = await fetch(`${API_BASE}/settings/import`, { method: 'POST', headers, body: form })
+  if (resp.status === 401) {
+    clearToken()
+    notifyUnauthorized()
+    throw new Error('unauthorized')
+  }
+  if (resp.status === 403) {
+    notifyForbidden()
+  }
+  if (!resp.ok) throw new Error(await parseError(resp))
+  return resp.json()
+}
+
+export interface OperationLogItem {
+  id: number
+  entity: string
+  entity_id: number
+  content: string
+  operator: string
+  created_at: number
+}
+
+export function fetchOperationLogs(
+  entity: string,
+  entityId: number,
+  params: { page?: number; pageSize?: number } = {}
+): Promise<PaginatedResult<OperationLogItem>> {
+  const query = new URLSearchParams()
+  query.set('entity', entity)
+  query.set('entity_id', String(entityId))
+  if (params.page) query.set('page', String(params.page))
+  if (params.pageSize) query.set('page_size', String(params.pageSize))
+  return request<PaginatedResult<OperationLogItem>>(`/operation-logs?${query.toString()}`)
+}
+
+export function exportUsers(): Promise<Blob> {
+  return fetch(`${API_BASE}/users/export`, { headers: authHeaders() }).then(async (resp) => {
+    if (resp.status === 401) {
+      clearToken()
+      notifyUnauthorized()
+      throw new Error('unauthorized')
+    }
+    if (resp.status === 403) {
+      notifyForbidden()
+    }
+    if (!resp.ok) throw new Error(await parseError(resp))
+    return resp.blob()
+  })
 }
 
 export function fetchSettingLogs(
@@ -457,10 +563,21 @@ export function fetchTransfers(
   query.set('type', type)
   if (params.page) query.set('page', String(params.page))
   if (params.pageSize) query.set('page_size', String(params.pageSize))
+  if (params.statuses?.length) query.set('status', params.statuses.join(','))
+  if (params.usernames?.length) query.set('username', params.usernames.join(','))
   if (params.sort) query.set('sort', params.sort)
   if (params.order) query.set('order', params.order)
   const qs = query.toString()
   return request<PaginatedResult<TransferRecord>>(`/transfers?${qs}`)
+}
+
+export function deleteTransfer(recordId: number): Promise<{ ok: boolean }> {
+  return request(`/transfers/${recordId}`, { method: 'DELETE' })
+}
+
+/** 所有管理员用户名列表（供导入/导出记录的操作人筛选下拉框） */
+export function fetchAdmins(): Promise<string[]> {
+  return request<string[]>('/admins')
 }
 
 export function transferDownloadUrl(recordId: number): string {

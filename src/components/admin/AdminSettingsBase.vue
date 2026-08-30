@@ -5,6 +5,7 @@
     <div class="settings-body">
       <div class="settings-table-wrap">
         <AppTable
+          ref="tableRef"
           :columns="columns"
           :data="settings"
           :loading="loading"
@@ -17,7 +18,7 @@
           :sort-method="onServerSort"
           @filter-change="onFilterChange"
         >
-          <!-- 新增按钮作为表格附属物，位于表格标题栏右侧 -->
+          <!-- 新增 / 导出 / 导入 / 模板 / 重置 作为表格附属物，位于表格标题栏右侧 -->
           <template v-if="canManageSettings" #table-title-right>
             <AppButton
               size="middle"
@@ -26,6 +27,41 @@
               @click="openAdd"
             >
               <AppIcon name="lucide:plus" :size="15" />
+            </AppButton>
+            <AppExport
+              icon-only
+              size="middle"
+              format="XLSX"
+              :count="total"
+              file-prefix="settings"
+              :loading="exporting"
+              :button-title="$t('common.export')"
+              @export="onExport"
+            />
+            <AppButton
+              size="middle"
+              type="default"
+              :title="$t('common.import')"
+              @click="importVisible = true"
+            >
+              <AppIcon name="lucide:upload" :size="15" />
+            </AppButton>
+            <AppButton
+              size="middle"
+              type="default"
+              :loading="templating"
+              :title="$t('console.downloadTemplate')"
+              @click="onDownloadTemplate"
+            >
+              <AppIcon name="lucide:file-down" :size="15" />
+            </AppButton>
+            <AppButton
+              size="middle"
+              type="default"
+              :title="$t('console.resetFilters')"
+              @click="onReset"
+            >
+              <AppIcon name="lucide:rotate-ccw" :size="15" />
             </AppButton>
           </template>
 
@@ -97,6 +133,17 @@
         :total="total"
         v-model:page="currentPage"
         v-model:page-size="pageSize"
+      />
+
+      <AppImport
+        v-model:visible="importVisible"
+        :title="$t('common.import')"
+        table
+        multiple
+        :max-count="5"
+        :max-size="10 * 1024 * 1024"
+        :processor="processImportFile"
+        @done="onImportDone"
       />
 
       <Teleport to="body">
@@ -186,8 +233,11 @@ import { useI18n } from 'vue-i18n'
 import type { SettingItem } from '@/types/admin'
 import {
   deleteSetting,
+  downloadSettingsTemplate,
+  exportSettings,
   fetchSettingLogs,
   fetchSettings,
+  importSettings,
   updateSetting,
   type SettingLogItem
 } from '@/services/adminService'
@@ -198,6 +248,8 @@ import AppIcon from '@/components/common/AppIcon.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import AppInput from '@/components/common/AppInput.vue'
 import AppButton from '@/components/common/AppButton.vue'
+import AppExport from '@/components/common/AppExport.vue'
+import AppImport, { type ImportSummary } from '@/components/common/AppImport.vue'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import { useToast } from '@/composables/useToast'
 import { useRowValidation } from '@/composables/useRowValidation'
@@ -234,6 +286,10 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const enabledFilter = ref<boolean | null>(null)
 const sortFilter = ref<{ key: string; order: 'asc' | 'desc' | null }>({ key: '', order: null })
+// 表格实例：重置时清空表头筛选/排序高亮
+const tableRef = ref<InstanceType<typeof AppTable> | null>(null)
+// 重置进行中标志：避免重置分页时触发 watch 导致重复请求
+let resetting = false
 
 const load = async () => {
   loading.value = true
@@ -276,8 +332,26 @@ function onFilterChange(filters: Record<string, any[]>) {
   }
 }
 
-watch(currentPage, load)
+/** 重置：清除启用筛选与排序、分页回默认，重新查询 */
+function onReset() {
+  resetting = true
+  try {
+    enabledFilter.value = null
+    sortFilter.value = { key: '', order: null }
+    pageSize.value = 10
+    currentPage.value = 1
+    tableRef.value?.resetState()
+  } finally {
+    resetting = false
+  }
+  load()
+}
+
+watch(currentPage, () => {
+  if (!resetting) load()
+})
 watch(pageSize, () => {
+  if (resetting) return
   currentPage.value = 1
   load()
 })
@@ -467,6 +541,86 @@ const submitAdd = async () => {
     addError.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
     addSubmitting.value = false
+  }
+}
+
+// ============ 导出 / 模板 / 导入 ============
+const exporting = ref(false)
+const templating = ref(false)
+const importVisible = ref(false)
+
+/** 触发浏览器下载一个 Blob */
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+const onExport = async () => {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const blob = await exportSettings()
+    downloadBlob(blob, `settings_${Date.now()}.xlsx`)
+    showToast(t('console.exportSuccess'), 'success')
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
+  } finally {
+    exporting.value = false
+  }
+}
+
+const onDownloadTemplate = async () => {
+  if (templating.value) return
+  templating.value = true
+  try {
+    const blob = await downloadSettingsTemplate()
+    downloadBlob(blob, 'settings_template.xlsx')
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
+  } finally {
+    templating.value = false
+  }
+}
+
+const processImportFile = async (file: File) => {
+  const res = await importSettings(file)
+  if (res.errors?.length) {
+    return {
+      message: t('console.importPartial', { n: res.errors.length }),
+      warn: true,
+      created: res.created,
+      updated: res.updated
+    }
+  }
+  return {
+    message: t('console.importSuccess', { created: res.created, updated: res.updated }),
+    created: res.created,
+    updated: res.updated
+  }
+}
+
+function onImportDone(s: ImportSummary) {
+  if (s.failed === 0 && s.warn === 0) {
+    showToast(t('console.importSuccess', { created: s.created, updated: s.updated }), 'success')
+  } else if (s.failed === 0) {
+    showToast(t('console.importPartialDone', { created: s.created, updated: s.updated }), 'info')
+  } else if (s.success + s.warn > 0) {
+    showToast(
+      t('console.importMixedDone', { created: s.created, updated: s.updated, failed: s.failed }),
+      'error'
+    )
+  } else {
+    showToast(t('console.importAllFailed', { failed: s.failed }), 'error')
+  }
+  if (s.success + s.warn > 0) {
+    if (currentPage.value !== 1) currentPage.value = 1
+    else load()
   }
 }
 </script>

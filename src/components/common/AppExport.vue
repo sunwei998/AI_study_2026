@@ -121,7 +121,7 @@ function positionPanel() {
   if (!rect) return
   const vw = window.innerWidth
   const vh = window.innerHeight
-  let left = Math.min(Math.max(rect.right - PANEL_W, 8), vw - PANEL_W - 8)
+  const left = Math.min(Math.max(rect.right - PANEL_W, 8), vw - PANEL_W - 8)
   let top = rect.bottom + 8
   // 下方空间不足时翻转到上方
   nextTick(() => {

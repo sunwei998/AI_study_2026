@@ -87,3 +87,19 @@ tab 与下方内容当前用 `.admin-tab-layout__tabs{margin-bottom:6px}`（隐�
 - 代理：vite.config.ts 把 `/api` 代理到 `http://localhost:8000`（localhost 先解析 127.0.0.1，故能命中只绑 IPv4 的后端）
 - 验证命令：`npm run type-check`、`npm run build`、`npm run lint`
 - 后台管理员：admin / admin123（super_admin）
+
+## 后端约定（ai-chat-server）
+
+### fetch_one / fetch_all 返回 sqlite3.Row，无 .get() 方法（重要坑）
+
+`db.fetch_one()` 返回 `sqlite3.Row`，**不是 dict**：支持 `row["key"]` 下标访问和 `row.keys()`，但**没有 `.get()`**。在 helper 里想用 `.get(key, default)` 时必须先 `dict(row)` 转换，否则运行时报 `AttributeError: 'sqlite3.Row' object has no attribute 'get'` → 接口 500。
+
+- 参考：`admin.py` 的 `update_setting` 里 `old = dict(row)`；三个 diff 日志函数 `_model_diff_logs` / `_dim_value_diff_logs` / `_user_diff_logs` 开头都 `old = dict(old)` 兜底。
+- 教训：给接口加「字段级 diff 日志」这类纯函数 helper 时，单元测试若只传普通 dict 是测不出来的——必须用真实 `sqlite3.Row`（或 `conn.row_factory=sqlite3.Row` 取一行）回归，才能暴露 `.get()` 缺失。
+
+### FastAPI 路由顺序：字面量段必须注册在动态段之前（重要坑）
+
+新增「带字面量段的路径」（如 `GET /users/export`、`GET /models/check`）必须**注册在**对应的「动态段路径」（`GET /users/{user_id}`）**之前**。FastAPI/Starlette 按注册顺序匹配，`/users/export` 若在 `/users/{user_id}` 之后注册，会被 `{user_id}` 捕获 → `"export"` 转 int 失败 → 422（不是 404/500，很隐蔽）。
+
+- 现状：`admin.py` 里 `export_users` 已上移到 `get_user` 之前；`/models/check`、`/dim-tables/by-code/{code}/values` 等原有路由本就靠前。
+- 教训：加任何 `GET /xxx/some-literal` 前，先确认没有 `GET /xxx/{id}` 排在其后；有则把 literal 路由放在动态段之前。

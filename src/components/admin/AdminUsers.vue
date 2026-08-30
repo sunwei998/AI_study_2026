@@ -4,6 +4,7 @@
 
     <div v-if="!error" class="users-table-wrap">
       <AppTable
+        ref="tableRef"
         :columns="columns"
         :data="users"
         :loading="loading"
@@ -16,6 +17,28 @@
         :sort-method="onServerSort"
         @filter-change="onFilterChange"
       >
+        <!-- 导出 / 重置 作为表格附属物，位于表格标题栏右侧 -->
+        <template v-if="auth.isSuperAdmin" #table-title-right>
+          <AppExport
+            icon-only
+            size="middle"
+            format="XLSX"
+            :count="total"
+            file-prefix="users"
+            :loading="exporting"
+            :button-title="$t('common.export')"
+            @export="onExport"
+          />
+          <AppButton
+            size="middle"
+            type="default"
+            :title="$t('console.resetFilters')"
+            @click="onReset"
+          >
+            <AppIcon name="lucide:rotate-ccw" :size="15" />
+          </AppButton>
+        </template>
+
         <template #column-username="{ row }">
           <AppTooltip :content="row.username">
             <span class="cell-user">
@@ -53,6 +76,18 @@
             </button>
             <button class="row-btn" :title="$t('console.resetPassword')" @click="openResetPassword(row)">
               <AppIcon name="lucide:key-round" :size="15" />
+            </button>
+            <button class="row-btn" :title="$t('console.logs')" @click="openLogs(row)">
+              <AppIcon name="lucide:history" :size="15" />
+            </button>
+            <button
+              class="row-btn row-btn--danger"
+              :class="{ 'is-disabled': !canDeleteUser(row) }"
+              :disabled="!canDeleteUser(row)"
+              :title="deleteDisabledTitle(row)"
+              @click="askDeleteUser(row)"
+            >
+              <AppIcon name="lucide:trash-2" :size="15" />
             </button>
           </div>
         </template>
@@ -182,6 +217,44 @@
       </Transition>
     </Teleport>
 
+    <Teleport to="body">
+      <Transition name="confirm" appear>
+        <div v-if="logsVisible" class="form-overlay" @click.self="closeLogs">
+          <div class="form-modal form-modal--logs" role="dialog" aria-modal="true">
+            <span class="form-accent-line"></span>
+            <h3 class="form-title">{{ $t('console.logs') }}</h3>
+            <div class="logs-subtitle">{{ logsKey }}</div>
+
+            <div class="logs-table">
+              <AppTable
+                :columns="logColumns"
+                :data="logs"
+                :loading="logsLoading"
+                loading-type="skeleton"
+                :skeleton-rows="5"
+                :empty-text="$t('console.noLogs')"
+                row-key="id"
+                size="small"
+                show-index
+                :max-height="360"
+              />
+              <Pagination
+                :total="logsTotal"
+                v-model:page="logsPage"
+                v-model:page-size="logsPageSize"
+              />
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="form-btn form-btn--ghost" @click="closeLogs">
+                {{ $t('confirm.close') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <ConfirmModal
       v-model:visible="confirmVisible"
       :title="confirmTitle"
@@ -198,8 +271,18 @@
 import { computed, onMounted, ref ,watch} from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AdminUser, UserRole, UserUpdatePayload } from '@/types/admin'
-import { fetchAdminUser, fetchAdminUsers, resetUserPassword, updateAdminUser } from '@/services/adminService'
+import {
+  deleteUser,
+  exportUsers,
+  fetchAdminUser,
+  fetchAdminUsers,
+  fetchOperationLogs,
+  resetUserPassword,
+  updateAdminUser,
+  type OperationLogItem
+} from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
+import { formatDateTime } from '@/utils/format'
 import { useToast } from '@/composables/useToast'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
@@ -209,6 +292,8 @@ import AppCascader, { type CascaderValue } from '@/components/common/AppCascader
 import DatePicker from '@/components/common/DatePicker.vue'
 import AppInput from '@/components/common/AppInput.vue'
 import AppSelect from '@/components/common/AppSelect.vue'
+import AppButton from '@/components/common/AppButton.vue'
+import AppExport from '@/components/common/AppExport.vue'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import AppTooltip from '@/components/common/AppTooltip.vue'
 import { ALL_ROLES, ROLE_LABEL_KEYS } from '@/utils/roles'
@@ -229,6 +314,10 @@ const genderFilter = ref<string[]>([])
 const roleFilter = ref<string[]>([])
 const isActiveFilter = ref<boolean | null>(null)
 const sortFilter = ref<{ key: string; order: 'asc' | 'desc' | null }>({ key: '', order: null })
+// 表格实例：重置时清空表头筛选/排序高亮
+const tableRef = ref<InstanceType<typeof AppTable> | null>(null)
+// 重置进行中标志：避免重置分页时触发 watch 导致重复请求
+let resetting = false
 
 const load = async () => {
   loading.value = true
@@ -277,8 +366,29 @@ function onFilterChange(filters: Record<string, any[]>) {
   }
 }
 
-watch(currentPage, load)
+/** 重置：清除全部筛选与排序、分页回默认，重新查询 */
+function onReset() {
+  resetting = true
+  try {
+    usernameFilter.value = ''
+    genderFilter.value = []
+    roleFilter.value = []
+    isActiveFilter.value = null
+    sortFilter.value = { key: '', order: null }
+    pageSize.value = 10
+    currentPage.value = 1
+    tableRef.value?.resetState()
+  } finally {
+    resetting = false
+  }
+  load()
+}
+
+watch(currentPage, () => {
+  if (!resetting) load()
+})
 watch(pageSize, () => {
+  if (resetting) return
   currentPage.value = 1
   load()
 })
@@ -435,7 +545,7 @@ const columns = computed<TableColumn[]>(() => [
         {
           key: 'actions',
           title: t('console.actions'),
-          width: 140,
+          width: 190,
           align: 'center',
           fixed: 'right'
         } as TableColumn
@@ -475,7 +585,7 @@ const doConfirm = async () => {
     await confirmAction()
     confirmVisible.value = false
   } catch (err) {
-    error.value = err instanceof Error ? err.message : t('common.errorOccurred')
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
     confirmVisible.value = false
   } finally {
     confirmLoading.value = false
@@ -491,6 +601,28 @@ const askToggleActive = (u: AdminUser) => {
       await updateAdminUser(u.id, { is_active: target })
       await load()
       showToast(target ? t('console.enableSuccess') : t('console.disableSuccess'), 'success')
+    }
+  )
+}
+
+// 删除用户：仅能删除非自己且未启用的用户
+const canDeleteUser = (u: AdminUser) => u.id !== auth.user?.id && !u.is_active
+
+const deleteDisabledTitle = (u: AdminUser) => {
+  if (u.id === auth.user?.id) return t('console.cannotDeleteSelf')
+  if (u.is_active) return t('console.cannotDeleteActive')
+  return t('console.delete')
+}
+
+const askDeleteUser = (u: AdminUser) => {
+  if (!canDeleteUser(u)) return
+  openConfirm(
+    t('console.deleteUserTitle'),
+    t('console.deleteUserMessage', { name: u.username }),
+    async () => {
+      await deleteUser(u.id)
+      showToast(t('console.deleted'), 'success')
+      await load()
     }
   )
 }
@@ -633,6 +765,87 @@ const submitRegion = async () => {
     regionSubmitting.value = false
   }
 }
+
+// ============ 导出 ============
+const exporting = ref(false)
+
+const onExport = async () => {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const blob = await exportUsers()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `users_${Date.now()}.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    showToast(t('console.exportSuccess'), 'success')
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
+  } finally {
+    exporting.value = false
+  }
+}
+
+// ============ 操作日志 ============
+const logsVisible = ref(false)
+const logsLoading = ref(false)
+const logsKey = ref('')
+const logsId = ref<number | null>(null)
+const logs = ref<OperationLogItem[]>([])
+const logsTotal = ref(0)
+const logsPage = ref(1)
+const logsPageSize = ref(10)
+
+const logColumns = computed<TableColumn[]>(() => [
+  { key: 'content', title: t('console.logContent'), width: 320 },
+  { key: 'operator', title: t('console.operator'), width: 120 },
+  { key: 'created_at', title: t('console.operateTime'), width: 180, formatter: (row) => formatDateTime(row.created_at) },
+])
+
+const loadLogs = async () => {
+  if (logsId.value == null) return
+  logsLoading.value = true
+  try {
+    const res = await fetchOperationLogs('user', logsId.value, {
+      page: logsPage.value,
+      pageSize: logsPageSize.value,
+    })
+    logs.value = res.items
+    logsTotal.value = res.total
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : t('common.errorOccurred')
+  } finally {
+    logsLoading.value = false
+  }
+}
+
+const openLogs = (u: AdminUser) => {
+  logsId.value = u.id
+  logsKey.value = u.username
+  logsPage.value = 1
+  logsPageSize.value = 10
+  logs.value = []
+  logsTotal.value = 0
+  logsVisible.value = true
+  void loadLogs()
+}
+
+const closeLogs = () => {
+  logsVisible.value = false
+  logsId.value = null
+  logsKey.value = ''
+  logs.value = []
+}
+
+watch(logsPage, loadLogs)
+watch(logsPageSize, () => {
+  logsPage.value = 1
+  loadLogs()
+})
 </script>
 
 <style scoped>
@@ -821,6 +1034,25 @@ const submitRegion = async () => {
   box-shadow: 0 0 8px var(--color-glow);
 }
 
+.row-btn--danger:hover {
+  color: #ff5b6a;
+  border-color: #ff5b6a;
+  box-shadow: 0 0 8px rgba(255, 77, 94, 0.45);
+}
+
+.row-btn.is-disabled,
+.row-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.row-btn.is-disabled:hover,
+.row-btn:disabled:hover {
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+  box-shadow: none;
+}
+
 .form-overlay {
   position: fixed;
   inset: 0;
@@ -846,6 +1078,27 @@ const submitRegion = async () => {
   box-shadow:
     0 24px 60px rgba(0, 0, 0, 0.45),
     0 0 40px var(--color-glow);
+}
+
+.form-modal--logs {
+  width: min(780px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.logs-subtitle {
+  margin: -10px 0 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-primary);
+  text-shadow: 0 0 12px var(--color-glow);
+  word-break: break-all;
+}
+
+.logs-table {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .form-accent-line {

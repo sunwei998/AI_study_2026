@@ -117,6 +117,9 @@
             <button class="row-btn" :title="$t('console.edit')" @click="openEdit(row)">
               <AppIcon name="lucide:pencil" :size="15" />
             </button>
+            <button class="row-btn" :title="$t('console.logs')" @click="openLogs(row)">
+              <AppIcon name="lucide:history" :size="15" />
+            </button>
             <button
               class="row-btn row-btn--danger"
               :class="{ 'is-disabled': row.enabled }"
@@ -178,9 +181,11 @@
               <div class="form-row">
                 <label class="form-field">
                   <span class="form-label">{{ $t('console.provider') }}</span>
-                  <select v-model="form.provider" class="form-input">
-                    <option v-for="p in providers" :key="p.id" :value="p.id">{{ p.name }}</option>
-                  </select>
+                  <AppSelect
+                    v-model="form.provider"
+                    :options="providerOptions"
+                    :placeholder="$t('common.pleaseSelect')"
+                  />
                 </label>
                 <label class="form-field">
                   <span class="form-label">{{ $t('console.sortOrder') }}</span>
@@ -233,6 +238,44 @@
       @cancel="confirmVisible = false"
     />
 
+    <Teleport to="body">
+      <Transition name="confirm" appear>
+        <div v-if="logsVisible" class="form-overlay" @click.self="closeLogs">
+          <div class="form-modal form-modal--logs" role="dialog" aria-modal="true">
+            <span class="form-accent-line"></span>
+            <h3 class="form-title">{{ $t('console.logs') }}</h3>
+            <div class="logs-subtitle">{{ logsKey }}</div>
+
+            <div class="logs-table">
+              <AppTable
+                :columns="logColumns"
+                :data="logs"
+                :loading="logsLoading"
+                loading-type="skeleton"
+                :skeleton-rows="5"
+                :empty-text="$t('console.noLogs')"
+                row-key="id"
+                size="small"
+                show-index
+                :max-height="360"
+              />
+              <Pagination
+                :total="logsTotal"
+                v-model:page="logsPage"
+                v-model:page-size="logsPageSize"
+              />
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="form-btn form-btn--ghost" @click="closeLogs">
+                {{ $t('confirm.close') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <AppImport
       v-model:visible="importVisible"
       :title="$t('console.importModels')"
@@ -258,10 +301,13 @@ import {
   exportModelsCsv,
   fetchAdminModel,
   fetchAdminModels,
+  fetchOperationLogs,
   importModelsCsv,
-  updateAdminModel
+  updateAdminModel,
+  type OperationLogItem
 } from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
+import { formatDateTime } from '@/utils/format'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppImport, { type ImportSummary } from '@/components/common/AppImport.vue'
 import AppExport from '@/components/common/AppExport.vue'
@@ -269,6 +315,7 @@ import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import AppInput from '@/components/common/AppInput.vue'
+import AppSelect from '@/components/common/AppSelect.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import { useProviders } from '@/composables/useProviders'
@@ -295,11 +342,17 @@ const total = ref(0)
 
 // 模型提供方数据字典：维表接口（按语言返回 name）优先，未配置时回退本地默认字典
 const { providers, providerName } = useProviders()
+// 表单提供商下拉选项（AppSelect 用 { label, value }）
+const providerOptions = computed(() => providers.value.map((p) => ({ label: p.name, value: p.id })))
 
 const currentPage = ref(1)
 const pageSize = ref(10)
 const enabledFilter = ref<boolean | null>(null)
 const freeFilter = ref<boolean | null>(null)
+const visionFilter = ref<boolean | null>(null)
+const supportsSearchFilter = ref<boolean | null>(null)
+const nameFilter = ref('')
+const modelKeyFilter = ref('')
 const providerFilter = ref<string[]>([])
 const sortFilter = ref<{ key: string; order: 'asc' | 'desc' | null }>({ key: '', order: null })
 
@@ -314,6 +367,10 @@ function onReset() {
   try {
     enabledFilter.value = null
     freeFilter.value = null
+    visionFilter.value = null
+    supportsSearchFilter.value = null
+    nameFilter.value = ''
+    modelKeyFilter.value = ''
     providerFilter.value = []
     sortFilter.value = { key: '', order: null }
     pageSize.value = 10
@@ -335,6 +392,10 @@ const load = async () => {
       pageSize: pageSize.value,
       enabled: enabledFilter.value === null ? undefined : enabledFilter.value,
       free: freeFilter.value === null ? undefined : freeFilter.value,
+      vision: visionFilter.value === null ? undefined : visionFilter.value,
+      supportsSearch: supportsSearchFilter.value === null ? undefined : supportsSearchFilter.value,
+      name: nameFilter.value || undefined,
+      modelKey: modelKeyFilter.value || undefined,
       providers: providerFilter.value.length ? providerFilter.value : undefined,
       sort: sortFilter.value.order ? sortFilter.value.key : undefined,
       order: sortFilter.value.order ?? undefined
@@ -358,12 +419,20 @@ function onServerSort(key: string, order: 'asc' | 'desc' | null) {
   }
 }
 
-// 服务端筛选：enabled/free 单选，provider 多选
+// 服务端筛选：enabled/free/vision/supports_search 单选，provider 多选，name/model_key 模糊
 function onFilterChange(filters: Record<string, any[]>) {
   const rawEnabled = filters.enabled?.[0]
   enabledFilter.value = typeof rawEnabled === 'boolean' ? rawEnabled : null
   const rawFree = filters.free?.[0]
   freeFilter.value = typeof rawFree === 'boolean' ? rawFree : null
+  const rawVision = filters.vision?.[0]
+  visionFilter.value = typeof rawVision === 'boolean' ? rawVision : null
+  const rawSearch = filters.supports_search?.[0]
+  supportsSearchFilter.value = typeof rawSearch === 'boolean' ? rawSearch : null
+  const name = filters.name?.[0]
+  nameFilter.value = typeof name === 'string' ? name : ''
+  const modelKey = filters.model_key?.[0]
+  modelKeyFilter.value = typeof modelKey === 'string' ? modelKey : ''
   providerFilter.value = (filters.provider ?? []).map(String)
   if (currentPage.value === 1) {
     load()
@@ -399,14 +468,27 @@ const columns = computed<TableColumn[]>(() => [
     // 后端返回 1/0，筛选值是布尔，需宽松比较
     filterMethod: (v: any, row: AdminModel) => Boolean(row.enabled) === Boolean(v)
   },
-  { key: 'model_key', title: t('console.modelKey'), width: 210, ellipsis: true, sortable: true, className: 'cell-key' },
+  {
+    key: 'model_key',
+    title: t('console.modelKey'),
+    width: 210,
+    ellipsis: true,
+    sortable: true,
+    className: 'cell-key',
+    filterable: true,
+    filterType: 'input',
+    filterPlaceholder: t('common.search')
+  },
   {
     key: 'name',
     title: t('console.name'),
     width: 150,
     ellipsis: true,
     sortable: true,
-    formatter: (row: AdminModel) => displayName(row)
+    formatter: (row: AdminModel) => displayName(row),
+    filterable: true,
+    filterType: 'input',
+    filterPlaceholder: t('common.search')
   },
   {
     key: 'provider',
@@ -432,8 +514,32 @@ const columns = computed<TableColumn[]>(() => [
     ],
     filterMethod: (v: any, row: AdminModel) => Boolean(row.free) === Boolean(v)
   },
-  { key: 'vision', title: t('console.vision'), width: 80, align: 'center' },
-  { key: 'supports_search', title: t('console.supportsSearch'), width: 90, align: 'center' },
+  {
+    key: 'vision',
+    title: t('console.vision'),
+    width: 80,
+    align: 'center',
+    filterable: true,
+    filterType: 'radio',
+    filters: [
+      { text: t('console.supports'), value: true },
+      { text: t('console.notSupports'), value: false }
+    ],
+    filterMethod: (v: any, row: AdminModel) => Boolean(row.vision) === Boolean(v)
+  },
+  {
+    key: 'supports_search',
+    title: t('console.supportsSearch'),
+    width: 90,
+    align: 'center',
+    filterable: true,
+    filterType: 'radio',
+    filters: [
+      { text: t('console.supports'), value: true },
+      { text: t('console.notSupports'), value: false }
+    ],
+    filterMethod: (v: any, row: AdminModel) => Boolean(row.supports_search) === Boolean(v)
+  },
   { key: 'is_default', title: t('console.default'), width: 90, align: 'center' },
   { key: 'sort_order', title: t('console.sortOrder'), width: 100, align: 'right', sortable: true, className: 'cell-order' },
   ...(canManageModels.value
@@ -441,7 +547,7 @@ const columns = computed<TableColumn[]>(() => [
         {
           key: 'actions',
           title: t('console.actions'),
-          width: 100,
+          width: 130,
           align: 'center',
           fixed: 'right'
         } as TableColumn
@@ -450,13 +556,18 @@ const columns = computed<TableColumn[]>(() => [
 ])
 
 const toggleEnabled = async (m: AdminModel) => {
+  // 默认模型不允许禁用：前端直接拦截，不打接口
+  if (m.is_default && m.enabled) {
+    showToast(t('console.defaultCannotDisable'), 'error')
+    return
+  }
   const target = { ...m, enabled: !m.enabled }
   try {
     await updateAdminModel(m.id, toPayload(target))
     m.enabled = target.enabled
     showToast(target.enabled ? t('console.enableSuccess') : t('console.disableSuccess'), 'success')
   } catch (err) {
-    error.value = err instanceof Error ? err.message : t('common.errorOccurred')
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
   }
 }
 
@@ -532,7 +643,7 @@ const openEdit = async (m: AdminModel) => {
     const detail = await fetchAdminModel(m.id)
     form.value = toPayload(detail)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : t('common.errorOccurred')
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
     formVisible.value = false
   }
 }
@@ -654,7 +765,7 @@ const doDelete = async () => {
     confirmVisible.value = false
     await load()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : t('common.errorOccurred')
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
     confirmVisible.value = false
   } finally {
     confirmLoading.value = false
@@ -744,6 +855,63 @@ function onImportDone(s: ImportSummary) {
     else load()
   }
 }
+
+// ============ 操作日志 ============
+const logsVisible = ref(false)
+const logsLoading = ref(false)
+const logsKey = ref('')
+const logsId = ref<number | null>(null)
+const logs = ref<OperationLogItem[]>([])
+const logsTotal = ref(0)
+const logsPage = ref(1)
+const logsPageSize = ref(10)
+
+const logColumns = computed<TableColumn[]>(() => [
+  { key: 'content', title: t('console.logContent'), width: 320 },
+  { key: 'operator', title: t('console.operator'), width: 120 },
+  { key: 'created_at', title: t('console.operateTime'), width: 180, formatter: (row) => formatDateTime(row.created_at) },
+])
+
+const loadLogs = async () => {
+  if (logsId.value == null) return
+  logsLoading.value = true
+  try {
+    const res = await fetchOperationLogs('model', logsId.value, {
+      page: logsPage.value,
+      pageSize: logsPageSize.value,
+    })
+    logs.value = res.items
+    logsTotal.value = res.total
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
+  } finally {
+    logsLoading.value = false
+  }
+}
+
+const openLogs = (m: AdminModel) => {
+  logsId.value = m.id
+  logsKey.value = `${displayName(m)} · ${m.model_key}`
+  logsPage.value = 1
+  logsPageSize.value = 10
+  logs.value = []
+  logsTotal.value = 0
+  logsVisible.value = true
+  void loadLogs()
+}
+
+const closeLogs = () => {
+  logsVisible.value = false
+  logsId.value = null
+  logsKey.value = ''
+  logs.value = []
+}
+
+watch(logsPage, loadLogs)
+watch(logsPageSize, () => {
+  logsPage.value = 1
+  loadLogs()
+})
 </script>
 
 <style scoped>
@@ -978,6 +1146,25 @@ function onImportDone(s: ImportSummary) {
   box-shadow:
     0 24px 60px rgba(0, 0, 0, 0.45),
     0 0 40px var(--color-glow);
+}
+
+.form-modal--logs {
+  width: min(780px, 100%);
+}
+
+.logs-subtitle {
+  margin: -10px 0 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-primary);
+  text-shadow: 0 0 12px var(--color-glow);
+  word-break: break-all;
+}
+
+.logs-table {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .form-accent-line {

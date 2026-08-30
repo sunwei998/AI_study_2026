@@ -1,10 +1,11 @@
 <template>
   <div
     class="app-select"
-    :class="{ 'is-open': isOpen, 'is-disabled': disabled, 'is-focused': isFocused }"
+    :class="{ 'is-open': isOpen, 'is-disabled': disabled, 'is-focused': isFocused, 'is-multiple': multiple }"
     ref="rootRef"
   >
     <button
+      ref="triggerRef"
       type="button"
       class="as-trigger"
       :disabled="disabled"
@@ -12,7 +13,36 @@
       @focus="isFocused = true"
       @blur="isFocused = false"
     >
-      <span class="as-value" :class="{ placeholder: !hasValue }">{{ displayLabel }}</span>
+      <!-- 单选：单值回显 -->
+      <span v-if="!multiple" class="as-value" :class="{ placeholder: !hasValue }">{{ displayLabel }}</span>
+
+      <!-- 多选：tag 回显 + 宽度折叠 -->
+      <div v-else ref="tagsRef" class="as-tags">
+        <span v-if="selectedOptions.length === 0" class="as-value placeholder">
+          {{ placeholder || t('common.pleaseSelect') }}
+        </span>
+        <template v-else>
+          <span v-for="opt in visibleSelected" :key="String(opt.value)" class="as-tag">
+            <span class="as-tag-label">{{ opt.label }}</span>
+            <svg
+              class="as-tag-close"
+              viewBox="0 0 24 24"
+              width="12"
+              height="12"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              @click.stop="removeTag(opt.value)"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </span>
+          <span v-if="hiddenCount > 0" class="as-tag as-tag--more">+{{ hiddenCount }}</span>
+        </template>
+      </div>
+
       <svg
         class="as-arrow"
         viewBox="0 0 24 24"
@@ -28,6 +58,18 @@
       </svg>
     </button>
 
+    <!-- 隐藏测量层：渲染全部 tag 用于测量宽度（visibility 隐藏仍可量 offsetWidth） -->
+    <div v-if="multiple" ref="measureRef" class="as-measure" aria-hidden="true">
+      <span v-for="opt in selectedOptions" :key="String(opt.value)" class="as-tag">
+        <span class="as-tag-label">{{ opt.label }}</span>
+        <svg class="as-tag-close" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </span>
+      <span class="as-tag as-tag--more">+99</span>
+    </div>
+
     <Transition name="as-dropdown">
       <Teleport to="body">
         <div v-if="isOpen" ref="panelRef" class="as-panel" :style="panelStyle" role="listbox">
@@ -37,14 +79,31 @@
               :key="String(opt.value)"
               type="button"
               class="as-option"
-              :class="{ active: modelValue === opt.value }"
+              :class="{ active: multiple ? isChecked(opt) : modelValue === opt.value }"
               role="option"
-              :aria-selected="modelValue === opt.value"
+              :aria-selected="multiple ? isChecked(opt) : modelValue === opt.value"
               @click="select(opt)"
             >
+              <!-- 多选 checkbox -->
+              <span v-if="multiple" class="as-checkbox" :class="{ checked: isChecked(opt) }">
+                <svg
+                  v-if="isChecked(opt)"
+                  viewBox="0 0 24 24"
+                  width="12"
+                  height="12"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </span>
               <span class="as-option-label">{{ opt.label }}</span>
+              <!-- 单选对勾 -->
               <svg
-                v-if="modelValue === opt.value"
+                v-if="!multiple && modelValue === opt.value"
                 class="as-check"
                 viewBox="0 0 24 24"
                 width="14"
@@ -68,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 interface SelectOption {
@@ -76,29 +135,36 @@ interface SelectOption {
   value: string | number | boolean
 }
 
+type SelectValue = string | number | boolean
+
 const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
-    modelValue: string | number | boolean | null | undefined
+    modelValue: SelectValue | null | undefined | SelectValue[]
     options?: Array<SelectOption | string | number>
     placeholder?: string
     disabled?: boolean
+    multiple?: boolean
   }>(),
   {
     options: () => [],
     placeholder: '',
-    disabled: false
+    disabled: false,
+    multiple: false
   }
 )
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: string | number | boolean): void
-  (e: 'change', value: string | number | boolean): void
+  (e: 'update:modelValue', value: SelectValue | SelectValue[]): void
+  (e: 'change', value: SelectValue | SelectValue[]): void
 }>()
 
 const rootRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
+const triggerRef = ref<HTMLElement | null>(null)
+const tagsRef = ref<HTMLElement | null>(null)
+const measureRef = ref<HTMLElement | null>(null)
 const isOpen = ref(false)
 const isFocused = ref(false)
 
@@ -110,7 +176,6 @@ function updatePanelPos() {
   const el = rootRef.value
   if (!el || !isOpen.value) return
   const rect = el.getBoundingClientRect()
-  // 用面板实际高度精确贴住触发器（向下贴底边，向上贴顶边，0 间隙）
   const panelH = panelRef.value?.offsetHeight || PANEL_MAX_HEIGHT
   let top = rect.bottom
   if (top + panelH > window.innerHeight && rect.top > panelH + 12) {
@@ -126,10 +191,8 @@ function updatePanelPos() {
 
 watch(isOpen, async (open) => {
   if (open) {
-    // 等面板挂载后再定位，才能拿到真实高度
     await nextTick()
     updatePanelPos()
-    // 任意元素滚动/视口变化时跟随定位（capture 可捕获内部滚动容器）
     window.addEventListener('scroll', updatePanelPos, true)
     window.addEventListener('resize', updatePanelPos)
   } else {
@@ -143,11 +206,26 @@ const normalizedOptions = computed<SelectOption[]>(() => {
     if (typeof opt === 'object' && opt !== null && 'value' in opt) {
       return { label: String(opt.label), value: opt.value }
     }
-    return { label: String(opt), value: opt as string | number }
+    return { label: String(opt), value: opt as SelectValue }
+  })
+})
+
+// 多选选中值列表
+const selectedList = computed<SelectValue[]>(() => {
+  if (!props.multiple) return []
+  return Array.isArray(props.modelValue) ? (props.modelValue as SelectValue[]) : []
+})
+
+// 多选回显的 option（按选中顺序，未匹配到 options 时用 value 兜底）
+const selectedOptions = computed<SelectOption[]>(() => {
+  return selectedList.value.map((v) => {
+    const found = normalizedOptions.value.find((o) => o.value === v)
+    return found || { label: String(v), value: v }
   })
 })
 
 const hasValue = computed(() => {
+  if (props.multiple) return selectedList.value.length > 0
   return props.modelValue !== null && props.modelValue !== undefined && props.modelValue !== ''
 })
 
@@ -157,16 +235,85 @@ const displayLabel = computed(() => {
   return found ? found.label : String(props.modelValue)
 })
 
+function isChecked(opt: SelectOption): boolean {
+  return selectedList.value.includes(opt.value)
+}
+
 function toggle() {
   if (props.disabled) return
   isOpen.value = !isOpen.value
 }
 
 function select(opt: SelectOption) {
-  emit('update:modelValue', opt.value)
-  emit('change', opt.value)
-  isOpen.value = false
+  if (props.multiple) {
+    const arr = [...selectedList.value]
+    const idx = arr.indexOf(opt.value)
+    if (idx > -1) arr.splice(idx, 1)
+    else arr.push(opt.value)
+    emit('update:modelValue', arr)
+    emit('change', arr)
+    // 多选不关闭下拉，继续勾选
+  } else {
+    emit('update:modelValue', opt.value)
+    emit('change', opt.value)
+    isOpen.value = false
+  }
 }
+
+function removeTag(value: SelectValue) {
+  if (!props.multiple) return
+  const arr = selectedList.value.filter((v) => v !== value)
+  emit('update:modelValue', arr)
+  emit('change', arr)
+}
+
+// ============ 多选 tag 宽度折叠（借鉴 element-plus collapse-tags） ============
+const TAG_GAP = 4
+const visibleCount = ref(9999)
+
+function computeVisible() {
+  if (!props.multiple) return
+  const container = tagsRef.value
+  const measure = measureRef.value
+  if (!container || !measure) return
+  const tags = Array.from(measure.querySelectorAll('.as-tag:not(.as-tag--more)')) as HTMLElement[]
+  if (tags.length === 0) {
+    visibleCount.value = 0
+    return
+  }
+  // 可用宽度 = tag 容器宽度；逐个累加 tag 宽度直到放不下
+  const available = container.clientWidth
+  let acc = 0
+  let n = 0
+  for (let i = 0; i < tags.length; i++) {
+    const w = tags[i].offsetWidth + (i === 0 ? 0 : TAG_GAP)
+    if (acc + w > available) break
+    acc += w
+    n++
+  }
+  visibleCount.value = Math.max(1, n)
+}
+
+const visibleSelected = computed(() => selectedOptions.value.slice(0, visibleCount.value))
+const hiddenCount = computed(() => Math.max(0, selectedOptions.value.length - visibleCount.value))
+
+let resizeObserver: ResizeObserver | null = null
+onMounted(() => {
+  if (props.multiple && triggerRef.value) {
+    resizeObserver = new ResizeObserver(() => computeVisible())
+    resizeObserver.observe(triggerRef.value)
+    computeVisible()
+  }
+})
+onBeforeUnmount(() => resizeObserver?.disconnect())
+
+watch(
+  () => selectedOptions.value.map((o) => String(o.value)).join('|'),
+  async () => {
+    await nextTick()
+    computeVisible()
+  }
+)
 
 function onDocClick(e: MouseEvent) {
   if (!isOpen.value) return
@@ -257,9 +404,91 @@ onBeforeUnmount(() => {
   color: var(--color-primary);
 }
 
+/* —— 多选 tag —— */
+.as-tags {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.as-tag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+  color: var(--color-primary);
+  font-size: 11px;
+  max-width: 96px;
+}
+
+.as-tag-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.as-tag-close {
+  flex-shrink: 0;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: var(--transition-fast);
+}
+
+.as-tag-close:hover {
+  opacity: 1;
+}
+
+.as-tag--more {
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+/* 隐藏测量层：屏幕外 + visibility 隐藏（保留布局可量宽度） */
+.as-measure {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+  visibility: hidden;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* —— 多选 checkbox —— */
+.as-checkbox {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  transition: var(--transition-fast);
+}
+
+.as-checkbox.checked {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  border-color: var(--color-primary);
+  box-shadow: 0 0 6px var(--color-glow);
+}
+
 /* 下拉面板（Teleport 到 body，fixed 定位由 JS 计算） */
 .as-panel {
-  z-index: 3000;
+  /* 需高于 AppTable 筛选面板的 10001，否则筛选面板内的下拉选项会被盖住 */
+  z-index: 11000;
   background: var(--color-glass);
   backdrop-filter: blur(16px) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(16px) saturate(var(--glass-saturate));

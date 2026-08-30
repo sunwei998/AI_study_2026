@@ -225,6 +225,9 @@
               <button class="row-btn" :title="t('console.save')" @click="save(row)">
                 <AppIcon name="lucide:save" :size="15" />
               </button>
+              <button class="row-btn" :title="t('console.logs')" @click="openLogs(row)">
+                <AppIcon name="lucide:history" :size="15" />
+              </button>
               <button class="row-btn row-btn--danger" :title="t('console.delete')" @click="removeValue(row)">
                 <AppIcon name="lucide:trash-2" :size="15" />
               </button>
@@ -360,6 +363,55 @@
         </div>
       </Transition>
     </Teleport>
+
+    <!-- 取值操作日志弹窗 -->
+    <Teleport to="body">
+      <Transition name="confirm" appear>
+        <div v-if="logsVisible" class="form-overlay" @click.self="closeLogs">
+          <div class="form-modal form-modal--logs" role="dialog" aria-modal="true">
+            <span class="form-accent-line"></span>
+            <h3 class="form-title">{{ t('console.logs') }}</h3>
+            <div class="logs-subtitle">{{ logsKey }}</div>
+
+            <div class="logs-table">
+              <AppTable
+                :columns="logColumns"
+                :data="logs"
+                :loading="logsLoading"
+                loading-type="skeleton"
+                :skeleton-rows="5"
+                :empty-text="t('console.noLogs')"
+                row-key="id"
+                size="small"
+                show-index
+                :max-height="360"
+              />
+              <Pagination
+                :total="logsTotal"
+                v-model:page="logsPage"
+                v-model:page-size="logsPageSize"
+              />
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="form-btn form-btn--ghost" @click="closeLogs">
+                {{ t('confirm.close') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <ConfirmModal
+      v-model:visible="confirmVisible"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      :confirming="confirmLoading"
+      danger
+      @confirm="doConfirm"
+      @cancel="confirmVisible = false"
+    />
   </div>
 </template>
 
@@ -376,11 +428,14 @@ import {
   exportDimValues,
   fetchDimTables,
   fetchDimValues,
+  fetchOperationLogs,
   importDimValues,
   updateDimTable,
-  updateDimValue
+  updateDimValue,
+  type OperationLogItem
 } from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
+import { formatDateTime } from '@/utils/format'
 import AppLoading from '@/components/common/AppLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import Pagination from '@/components/common/Pagination.vue'
@@ -388,6 +443,7 @@ import AppInput from '@/components/common/AppInput.vue'
 import AppButton from '@/components/common/AppButton.vue'
 import AppExport from '@/components/common/AppExport.vue'
 import AppImport, { type ImportSummary } from '@/components/common/AppImport.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import { useToast } from '@/composables/useToast'
 import { useRowValidation } from '@/composables/useRowValidation'
@@ -532,7 +588,7 @@ const columns = computed<TableColumn[]>(() => [
         {
           key: 'actions',
           title: t('console.actions'),
-          width: 100,
+          width: 130,
           align: 'center',
           fixed: 'right'
         } as TableColumn
@@ -639,17 +695,42 @@ const toggle = async (row: DimValue) => {
   }
 }
 
-const removeValue = async (row: DimValue) => {
-  if (!selectedId.value) return
-  if (!confirm(t('console.dimTable.deleteValueConfirm'))) return
+// ============ 二次确认（删除维表 / 删除取值共用） ============
+const confirmVisible = ref(false)
+const confirmLoading = ref(false)
+const confirmTitle = ref('')
+const confirmMessage = ref('')
+let confirmAction: (() => Promise<void>) | null = null
+
+const openConfirm = (title: string, message: string, action: () => Promise<void>) => {
+  confirmTitle.value = title
+  confirmMessage.value = message
+  confirmAction = action
+  confirmVisible.value = true
+}
+
+const doConfirm = async () => {
+  if (!confirmAction) return
+  confirmLoading.value = true
   try {
-    await deleteDimValue(selectedId.value, row.id)
+    await confirmAction()
+    confirmVisible.value = false
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
+  } finally {
+    confirmLoading.value = false
+  }
+}
+
+const removeValue = (row: DimValue) => {
+  if (!selectedId.value) return
+  const tableId = selectedId.value
+  openConfirm(t('console.delete'), t('console.dimTable.deleteValueConfirm'), async () => {
+    await deleteDimValue(tableId, row.id)
     showToast(t('console.deleted'), 'success')
     await refreshTableCount()
     await loadValues()
-  } catch (err) {
-    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
-  }
+  })
 }
 
 const refreshTableCount = async () => {
@@ -755,16 +836,13 @@ const submitTable = async () => {
   }
 }
 
-const removeTable = async (tb: DimTable) => {
-  if (!confirm(t('console.dimTable.deleteTableConfirm'))) return
-  try {
+const removeTable = (tb: DimTable) => {
+  openConfirm(t('console.delete'), t('console.dimTable.deleteTableConfirm'), async () => {
     await deleteDimTable(tb.id)
     showToast(t('console.deleted'), 'success')
     if (selectedId.value === tb.id) selectedId.value = null
     await loadTables()
-  } catch (err) {
-    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
-  }
+  })
 }
 
 // ============ 取值表单（新增） ============
@@ -949,6 +1027,63 @@ async function onImportDone(s: ImportSummary) {
     await loadValues()
   }
 }
+
+// ============ 取值操作日志 ============
+const logsVisible = ref(false)
+const logsLoading = ref(false)
+const logsKey = ref('')
+const logsId = ref<number | null>(null)
+const logs = ref<OperationLogItem[]>([])
+const logsTotal = ref(0)
+const logsPage = ref(1)
+const logsPageSize = ref(10)
+
+const logColumns = computed<TableColumn[]>(() => [
+  { key: 'content', title: t('console.logContent'), width: 320 },
+  { key: 'operator', title: t('console.operator'), width: 120 },
+  { key: 'created_at', title: t('console.operateTime'), width: 180, formatter: (row) => formatDateTime(row.created_at) },
+])
+
+const loadLogs = async () => {
+  if (logsId.value == null) return
+  logsLoading.value = true
+  try {
+    const res = await fetchOperationLogs('dim_value', logsId.value, {
+      page: logsPage.value,
+      pageSize: logsPageSize.value,
+    })
+    logs.value = res.items
+    logsTotal.value = res.total
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
+  } finally {
+    logsLoading.value = false
+  }
+}
+
+const openLogs = (row: DimValue) => {
+  logsId.value = row.id
+  logsKey.value = `${row.name} · ${row.code}`
+  logsPage.value = 1
+  logsPageSize.value = 10
+  logs.value = []
+  logsTotal.value = 0
+  logsVisible.value = true
+  void loadLogs()
+}
+
+const closeLogs = () => {
+  logsVisible.value = false
+  logsId.value = null
+  logsKey.value = ''
+  logs.value = []
+}
+
+watch(logsPage, loadLogs)
+watch(logsPageSize, () => {
+  logsPage.value = 1
+  loadLogs()
+})
 
 loadTables().then(loadValues)
 </script>
@@ -1298,6 +1433,25 @@ loadTables().then(loadValues)
   box-shadow:
     0 24px 60px rgba(0, 0, 0, 0.45),
     0 0 40px var(--color-glow);
+}
+
+.form-modal--logs {
+  width: min(780px, 100%);
+}
+
+.logs-subtitle {
+  margin: -10px 0 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-primary);
+  text-shadow: 0 0 12px var(--color-glow);
+  word-break: break-all;
+}
+
+.logs-table {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .form-accent-line {

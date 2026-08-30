@@ -201,17 +201,23 @@
         >
           ☰
         </button>
-        <MessageList
-          :messages="messages"
-          :is-loading="isLoading"
-          @send="handleSendMessage"
-          @regenerate="handleRegenerate"
-        />
-        <InputBox
-          :is-loading="isLoading"
-          @send="handleSendMessage"
-          @stop="store.abortCurrentRequest()"
-        />
+        <!-- 会话初始化 loading：拉取会话/消息期间展示，避免闪出「新增会话」空页面 -->
+        <div v-if="store.initLoading" class="chat-init-loading">
+          <ChartLoading :text="$t('chat.loadingSessions')" />
+        </div>
+        <template v-else>
+          <MessageList
+            :messages="messages"
+            :is-loading="isLoading"
+            @send="handleSendMessage"
+            @regenerate="handleRegenerate"
+          />
+          <InputBox
+            :is-loading="isLoading"
+            @send="handleSendMessage"
+            @stop="store.abortCurrentRequest()"
+          />
+        </template>
       </main>
     </div>
 
@@ -244,6 +250,7 @@ import ModelSelector from './ModelSelector.vue'
 import LanguageSwitcher from './LanguageSwitcher.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AppLoading from '@/components/common/AppLoading.vue'
+import ChartLoading from '@/components/common/ChartLoading.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import UserMenu from './UserMenu.vue'
 import UserProfileDialog from './UserProfileDialog.vue'
@@ -994,6 +1001,14 @@ const handleRegenerate = async (message: Message) => {
   flex-direction: column;
   overflow: hidden;
   animation: slideInRight 0.3s ease-out;
+}
+
+.chat-init-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
 }
 
 .sidebar-reopen {

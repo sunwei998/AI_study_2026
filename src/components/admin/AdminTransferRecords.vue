@@ -2,11 +2,18 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TransferRecord, TransferType } from '@/types/admin'
-import { downloadTransfer, exportModelsCsv, fetchTransfers } from '@/services/adminService'
+import {
+  deleteTransfer,
+  downloadTransfer,
+  exportModelsCsv,
+  fetchAdmins,
+  fetchTransfers
+} from '@/services/adminService'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import AppTag, { type AppTagStatus } from '@/components/common/AppTag.vue'
 import Pagination from '@/components/common/Pagination.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { downloadBlob, formatFileSize } from '@/utils/download'
 import { useToast } from '@/composables/useToast'
 
@@ -21,6 +28,14 @@ const loading = ref(true)
 const error = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
+
+// 筛选 / 排序状态（服务端）
+const statusFilter = ref<string[]>([])
+const usernameFilter = ref<string[]>([])
+const sortFilter = ref<{ key: string; order: 'asc' | 'desc' | null }>({ key: '', order: null })
+
+// 操作人筛选下拉框选项：所有管理员
+const admins = ref<string[]>([])
 
 const isImport = computed(() => props.type === 'import')
 
@@ -50,6 +65,16 @@ function hasErrors(row: TransferRecord): boolean {
   return isImport.value && (row.status === 'failed' || row.status === 'partial')
 }
 
+// 状态筛选选项：导入含 partial，导出不含
+const statusFilters = computed(() => {
+  const list = [
+    { text: t('console.statusSuccess'), value: 'success' },
+    { text: t('console.statusPartial'), value: 'partial' },
+    { text: t('console.statusFailed'), value: 'failed' }
+  ]
+  return isImport.value ? list : list.filter((f) => f.value !== 'partial')
+})
+
 const columns = computed<TableColumn[]>(() => [
   {
     key: 'filename',
@@ -61,6 +86,10 @@ const columns = computed<TableColumn[]>(() => [
     key: 'username',
     title: t('console.transferOperator'),
     width: 140,
+    filterable: true,
+    filterType: 'select',
+    filterMultiple: true,
+    filters: admins.value.map((a) => ({ text: a, value: a })),
     formatter: (row: TransferRecord) => row.username || '-'
   },
   {
@@ -68,6 +97,9 @@ const columns = computed<TableColumn[]>(() => [
     title: t('console.transferStatus'),
     width: 110,
     align: 'center',
+    filterable: true,
+    filterType: isImport.value ? 'checkbox' : 'radio',
+    filters: statusFilters.value,
     formatter: (row: TransferRecord) => statusTag(row).label
   },
   {
@@ -89,16 +121,24 @@ const columns = computed<TableColumn[]>(() => [
     title: t('console.transferTime'),
     width: 180,
     className: 'cell-time',
+    sortable: true,
     formatter: (row: TransferRecord) => formatTime(row.created_at)
   },
-  { key: 'actions', title: t('console.actions'), width: 110, align: 'center', fixed: 'right' }
+  { key: 'actions', title: t('console.actions'), width: 140, align: 'center', fixed: 'right' }
 ])
 
 const load = async () => {
   loading.value = true
   error.value = ''
   try {
-    const res = await fetchTransfers(props.type, { page: currentPage.value, pageSize: pageSize.value })
+    const res = await fetchTransfers(props.type, {
+      page: currentPage.value,
+      pageSize: pageSize.value,
+      statuses: statusFilter.value.length ? statusFilter.value : undefined,
+      usernames: usernameFilter.value.length ? usernameFilter.value : undefined,
+      sort: sortFilter.value.order ? sortFilter.value.key : undefined,
+      order: sortFilter.value.order ?? undefined
+    })
     records.value = res.items
     total.value = res.total
   } catch (err) {
@@ -106,6 +146,21 @@ const load = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// 服务端排序
+function onServerSort(key: string, order: 'asc' | 'desc' | null) {
+  sortFilter.value = { key, order }
+  if (currentPage.value === 1) load()
+  else currentPage.value = 1
+}
+
+// 服务端筛选：状态（导入多选/导出单选）、操作人多选下拉
+function onFilterChange(filters: Record<string, any[]>) {
+  statusFilter.value = (filters.status ?? []).map(String)
+  usernameFilter.value = (filters.username ?? []).map(String)
+  if (currentPage.value === 1) load()
+  else currentPage.value = 1
 }
 
 watch(currentPage, load)
@@ -116,6 +171,10 @@ watch(pageSize, () => {
 watch(
   () => props.type,
   () => {
+    // 切换导入/导出时重置筛选与排序，避免状态串页
+    statusFilter.value = []
+    usernameFilter.value = []
+    sortFilter.value = { key: '', order: null }
     currentPage.value = 1
     load()
   }
@@ -153,6 +212,44 @@ function downloadTitle(row: TransferRecord): string {
   return t('console.downloadRegenerate')
 }
 
+// ============ 删除（二次确认） ============
+const confirmVisible = ref(false)
+const confirmLoading = ref(false)
+const deletingId = ref<number | null>(null)
+const deletingName = ref('')
+
+const askDelete = (row: TransferRecord) => {
+  deletingId.value = row.id
+  deletingName.value = row.filename
+  confirmVisible.value = true
+}
+
+const doDelete = async () => {
+  if (deletingId.value == null) return
+  confirmLoading.value = true
+  try {
+    await deleteTransfer(deletingId.value)
+    showToast(t('console.deleted'), 'success')
+    confirmVisible.value = false
+    await load()
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
+    confirmVisible.value = false
+  } finally {
+    confirmLoading.value = false
+  }
+}
+
+// 操作人筛选下拉框选项：所有管理员
+async function loadAdmins() {
+  try {
+    admins.value = await fetchAdmins()
+  } catch {
+    /* 静默失败，下拉框为空即可 */
+  }
+}
+
+loadAdmins()
 load()
 </script>
 
@@ -170,6 +267,9 @@ load()
         :empty-text="isImport ? $t('console.noImportRecords') : $t('console.noExportRecords')"
         row-key="id"
         size="small"
+        custom-sort
+        :sort-method="onServerSort"
+        @filter-change="onFilterChange"
       >
         <template #column-filename="{ row }">
           <span class="tr-file" :title="row.filename">
@@ -185,26 +285,41 @@ load()
         </template>
 
         <template #column-actions="{ row }">
-          <button
-            class="row-btn"
-            :class="{ 'is-disabled': !canDownload(row) }"
-            :title="downloadTitle(row)"
-            :disabled="!canDownload(row) || downloading !== null"
-            @click="onDownload(row)"
-          >
-            <AppIcon
-              v-if="downloading === row.id"
-              name="lucide:loader-2"
-              :size="15"
-              class="spin"
-            />
-            <AppIcon v-else name="lucide:download" :size="15" />
-          </button>
+          <div class="row-actions">
+            <button
+              class="row-btn"
+              :class="{ 'is-disabled': !canDownload(row) }"
+              :title="downloadTitle(row)"
+              :disabled="!canDownload(row) || downloading !== null"
+              @click="onDownload(row)"
+            >
+              <AppIcon
+                v-if="downloading === row.id"
+                name="lucide:loader-2"
+                :size="15"
+                class="spin"
+              />
+              <AppIcon v-else name="lucide:download" :size="15" />
+            </button>
+            <button class="row-btn row-btn--danger" :title="$t('console.delete')" @click="askDelete(row)">
+              <AppIcon name="lucide:trash-2" :size="15" />
+            </button>
+          </div>
         </template>
       </AppTable>
     </div>
 
     <Pagination :total="total" v-model:page="currentPage" v-model:page-size="pageSize" />
+
+    <ConfirmModal
+      v-model:visible="confirmVisible"
+      :title="$t('console.deleteTransferTitle')"
+      :message="$t('console.deleteTransferMessage', { name: deletingName })"
+      :confirming="confirmLoading"
+      danger
+      @confirm="doDelete"
+      @cancel="confirmVisible = false"
+    />
   </div>
 </template>
 
@@ -257,6 +372,12 @@ load()
   flex-shrink: 0;
 }
 
+.row-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
 .row-btn {
   width: 30px;
   height: 30px;
@@ -275,6 +396,12 @@ load()
   color: var(--color-primary);
   border-color: var(--color-primary);
   box-shadow: 0 0 10px var(--color-glow);
+}
+
+.row-btn--danger:hover {
+  color: #ff5b6a;
+  border-color: #ff5b6a;
+  box-shadow: 0 0 10px rgba(255, 77, 94, 0.45);
 }
 
 .row-btn.is-disabled {

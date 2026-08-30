@@ -23,6 +23,8 @@ export const useChatStore = defineStore('chat', () => {
   const currentTheme = ref<ThemeType>('dark')
   const loadingSessions = ref<Record<string, boolean>>({})
   const requestIds = new Map<string, string>()
+  // 会话初始化 loading：进入 chat 时在会话/消息拉取完成前展示 loading，避免闪出「新增会话」空页面
+  const initLoading = ref(true)
 
   // 计算属性
   const currentSession = computed(
@@ -188,18 +190,23 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   const init = async () => {
-    await auth.init()
-    if (!auth.user) return
+    initLoading.value = true
     try {
-      applyList(await apiService.fetchSessions())
-    } catch {
-      // 未登录或后端不可用时静默
-    }
-    if (sessions.value.length === 0) {
-      await createNewSession()
-    } else {
-      currentSessionId.value = sessions.value[0].id
-      await loadMessages(currentSessionId.value)
+      await auth.init()
+      if (!auth.user) return
+      try {
+        applyList(await apiService.fetchSessions())
+      } catch {
+        // 未登录或后端不可用时静默
+      }
+      if (sessions.value.length === 0) {
+        await createNewSession()
+      } else {
+        currentSessionId.value = sessions.value[0].id
+        await loadMessages(currentSessionId.value)
+      }
+    } finally {
+      initLoading.value = false
     }
   }
 
@@ -549,6 +556,7 @@ export const useChatStore = defineStore('chat', () => {
     loadingOlder.value = {}
     currentSessionId.value = ''
     requestIds.clear()
+    initLoading.value = true
   }
 
   const setTheme = (theme: ThemeType) => {
@@ -577,6 +585,7 @@ export const useChatStore = defineStore('chat', () => {
     availableModels,
     isLoading,
     isSessionLoading,
+    initLoading,
     // 计算属性
     currentSession,
     sortedSessions,

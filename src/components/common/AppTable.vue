@@ -388,12 +388,13 @@
             </div>
           </div>
 
-          <!-- select 下拉 -->
+          <!-- select 下拉（单选/多选） -->
           <div v-else-if="filterPanel.filterType === 'select'" class="app-table__filter-select">
             <AppSelect
-              :model-value="filterPanel.selected[0] ?? ''"
-              :options="selectOptions"
+              :model-value="filterPanel.filterMultiple ? filterPanel.selected : (filterPanel.selected[0] ?? '')"
+              :options="filterPanel.filterMultiple ? selectFilterOptions : selectOptions"
               :placeholder="filterPanel.placeholder"
+              :multiple="filterPanel.filterMultiple"
               @update:model-value="onSelectChange"
             />
           </div>
@@ -478,6 +479,7 @@ export interface TableColumn {
   filterType?: 'checkbox' | 'radio' | 'select' | 'input'
   filters?: TableFilter[]
   filterMode?: 'single' | 'multiple'
+  filterMultiple?: boolean
   filterSearch?: boolean
   filterPlaceholder?: string
   filterMethod?: (value: any, row: any) => boolean
@@ -810,6 +812,7 @@ const filterPanel = ref({
   inputValue: '' as string,
   searchText: '',
   filterSearch: false,
+  filterMultiple: false,
   placeholder: '',
   style: {} as Record<string, string>
 })
@@ -824,10 +827,15 @@ const filteredPanelFilters = computed(() => {
 // 各类型 options
 const radioGroupName = computed(() => `app-table-filter-${filterPanel.value.colKey}`)
 
+// 单选下拉选项（含「全部」）；多选下拉选项（不含「全部」，空数组即全部）
 const selectOptions = computed(() => [
   { label: t('common.all'), value: '' },
   ...filteredPanelFilters.value.map((f) => ({ label: f.text, value: f.value }))
 ])
+
+const selectFilterOptions = computed(() =>
+  filteredPanelFilters.value.map((f) => ({ label: f.text, value: f.value }))
+)
 
 function onAllFilterChange() {
   filterPanel.value.selected = []
@@ -839,7 +847,11 @@ function onRadioSelect(value: any) {
 }
 
 function onSelectChange(value: any) {
-  filterPanel.value.selected = value === '' || value === undefined ? [] : [value]
+  if (filterPanel.value.filterMultiple) {
+    filterPanel.value.selected = Array.isArray(value) ? [...value] : []
+  } else {
+    filterPanel.value.selected = value === '' || value === undefined ? [] : [value]
+  }
 }
 
 function onInputFilterChange(value: string | number | null) {
@@ -863,6 +875,7 @@ function toggleFilter(col: TableColumn, event: Event) {
     inputValue: (activeFilters.value[col.key]?.[0] as string) || '',
     searchText: '',
     filterSearch: !!col.filterSearch,
+    filterMultiple: !!col.filterMultiple,
     placeholder: col.filterPlaceholder || t('common.search'),
     style: {
       position: 'fixed',
@@ -930,8 +943,11 @@ function closeFilterPanel() {
 
 function onFilterDocClick(e: MouseEvent) {
   const target = e.target as Node
+  const el = target as Element | null
   // 点击筛选图标本身时交给 toggleFilter 处理（用于再次点击收起），不在此处关闭
-  if ((target as Element | null)?.closest?.('.app-table__filter-btn')) return
+  if (el?.closest?.('.app-table__filter-btn')) return
+  // 豁免 AppSelect 下拉面板（Teleport 到 body，位于 filterPanel 之外）内的点击，避免点选项时误关筛选面板
+  if (el?.closest?.('.as-panel')) return
   if (filterPanelRef.value && !filterPanelRef.value.contains(target)) {
     closeFilterPanel()
   }
@@ -1474,14 +1490,31 @@ initDefaults()
   pointer-events: none;
 }
 
+/* fixed 列：任何时候都不透明，盖住下方滚动内容。
+   用 !important 强制压过通用 hover/斑马纹/selected/current 的半透明背景
+   （这些规则或特指度相同且靠后、或用了 !important，会反过来覆盖本规则）。 */
 .app-table__th--fixed-left,
-.app-table__td--fixed-left {
-  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
-}
-
+.app-table__td--fixed-left,
 .app-table__th--fixed-right,
 .app-table__td--fixed-right {
-  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
+  background: var(--color-surface) !important;
+}
+
+/* 行 hover 时 fixed 列仍保持不透明，仅叠加 primary 色调 */
+.app-table__row:hover .app-table__td--fixed-left,
+.app-table__row:hover .app-table__td--fixed-right {
+  background: color-mix(in srgb, var(--color-surface) 95%, var(--color-primary) 5%) !important;
+}
+
+/* selected / current 行：fixed 列同样强制不透明（与通用高亮同色调，但改为实底防透出） */
+.app-table__row--selected .app-table__td--fixed-left,
+.app-table__row--selected .app-table__td--fixed-right {
+  background: color-mix(in srgb, var(--color-surface) 90%, var(--color-primary) 10%) !important;
+}
+
+.app-table__row--current .app-table__td--fixed-left,
+.app-table__row--current .app-table__td--fixed-right {
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-primary) 8%) !important;
 }
 
 /* 表头标题 */
