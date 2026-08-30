@@ -372,16 +372,9 @@ export function fetchSettingsTotal(): Promise<number> {
   return request<{ total: number }>('/settings/count').then((r) => r.total)
 }
 
+/** 模板下载：与 fetchBlob 同构，表头语言由 Accept-Language 决定 */
 export function downloadSettingsTemplate(): Promise<Blob> {
-  return fetch(`${API_BASE}/settings/template`, { headers: authHeaders() }).then(async (resp) => {
-    if (resp.status === 401) {
-      clearToken()
-      notifyUnauthorized()
-      throw new Error('unauthorized')
-    }
-    if (!resp.ok) throw new Error(await parseError(resp))
-    return resp.blob()
-  })
+  return fetchBlob('/settings/template')
 }
 
 export interface SettingsImportResult {
@@ -552,17 +545,9 @@ export function fetchDimValuesTotal(tableId: number): Promise<number> {
   return request<{ total: number }>(`/dim-tables/${tableId}/values/count`).then((r) => r.total)
 }
 
-/** 下载某维表的导入模板 xlsx */
+/** 下载某维表的导入模板 xlsx：表头语言由 Accept-Language 决定 */
 export function downloadDimTemplate(tableId: number): Promise<Blob> {
-  return fetch(`${API_BASE}/dim-tables/${tableId}/template`, { headers: authHeaders() }).then(async (resp) => {
-    if (resp.status === 401) {
-      clearToken()
-      notifyUnauthorized()
-      throw new Error('unauthorized')
-    }
-    if (!resp.ok) throw new Error(await parseError(resp))
-    return resp.blob()
-  })
+  return fetchBlob(`/dim-tables/${tableId}/template`)
 }
 
 export interface DimImportResult {
@@ -589,6 +574,9 @@ export async function importDimValues(tableId: number, file: File): Promise<DimI
     clearToken()
     notifyUnauthorized()
     throw new Error('unauthorized')
+  }
+  if (resp.status === 403) {
+    notifyForbidden()
   }
   if (!resp.ok) throw new Error(await parseError(resp))
   return resp.json()
