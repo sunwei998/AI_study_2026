@@ -11,7 +11,7 @@ import {
 } from '@/services/adminService'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
-import AppTooltip from '@/components/common/AppTooltip.vue'
+import AppButton from '@/components/common/AppButton.vue'
 import AppTag, { type AppTagStatus } from '@/components/common/AppTag.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
@@ -176,8 +176,11 @@ function onFilterChange(filters: Record<string, any[]>) {
   else currentPage.value = 1
 }
 
-watch(currentPage, load)
+watch(currentPage, () => {
+  if (!resetting) load()
+})
 watch(pageSize, () => {
+  if (resetting) return
   currentPage.value = 1
   load()
 })
@@ -192,6 +195,25 @@ watch(
     load()
   }
 )
+
+// ============ 重置（逻辑同其他管理页） ============
+const tableRef = ref<InstanceType<typeof AppTable> | null>(null)
+let resetting = false
+
+function onReset() {
+  resetting = true
+  try {
+    statusFilter.value = []
+    usernameFilter.value = []
+    sortFilter.value = { key: '', order: null }
+    pageSize.value = 10
+    currentPage.value = 1
+    tableRef.value?.resetState()
+  } finally {
+    resetting = false
+  }
+  load()
+}
 
 const downloading = ref<number | null>(null)
 
@@ -272,6 +294,7 @@ load()
 
     <div class="tr-table-wrap">
       <AppTable
+        ref="tableRef"
         :columns="columns"
         :data="records"
         :loading="loading"
@@ -284,13 +307,22 @@ load()
         :sort-method="onServerSort"
         @filter-change="onFilterChange"
       >
-        <template #header-filename>
-          <span class="th-with-info">
-            {{ $t('console.transferFile') }}
-            <AppTooltip v-if="isImport" :content="retentionTip" placement="top" :max-width="280" force>
-              <AppIcon name="lucide:info" :size="13" class="th-info-icon" />
-            </AppTooltip>
+        <template #table-title-left>
+          <span v-if="isImport" class="tr-retention-hint">
+            <AppIcon name="lucide:info" :size="12" />
+            {{ retentionTip }}
           </span>
+        </template>
+
+        <template #table-title-right>
+          <AppButton
+            size="middle"
+            type="default"
+            :title="$t('console.resetFilters')"
+            @click="onReset"
+          >
+            <AppIcon name="lucide:rotate-ccw" :size="15" />
+          </AppButton>
         </template>
 
         <template #column-filename="{ row }">
@@ -392,21 +424,16 @@ load()
   min-height: 0;
 }
 
-.th-with-info {
+/* 与重置按钮同行的保留期提示语：弱化、不抢眼 */
+.tr-retention-hint {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-}
-
-.th-info-icon {
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 400;
   color: var(--color-text-secondary);
-  cursor: help;
-  transition: var(--transition-fast);
-}
-
-.th-info-icon:hover {
-  color: var(--color-primary);
-  filter: drop-shadow(0 0 6px var(--color-glow));
+  opacity: 0.75;
+  letter-spacing: 0.02em;
 }
 
 .tr-file {
