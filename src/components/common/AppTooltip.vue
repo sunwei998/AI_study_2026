@@ -35,12 +35,15 @@ const props = withDefaults(
     placement?: 'top' | 'bottom'
     maxWidth?: number
     disabled?: boolean
+    // 强制可显示：默认仅在触发元素文本溢出时显示，info 图标等无溢出场景需置 true
+    force?: boolean
   }>(),
   {
     content: '',
     placement: 'top',
     maxWidth: 320,
-    disabled: false
+    disabled: false,
+    force: false
   }
 )
 
@@ -86,7 +89,9 @@ function updatePosition() {
 async function onEnter() {
   if (props.disabled) return
   const trigger = triggerRef.value
-  if (!trigger || !isOverflow(trigger)) return
+  if (!trigger) return
+  // 默认仅文本溢出才显示；force 用于 info 图标等始终需要提示的场景
+  if (!props.force && !isOverflow(trigger)) return
   visible.value = true
   await nextTick()
   updatePosition()

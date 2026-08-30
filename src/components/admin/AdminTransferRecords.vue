@@ -11,16 +11,19 @@ import {
 } from '@/services/adminService'
 import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
+import AppTooltip from '@/components/common/AppTooltip.vue'
 import AppTag, { type AppTagStatus } from '@/components/common/AppTag.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { downloadBlob, formatFileSize } from '@/utils/download'
 import { useToast } from '@/composables/useToast'
+import { useAuthStore } from '@/stores/authStore'
 
 const props = defineProps<{ type: TransferType }>()
 
 const { t } = useI18n()
 const { showToast } = useToast()
+const auth = useAuthStore()
 
 const records = ref<TransferRecord[]>([])
 const total = ref(0)
@@ -38,6 +41,15 @@ const sortFilter = ref<{ key: string; order: 'asc' | 'desc' | null }>({ key: '',
 const admins = ref<string[]>([])
 
 const isImport = computed(() => props.type === 'import')
+
+// 导入源文件保留时长（小时），由后端按数据字典配置返回，用于表头说明清理范围
+const retentionHours = ref(720)
+const retentionTip = computed(() =>
+  t('console.importRetentionTip', {
+    hours: retentionHours.value,
+    days: retentionHours.value / 24
+  })
+)
 
 function formatTime(ts: number): string {
   if (!ts) return '-'
@@ -124,7 +136,7 @@ const columns = computed<TableColumn[]>(() => [
     sortable: true,
     formatter: (row: TransferRecord) => formatTime(row.created_at)
   },
-  { key: 'actions', title: t('console.actions'), width: 140, align: 'center', fixed: 'right' }
+  { key: 'actions', title: t('console.actions'), width: auth.isSuperAdmin ? 140 : 76, align: 'center', fixed: 'right' }
 ])
 
 const load = async () => {
@@ -141,6 +153,7 @@ const load = async () => {
     })
     records.value = res.items
     total.value = res.total
+    if (res.retention_hours) retentionHours.value = res.retention_hours
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
@@ -271,8 +284,21 @@ load()
         :sort-method="onServerSort"
         @filter-change="onFilterChange"
       >
+        <template #header-filename>
+          <span class="th-with-info">
+            {{ $t('console.transferFile') }}
+            <AppTooltip v-if="isImport" :content="retentionTip" placement="top" :max-width="280" force>
+              <AppIcon name="lucide:info" :size="13" class="th-info-icon" />
+            </AppTooltip>
+          </span>
+        </template>
+
         <template #column-filename="{ row }">
-          <span class="tr-file" :title="row.filename">
+          <span
+            class="tr-file"
+            :class="{ 'is-purged': isImport && !row.has_file }"
+            :title="isImport && !row.has_file ? $t('console.sourceFilePurged') : row.filename"
+          >
             <AppIcon name="lucide:file-text" :size="14" class="tr-file-icon" />
             {{ row.filename }}
           </span>
@@ -301,7 +327,12 @@ load()
               />
               <AppIcon v-else name="lucide:download" :size="15" />
             </button>
-            <button class="row-btn row-btn--danger" :title="$t('console.delete')" @click="askDelete(row)">
+            <button
+              v-if="auth.isSuperAdmin"
+              class="row-btn row-btn--danger"
+              :title="$t('console.delete')"
+              @click="askDelete(row)"
+            >
               <AppIcon name="lucide:trash-2" :size="15" />
             </button>
           </div>
@@ -361,6 +392,23 @@ load()
   min-height: 0;
 }
 
+.th-with-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.th-info-icon {
+  color: var(--color-text-secondary);
+  cursor: help;
+  transition: var(--transition-fast);
+}
+
+.th-info-icon:hover {
+  color: var(--color-primary);
+  filter: drop-shadow(0 0 6px var(--color-glow));
+}
+
 .tr-file {
   display: inline-flex;
   align-items: center;
@@ -370,6 +418,19 @@ load()
 .tr-file-icon {
   color: var(--color-text-secondary);
   flex-shrink: 0;
+}
+
+/* 源文件已过期清理、仅保留记录：文件名加删除线并弱化 */
+.tr-file.is-purged {
+  color: var(--color-text-secondary);
+  text-decoration-line: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--color-text-secondary) 75%, transparent);
+  opacity: 0.75;
+}
+
+.tr-file.is-purged .tr-file-icon {
+  opacity: 0.6;
 }
 
 .row-actions {

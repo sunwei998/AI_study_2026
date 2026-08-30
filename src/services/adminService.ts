@@ -558,7 +558,7 @@ export function fetchHotWords(period: HeatPeriod = 'month', limit = 20): Promise
 export function fetchTransfers(
   type: TransferType,
   params: PaginationParams = {}
-): Promise<PaginatedResult<TransferRecord>> {
+): Promise<PaginatedResult<TransferRecord> & { retention_hours?: number }> {
   const query = new URLSearchParams()
   query.set('type', type)
   if (params.page) query.set('page', String(params.page))
@@ -568,7 +568,7 @@ export function fetchTransfers(
   if (params.sort) query.set('sort', params.sort)
   if (params.order) query.set('order', params.order)
   const qs = query.toString()
-  return request<PaginatedResult<TransferRecord>>(`/transfers?${qs}`)
+  return request<PaginatedResult<TransferRecord> & { retention_hours?: number }>(`/transfers?${qs}`)
 }
 
 export function deleteTransfer(recordId: number): Promise<{ ok: boolean }> {

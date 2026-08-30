@@ -261,10 +261,16 @@ const auth = useAuthStore()
 // ============ 行内编辑校验 ============
 // key 只能英文+下划线、长度 < 64；value 长度 < 5000；remark 长度 ≤ 255
 const KEY_RE = /^[A-Za-z_]+$/
+// 导入源文件保留时长（小时）：仅接受 >0 的正整数
+const RETENTION_KEY = 'import_file_retention_hours'
+const POSITIVE_INT_RE = /^[1-9]\d*$/
 const validateRow = (s: SettingItem) => {
   const e: Partial<Record<'value' | 'remark', string>> = {}
   // value 允许为空（部分设置项可空），仅限长度
   if (String(s.value ?? '').length >= 5000) e.value = t('console.valueTooLong')
+  if (s.key === RETENTION_KEY && !POSITIVE_INT_RE.test(String(s.value ?? '').trim())) {
+    e.value = t('console.retentionHoursInvalid')
+  }
   if (String(s.remark ?? '').length > 255) e.remark = t('console.remarkTooLong')
   return e
 }
@@ -525,6 +531,10 @@ const submitAdd = async () => {
   // 配置值 / 备注：长度限制
   if (String(newValue.value ?? '').length >= 5000) {
     addError.value = t('console.valueTooLong')
+    return
+  }
+  if (key === RETENTION_KEY && !POSITIVE_INT_RE.test(String(newValue.value ?? '').trim())) {
+    addError.value = t('console.retentionHoursInvalid')
     return
   }
   if (String(newRemark.value ?? '').trim().length > 255) {
