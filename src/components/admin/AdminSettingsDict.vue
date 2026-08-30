@@ -120,9 +120,17 @@
             >
               <AppIcon name="lucide:rotate-ccw" :size="15" />
             </AppButton>
+            <AppButton
+              size="middle"
+              type="default"
+              :title="t('console.dimTable.fieldsSettings')"
+              @click="openFieldsSettings"
+            >
+              <AppIcon name="lucide:sliders-horizontal" :size="15" />
+            </AppButton>
           </template>
 
-          <template #column-code="{ row }">
+          <template v-if="hasField('code')" #column-code="{ row }">
             <AppInput
               v-model="row.code"
               type="text"
@@ -136,7 +144,7 @@
             />
           </template>
 
-          <template #column-name="{ row }">
+          <template v-if="hasField('name')" #column-name="{ row }">
             <AppInput
               v-model="row.name"
               type="text"
@@ -150,7 +158,7 @@
             />
           </template>
 
-          <template v-if="isModelProvider" #column-name_en="{ row }">
+          <template v-if="hasField('name_en')" #column-name_en="{ row }">
             <AppInput
               v-model="row.name_en"
               type="text"
@@ -164,22 +172,28 @@
             />
           </template>
 
-          <template v-if="isModelProvider" #column-api_key="{ row }">
+          <!-- 密钥列：仅模型提供商有 ollama 免密钥规则，其余维表不禁用 -->
+          <template v-if="hasField('api_key')" #column-api_key="{ row }">
             <AppInput
               v-model="row.api_key"
-              type="text"
+              type="password"
               size="small"
               class="dim-cell-input dim-cell-input--key"
-              :disabled="!canManageSettings || row.code === 'ollama'"
-              :placeholder="row.code === 'ollama' ? t('console.dimTable.ollamaNoKey') : t('console.dimTable.apiKeyPlaceholder')"
+              autocomplete="off"
+              :disabled="!canManageSettings || (isModelProvider && row.code === 'ollama')"
+              :placeholder="
+                isModelProvider && row.code === 'ollama'
+                  ? t('console.dimTable.ollamaNoKey')
+                  : t('console.dimTable.apiKeyPlaceholder')
+              "
               :error="!!fieldError(row.id, 'api_key')"
-              :title="fieldError(row.id, 'api_key') || row.api_key || undefined"
+              :title="fieldError(row.id, 'api_key') || undefined"
               @blur="check(row)"
               @keydown.enter="save(row)"
             />
           </template>
 
-          <template #column-sort_order="{ row }">
+          <template v-if="hasField('sort_order')" #column-sort_order="{ row }">
             <AppInput
               v-model="row.sort_order"
               type="text"
@@ -193,7 +207,7 @@
             />
           </template>
 
-          <template #column-remark="{ row }">
+          <template v-if="hasField('remark')" #column-remark="{ row }">
             <AppInput
               v-model="row.remark"
               type="text"
@@ -311,42 +325,35 @@
             <h3 class="form-title">{{ t('console.dimTable.new') }}</h3>
 
             <form class="form-body" @submit.prevent="submitValue">
-              <label class="form-field">
-                <span class="form-label">{{ t('console.dimTable.code') }}</span>
-                <input v-model="valueForm.code" type="text" class="form-input" :placeholder="t('console.dimTable.valueCodePlaceholder')" />
-              </label>
-              <label class="form-field">
-                <span class="form-label">{{ t('console.dimTable.name') }}</span>
-                <input v-model="valueForm.name" type="text" class="form-input" :placeholder="t('console.dimTable.valueNamePlaceholder')" />
-              </label>
-              <label v-if="isModelProvider" class="form-field">
-                <span class="form-label">{{ t('console.dimTable.nameEn') }}</span>
-                <input v-model="valueForm.name_en" type="text" class="form-input" :placeholder="t('console.dimTable.nameEnPlaceholder')" />
-              </label>
-              <label v-if="isModelProvider" class="form-field">
-                <span class="form-label">{{ t('console.dimTable.apiKey') }}</span>
-                <input v-model="valueForm.api_key" type="text" class="form-input" :placeholder="t('console.dimTable.apiKeyPlaceholder')" autocomplete="off" />
-              </label>
-              <label class="form-field">
-                <span class="form-label">{{ t('console.dimTable.sort') }}</span>
-                <input v-model="valueForm.sort_order" type="text" class="form-input" inputmode="numeric" />
-              </label>
-              <label class="form-field form-field--row">
-                <span class="form-label">{{ t('console.status') }}</span>
-                <button
-                  type="button"
-                  class="switch"
-                  :class="{ on: valueForm.enabled }"
-                  :aria-pressed="valueForm.enabled"
-                  @click="valueForm.enabled = !valueForm.enabled"
-                >
-                  <span class="switch-knob"></span>
-                </button>
-              </label>
-              <label class="form-field">
-                <span class="form-label">{{ t('console.remark') }}</span>
-                <input v-model="valueForm.remark" type="text" class="form-input" />
-              </label>
+              <!-- 表单字段由字段配置驱动：改配置后自动增删行，无需改模板 -->
+              <template v-for="fl in activeFields" :key="fl.field_key">
+                <label v-if="fl.field_type === 'bool'" class="form-field form-field--row">
+                  <span class="form-label">{{ fieldLabel(fl.field_key) }}</span>
+                  <button
+                    type="button"
+                    class="switch"
+                    :class="{ on: !!valueForm.values[fl.field_key] }"
+                    :aria-pressed="!!valueForm.values[fl.field_key]"
+                    @click="valueForm.values[fl.field_key] = !valueForm.values[fl.field_key]"
+                  >
+                    <span class="switch-knob"></span>
+                  </button>
+                </label>
+                <label v-else class="form-field">
+                  <span class="form-label">
+                    {{ fieldLabel(fl.field_key) }}
+                    <em v-if="fl.required" class="form-required">*</em>
+                  </span>
+                  <input
+                    v-model="valueForm.values[fl.field_key]"
+                    :type="fl.field_type === 'secret' ? 'password' : 'text'"
+                    class="form-input"
+                    :inputmode="fl.field_type === 'int' ? 'numeric' : undefined"
+                    :placeholder="fieldPlaceholder(fl)"
+                    :autocomplete="fl.field_type === 'secret' ? 'off' : undefined"
+                  />
+                </label>
+              </template>
 
               <p v-if="valueForm.error" class="form-error">{{ valueForm.error }}</p>
 
@@ -360,6 +367,110 @@
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- 字段设置弹窗（管理字段配置：开关列 / 改列头 / 调校验） -->
+    <Teleport to="body">
+      <Transition name="confirm" appear>
+        <div v-if="fieldsVisible" class="form-overlay" @click.self="closeFieldsSettings">
+          <div class="form-modal form-modal--fields" role="dialog" aria-modal="true">
+            <span class="form-accent-line"></span>
+            <h3 class="form-title">
+              {{ t('console.dimTable.fieldsSettingsTitle', { name: selected?.name ?? '' }) }}
+            </h3>
+
+            <p class="fields-desc">{{ t('console.dimTable.fieldsSettingsDesc') }}</p>
+
+            <div class="fields-table">
+              <div class="fields-row fields-row--head">
+                <span class="fields-cell fields-cell--key">{{ t('console.dimTable.fieldColKey') }}</span>
+                <span class="fields-cell">{{ t('console.dimTable.fieldColLabelZh') }}</span>
+                <span class="fields-cell">{{ t('console.dimTable.fieldColLabelEn') }}</span>
+                <span class="fields-cell fields-cell--flag">{{ t('console.dimTable.fieldColRequired') }}</span>
+                <span class="fields-cell fields-cell--flag">{{ t('console.dimTable.fieldColEnabled') }}</span>
+                <span class="fields-cell fields-cell--sort">{{ t('console.dimTable.fieldColSort') }}</span>
+              </div>
+
+              <div
+                v-for="fl in fieldsDraft"
+                :key="fl.field_key"
+                class="fields-row"
+                :class="{ 'is-disabled': !fl.enabled }"
+              >
+                <span class="fields-cell fields-cell--key">
+                  <span class="fields-keyname">{{ fl.label_zh || fl.field_key }}</span>
+                  <code class="fields-keycode">{{ fl.field_key }}</code>
+                  <em v-if="isCoreField(fl.field_key)" class="fields-core">{{ t('console.dimTable.coreField') }}</em>
+                </span>
+                <span class="fields-cell">
+                  <input
+                    v-model="fl.label_zh"
+                    type="text"
+                    class="fields-input"
+                    :disabled="!canManageSettings"
+                    :placeholder="t('console.dimTable.fieldColLabelZh')"
+                  />
+                </span>
+                <span class="fields-cell">
+                  <input
+                    v-model="fl.label_en"
+                    type="text"
+                    class="fields-input"
+                    :disabled="!canManageSettings"
+                    :placeholder="t('console.dimTable.fieldColLabelEn')"
+                  />
+                </span>
+                <span class="fields-cell fields-cell--flag">
+                  <button
+                    type="button"
+                    class="switch switch--sm"
+                    :class="{ on: fl.required }"
+                    :disabled="!canManageSettings || isCoreField(fl.field_key)"
+                    :aria-pressed="fl.required"
+                    @click="fl.required = !fl.required"
+                  >
+                    <span class="switch-knob"></span>
+                  </button>
+                </span>
+                <span class="fields-cell fields-cell--flag">
+                  <button
+                    type="button"
+                    class="switch switch--sm"
+                    :class="{ on: fl.enabled }"
+                    :disabled="!canManageSettings || isCoreField(fl.field_key)"
+                    :aria-pressed="fl.enabled"
+                    @click="fl.enabled = !fl.enabled"
+                  >
+                    <span class="switch-knob"></span>
+                  </button>
+                </span>
+                <span class="fields-cell fields-cell--sort">
+                  <input
+                    v-model="fl.sort_order"
+                    type="text"
+                    class="fields-input fields-input--num"
+                    inputmode="numeric"
+                    :disabled="!canManageSettings"
+                  />
+                </span>
+              </div>
+            </div>
+
+            <p class="fields-hint">{{ t('console.dimTable.fieldsSettingsHint') }}</p>
+            <p v-if="fieldsError" class="form-error">{{ fieldsError }}</p>
+
+            <div class="form-actions">
+              <button type="button" class="form-btn form-btn--ghost" :disabled="fieldsSaving" @click="closeFieldsSettings">
+                {{ t('confirm.cancel') }}
+              </button>
+              <button type="button" class="form-btn form-btn--primary" :disabled="fieldsSaving" @click="saveFieldsSettings">
+                <AppLoading v-if="fieldsSaving" :size="14" color="#fff" glow />
+                {{ t('confirm.save') }}
+              </button>
+            </div>
           </div>
         </div>
       </Transition>
@@ -419,7 +530,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { DimTable, DimValue } from '@/types/admin'
+import type { DimFieldItem, DimTable, DimValue, DimValueUpdate } from '@/types/admin'
 import {
   createDimTable,
   createDimValue,
@@ -427,11 +538,13 @@ import {
   deleteDimValue,
   downloadDimTemplate,
   exportDimValues,
+  fetchDimFields,
   fetchDimTables,
   fetchDimValues,
   fetchDimValuesTotal,
   fetchOperationLogs,
   importDimValues,
+  saveDimFields,
   updateDimTable,
   updateDimValue,
   type DimValuesExportParams,
@@ -451,7 +564,7 @@ import AppTable, { type TableColumn } from '@/components/common/AppTable.vue'
 import { useToast } from '@/composables/useToast'
 import { useRowValidation } from '@/composables/useRowValidation'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { showToast } = useToast()
 const auth = useAuthStore()
 
@@ -463,7 +576,27 @@ const tables = ref<DimTable[]>([])
 const loadingTables = ref(true)
 const selectedId = ref<number | null>(null)
 const selected = computed(() => tables.value.find((tb) => tb.id === selectedId.value) || null)
-// 仅模型提供商维表展示英文名称列并做英文名校验
+
+// ============ 字段配置（列渲染 / 校验规则的唯一来源） ============
+// 列顺序、中英文列头、类型与校验全部读 dim_table_fields，新增或关闭字段不需要改前端。
+const fields = ref<DimFieldItem[]>([])
+// 配置拉取失败时的兜底列，保证页面不至于空白（后端也有同口径的模板回退）
+const FALLBACK_FIELDS: DimFieldItem[] = [
+  { field_key: 'code', label_zh: '编码', label_en: 'Code', field_type: 'text', required: true, max_len: 64, no_cjk: false, sort_order: 10, enabled: true },
+  { field_key: 'name', label_zh: '名称', label_en: 'Name', field_type: 'text', required: true, max_len: 128, no_cjk: false, sort_order: 20, enabled: true }
+]
+const activeFields = computed(() => (fields.value.length ? fields.value : FALLBACK_FIELDS).filter((f) => f.enabled))
+const hasField = (key: string) => activeFields.value.some((f) => f.field_key === key)
+const fieldOf = (key: string) => activeFields.value.find((f) => f.field_key === key) || null
+/** 列头按当前语言取配置里的标签 */
+const fieldLabel = (key: string) => {
+  const f = fieldOf(key)
+  if (!f) return key
+  return (locale.value === 'en-US' ? f.label_en : f.label_zh) || key
+}
+
+// 「启用必须配置 API 密钥（ollama 豁免）」是模型提供商的**业务规则**，不是字段配置，
+// 后端 _validate_provider_enable 同口径按 model_provider 判定，因此这一处特例保留。
 const isModelProvider = computed(() => selected.value?.code === 'model_provider')
 
 const values = ref<DimValue[]>([])
@@ -516,12 +649,33 @@ const loadValues = async () => {
   }
 }
 
+/** 拉取当前维表的字段配置。失败不阻塞页面：fields 置空后走 FALLBACK_FIELDS */
+const loadFields = async () => {
+  if (!selectedId.value) {
+    fields.value = []
+    return
+  }
+  try {
+    const res = await fetchDimFields(selectedId.value)
+    fields.value = res.items ?? []
+  } catch {
+    fields.value = []
+    showToast(t('console.dimTable.fieldsLoadFailed'), 'error')
+  }
+}
+
+// 切换维表时同步刷新字段配置（列渲染与校验都依赖它）
+watch(selectedId, () => {
+  loadFields()
+})
+
 const selectTable = (id: number) => {
   if (id === selectedId.value) return
   selectedId.value = id
   currentPage.value = 1
   enabledFilter.value = null
   sortFilter.value = { key: '', order: null }
+  loadFields()
   loadValues()
 }
 
@@ -531,7 +685,7 @@ function onServerSort(key: string, order: 'asc' | 'desc' | null) {
   loadValues()
 }
 
-function onFilterChange(filters: Record<string, any[]>) {
+function onFilterChange(filters: Record<string, unknown[]>) {
   const rawEnabled = filters.enabled?.[0]
   enabledFilter.value = typeof rawEnabled === 'boolean' ? rawEnabled : null
   currentPage.value = 1
@@ -562,30 +716,35 @@ watch(pageSize, () => {
   loadValues()
 })
 
+/** 各字段的表格呈现预设；配置里新增的字段未命中时用默认宽度 */
+const COLUMN_PRESET: Record<string, Partial<TableColumn>> = {
+  code: { width: 200, ellipsis: true, sortable: true, className: 'cell-code' },
+  name: { width: 240, ellipsis: true, sortable: true },
+  name_en: { width: 180, ellipsis: true, sortable: true },
+  api_key: { width: 220, ellipsis: true, className: 'cell-apikey' },
+  sort_order: { width: 90, align: 'center', sortable: true },
+  enabled: { width: 90, align: 'center' },
+  remark: { width: 220 }
+}
+
+/** 列由字段配置生成：开关某列、改列头名，这里自动跟着变 */
 const columns = computed<TableColumn[]>(() => [
-  { key: 'code', title: t('console.dimTable.code'), width: 200, ellipsis: true, sortable: true, className: 'cell-code' },
-  { key: 'name', title: t('console.dimTable.name'), width: 240, ellipsis: true, sortable: true },
-  ...(isModelProvider.value
-    ? [
-        { key: 'name_en', title: t('console.dimTable.nameEn'), width: 180, ellipsis: true, sortable: true } as TableColumn,
-        { key: 'api_key', title: t('console.dimTable.apiKey'), width: 220, ellipsis: true, className: 'cell-apikey' } as TableColumn
+  ...activeFields.value.map((f) => {
+    const key = f.field_key
+    const col: TableColumn = { key, title: fieldLabel(key), ...(COLUMN_PRESET[key] ?? { width: 180 }) }
+    if (f.field_type === 'bool') {
+      // 布尔列统一给「启用/禁用」筛选
+      col.filterable = true
+      col.filterType = 'radio'
+      col.filters = [
+        { text: t('console.enabled'), value: true },
+        { text: t('console.disabled'), value: false }
       ]
-    : []),
-  { key: 'sort_order', title: t('console.dimTable.sort'), width: 90, align: 'center', sortable: true },
-  {
-    key: 'enabled',
-    title: t('console.status'),
-    width: 90,
-    align: 'center',
-    filterable: true,
-    filterType: 'radio',
-    filters: [
-      { text: t('console.enabled'), value: true },
-      { text: t('console.disabled'), value: false }
-    ],
-    filterMethod: (v: any, row: DimValue) => Boolean(row.enabled) === Boolean(v)
-  },
-  { key: 'remark', title: t('console.remark'), width: 220 },
+      col.filterMethod = (v: unknown, row: DimValue) =>
+        Boolean((row as unknown as Record<string, unknown>)[key]) === Boolean(v)
+    }
+    return col
+  }),
   ...(canManageSettings.value
     ? [
         {
@@ -605,46 +764,74 @@ const SORT_RE = /^\d{1,6}$/
 // 英文名称禁止出现汉字（CJK 统一表意文字）
 const CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/
 
-/** 模型提供商维表的英文名校验：必填 + 不允许中文 */
-const validateNameEn = (v: unknown): string | undefined => {
-  if (!isModelProvider.value) return undefined
-  const val = String(v ?? '').trim()
-  if (!val) return t('console.dimTable.nameEnRequired')
-  if (val.length > 128) return t('console.dimTable.nameTooLong')
-  if (CJK_RE.test(val)) return t('console.dimTable.nameEnNoChinese')
-  return undefined
-}
-
 /** 排序值收敛为 number；非法（字母/中文/负数/小数/超长/空）返回 null，调用方据此拒绝提交 */
 const parseSort = (v: unknown): number | null =>
   SORT_RE.test(String(v ?? '').trim()) ? Number(v) : null
 
+/**
+ * 按字段配置逐列校验：required / max_len / no_cjk / 整型，全部取自 dim_table_fields。
+ * 与后端 import 的校验同口径，所以改了配置两边一起变，不会前后端打架。
+ * 行内编辑与「新增取值」表单共用这一份，保证两处口径一致。
+ */
 const validateRow = (row: DimValue) => {
-  const e: Partial<Record<'code' | 'name' | 'name_en' | 'api_key' | 'sort_order' | 'remark', string>> = {}
-  const code = String(row.code ?? '').trim()
-  const name = String(row.name ?? '').trim()
-  if (!code) e.code = t('console.dimTable.codeRequired')
-  else if (code.length > 64) e.code = t('console.dimTable.codeTooLong')
-  else if (!CODE_RE.test(code)) e.code = t('console.dimTable.codeFormat')
-  if (!name) e.name = t('console.dimTable.nameRequired')
-  else if (name.length > 128) e.name = t('console.dimTable.nameTooLong')
-  const nameEnErr = validateNameEn(row.name_en)
-  if (nameEnErr) e.name_en = nameEnErr
-  if (isModelProvider.value) {
-    const keyVal = String(row.api_key ?? '')
-    if (keyVal.length > 512) {
-      e.api_key = t('console.dimTable.apiKeyTooLong')
-    } else if (row.enabled && needsApiKey(row.code) && !keyVal.trim()) {
-      // 启用状态下（ollama 豁免）必须有密钥，否则不允许保存
-      e.api_key = t('console.dimTable.apiKeyRequiredToEnable')
+  const e: Record<string, string> = {}
+  const data = row as unknown as Record<string, unknown>
+  for (const f of activeFields.value) {
+    const key = f.field_key
+    // 布尔列由开关控制，没有文本输入，不需要校验
+    if (f.field_type === 'bool') continue
+    const val = String(data[key] ?? '').trim()
+
+    if (f.field_type === 'int') {
+      if (!SORT_RE.test(val)) e[key] = t('console.dimTable.fieldInvalidInt', { field: fieldLabel(key) })
+      continue
+    }
+    if (f.required && !val) {
+      e[key] =
+        key === 'code'
+          ? t('console.dimTable.codeRequired')
+          : key === 'name'
+            ? t('console.dimTable.nameRequired')
+            : t('console.dimTable.fieldRequired', { field: fieldLabel(key) })
+      continue
+    }
+    // 编码格式是物理约束（导入定位行用），与是否配置无关
+    if (key === 'code' && val && !CODE_RE.test(val)) {
+      e[key] = t('console.dimTable.codeFormat')
+      continue
+    }
+    if (f.max_len && val.length > f.max_len) {
+      e[key] = t('console.dimTable.fieldTooLong', { field: fieldLabel(key), n: f.max_len })
+      continue
+    }
+    if (f.no_cjk && val && CJK_RE.test(val)) {
+      e[key] = t('console.dimTable.fieldNoChinese', { field: fieldLabel(key) })
+      continue
+    }
+    // 业务规则：模型提供商启用时必须配置密钥（ollama 豁免），与后端同口径
+    if (key === 'api_key' && isModelProvider.value && data.enabled && needsApiKey(data.code) && !val) {
+      e[key] = t('console.dimTable.apiKeyRequiredToEnable')
     }
   }
-  if (!SORT_RE.test(String(row.sort_order ?? '').trim())) e.sort_order = t('console.dimTable.sortInvalid')
-  if (String(row.remark ?? '').length > 255) e.remark = t('console.dimTable.remarkTooLong')
   return e
 }
 
-const { errors: rowErrors, fieldError, clearRow, check } = useRowValidation(validateRow)
+const { fieldError, clearRow, check } = useRowValidation(validateRow)
+
+/** 按字段配置组装提交载荷：bool → 布尔，int → 数字，其余 → 去空格字符串。
+ *  只含启用中的列，被关闭的列不进载荷（库里原值保留，与后端导入语义一致）。 */
+const buildPayload = (source: unknown): Record<string, unknown> => {
+  const data = source as Record<string, unknown>
+  const payload: Record<string, unknown> = {}
+  for (const f of activeFields.value) {
+    const key = f.field_key
+    const raw = data[key]
+    if (f.field_type === 'bool') payload[key] = !!raw
+    else if (f.field_type === 'int') payload[key] = parseSort(raw)
+    else payload[key] = String(raw ?? '').trim()
+  }
+  return payload
+}
 
 const savingId = ref<number | null>(null)
 const save = async (row: DimValue) => {
@@ -657,15 +844,8 @@ const save = async (row: DimValue) => {
   }
   savingId.value = row.id
   try {
-    await updateDimValue(selectedId.value, row.id, {
-      code: String(row.code).trim(),
-      name: String(row.name).trim(),
-      name_en: String(row.name_en ?? '').trim(),
-      api_key: String(row.api_key ?? '').trim(),
-      sort_order: parseSort(row.sort_order)!,
-      enabled: row.enabled,
-      remark: String(row.remark ?? '')
-    })
+    // 只提交启用中的列：被关闭的列不进 payload，库里原值保留（与后端导入语义一致）
+    await updateDimValue(selectedId.value, row.id, buildPayload(row) as DimValueUpdate)
     showToast(t('console.saved'), 'success')
     clearRow(row.id)
     await loadValues()
@@ -849,93 +1029,51 @@ const removeTable = (tb: DimTable) => {
 }
 
 // ============ 取值表单（新增） ============
+// 字段名 → 值，由字段配置驱动；这样新增字段后表单自动多一行，不用改模板
 const valueForm = ref({
   visible: false,
-  code: '',
-  name: '',
-  name_en: '',
-  api_key: '',
-  sort_order: '0',
-  enabled: true,
-  remark: '',
+  values: {} as Record<string, unknown>,
   error: '',
   submitting: false
 })
 
+/** 表单占位提示：优先用字段专属文案，其余留空 */
+const fieldPlaceholder = (f: DimFieldItem) => {
+  if (f.field_type === 'int') return '0'
+  if (f.field_key === 'api_key') return t('console.dimTable.apiKeyPlaceholder')
+  if (f.field_key === 'name_en') return t('console.dimTable.nameEnPlaceholder')
+  if (f.field_key === 'code') return t('console.dimTable.valueCodePlaceholder')
+  if (f.field_key === 'name') return t('console.dimTable.valueNamePlaceholder')
+  return ''
+}
+
 const openNewValue = () => {
-  valueForm.value = {
-    visible: true,
-    code: '',
-    name: '',
-    name_en: '',
-    api_key: '',
-    sort_order: '0',
-    enabled: true,
-    remark: '',
-    error: '',
-    submitting: false
+  const initial: Record<string, unknown> = {}
+  for (const f of activeFields.value) {
+    if (f.field_type === 'bool') initial[f.field_key] = f.field_key === 'enabled'
+    else if (f.field_type === 'int') initial[f.field_key] = '0'
+    else initial[f.field_key] = ''
   }
+  valueForm.value = { visible: true, values: initial, error: '', submitting: false }
 }
 
 const submitValue = async () => {
   if (valueForm.value.submitting || !selectedId.value) return
   const f = valueForm.value
-  if (!f.code.trim()) {
-    f.error = t('console.dimTable.codeRequired')
-    return
-  }
-  if (f.code.trim().length > 64) {
-    f.error = t('console.dimTable.codeTooLong')
-    return
-  }
-  if (!CODE_RE.test(f.code.trim())) {
-    f.error = t('console.dimTable.codeFormat')
-    return
-  }
-  if (!f.name.trim()) {
-    f.error = t('console.dimTable.nameRequired')
-    return
-  }
-  if (f.name.trim().length > 128) {
-    f.error = t('console.dimTable.nameTooLong')
-    return
-  }
-  const nameEnErr = validateNameEn(f.name_en)
-  if (nameEnErr) {
-    f.error = nameEnErr
-    return
-  }
-  if (isModelProvider.value) {
-    if (String(f.api_key ?? '').length > 512) {
-      f.error = t('console.dimTable.apiKeyTooLong')
-      return
-    }
-    // 新增即启用时（ollama 豁免），必须填写 API 密钥
-    if (f.enabled && needsApiKey(f.code) && !String(f.api_key ?? '').trim()) {
-      f.error = t('console.dimTable.apiKeyRequiredToEnable')
-      return
-    }
-  }
-  if (!SORT_RE.test(String(f.sort_order ?? '').trim())) {
-    f.error = t('console.dimTable.sortInvalid')
-    return
-  }
-  if (f.remark.trim().length > 255) {
-    f.error = t('console.dimTable.remarkTooLong')
+  // 复用行内校验：把表单值当一行来校验，保证新增与编辑两处口径完全一致
+  const errs = validateRow(f.values as unknown as DimValue)
+  const firstKey = Object.keys(errs)[0]
+  if (firstKey) {
+    f.error = errs[firstKey]
     return
   }
   f.submitting = true
   f.error = ''
   try {
-    await createDimValue(selectedId.value, {
-      code: f.code.trim(),
-      name: f.name.trim(),
-      name_en: String(f.name_en ?? '').trim(),
-      api_key: String(f.api_key ?? '').trim(),
-      sort_order: Number(String(f.sort_order).trim()),
-      enabled: f.enabled,
-      remark: f.remark.trim()
-    })
+    await createDimValue(
+      selectedId.value,
+      buildPayload(f.values) as unknown as Parameters<typeof createDimValue>[1]
+    )
     f.visible = false
     showToast(t('console.created'), 'success')
     currentPage.value = 1
@@ -946,6 +1084,88 @@ const submitValue = async () => {
     f.error = msg.includes('已存在') ? t('console.dimTable.valueDuplicate') : msg
   } finally {
     f.submitting = false
+  }
+}
+
+// ============ 字段设置（管理字段配置） ============
+// 管理员可在界面上开关列、改中英文列头、调必填与排序；
+// 保存后列渲染 / 校验 / 新增表单立即刷新，导出与导入模板由后端读同一份配置天然同步。
+const fieldsVisible = ref(false)
+const fieldsDraft = ref<DimFieldItem[]>([])
+const fieldsSaving = ref(false)
+const fieldsError = ref('')
+
+/** code / name 是导入定位行的核心字段：不允许关闭、不允许取消必填（后端同口径强制） */
+const isCoreField = (key: string) => key === 'code' || key === 'name'
+
+const openFieldsSettings = async () => {
+  if (!selectedId.value || !selected.value) return
+  fieldsError.value = ''
+  // 打开前拉全量配置（含被关闭的列），深拷贝到草稿，避免直接改共享状态
+  try {
+    const res = await fetchDimFields(selectedId.value)
+    fieldsDraft.value = (res.items ?? []).map((f) => ({ ...f }))
+  } catch {
+    showToast(t('console.dimTable.fieldsLoadFailed'), 'error')
+    return
+  }
+  fieldsVisible.value = true
+}
+
+const closeFieldsSettings = () => {
+  if (fieldsSaving.value) return
+  fieldsVisible.value = false
+}
+
+const saveFieldsSettings = async () => {
+  if (fieldsSaving.value || !selectedId.value) return
+  // 本地校验：中文列头必填 + 长度、英文列头长度、排序整型
+  for (const fl of fieldsDraft.value) {
+    const zh = String(fl.label_zh ?? '').trim()
+    if (!zh) {
+      fieldsError.value = t('console.dimTable.labelZhRequired')
+      return
+    }
+    if (zh.length > 32) {
+      fieldsError.value = t('console.dimTable.fieldTooLong', {
+        field: t('console.dimTable.fieldColLabelZh'),
+        n: 32
+      })
+      return
+    }
+    if (String(fl.label_en ?? '').trim().length > 64) {
+      fieldsError.value = t('console.dimTable.fieldTooLong', {
+        field: t('console.dimTable.fieldColLabelEn'),
+        n: 64
+      })
+      return
+    }
+    if (!SORT_RE.test(String(fl.sort_order ?? '').trim())) {
+      fieldsError.value = t('console.dimTable.fieldInvalidInt', {
+        field: t('console.dimTable.fieldColSort')
+      })
+      return
+    }
+  }
+  fieldsError.value = ''
+  fieldsSaving.value = true
+  try {
+    await saveDimFields(
+      selectedId.value,
+      fieldsDraft.value.map((f) => ({
+        ...f,
+        label_zh: String(f.label_zh ?? '').trim(),
+        label_en: String(f.label_en ?? '').trim(),
+        sort_order: Number(String(f.sort_order).trim())
+      }))
+    )
+    showToast(t('console.dimTable.fieldsSaved'), 'success')
+    fieldsVisible.value = false
+    await loadFields()
+  } catch (err) {
+    fieldsError.value = err instanceof Error ? err.message : t('common.errorOccurred')
+  } finally {
+    fieldsSaving.value = false
   }
 }
 
@@ -1514,6 +1734,150 @@ loadTables().then(loadValues)
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--color-text-secondary);
+}
+
+/* 必填标记：跟随主色，与科技风表单一致 */
+.form-required {
+  font-style: normal;
+  margin-left: 3px;
+  color: var(--color-primary);
+}
+
+/* —— 字段设置弹窗 —— */
+.form-modal--fields {
+  width: min(760px, 100%);
+}
+
+.fields-desc {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.fields-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.fields-row {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr) minmax(0, 1fr) 52px 52px 66px;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 60%, transparent);
+  transition: var(--transition-fast);
+}
+
+.fields-row.is-disabled {
+  opacity: 0.55;
+}
+
+.fields-row--head {
+  padding: 5px 10px;
+  border: none;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+}
+
+.fields-cell {
+  min-width: 0;
+}
+
+.fields-cell--key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fields-keyname {
+  font-size: 12.5px;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fields-keycode {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-secondary);
+}
+
+.fields-core {
+  flex: none;
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--color-primary);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.fields-cell--flag {
+  display: flex;
+  justify-content: center;
+}
+
+.fields-cell--sort {
+  display: flex;
+  justify-content: center;
+}
+
+.fields-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 12.5px;
+  transition: var(--transition-fast);
+}
+
+.fields-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+
+.fields-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fields-input--num {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.switch--sm {
+  transform: scale(0.82);
+  transform-origin: center;
+}
+
+.fields-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--color-text-tertiary);
 }
 
 .form-input {

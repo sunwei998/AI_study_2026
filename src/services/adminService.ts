@@ -5,6 +5,8 @@ import type {
   AdminUsage,
   AdminUser,
   DimOption,
+  DimFieldItem,
+  DimFieldsResult,
   DimTable,
   DimTableCreate,
   DimValue,
@@ -548,6 +550,19 @@ export function fetchDimValuesTotal(tableId: number): Promise<number> {
 /** 下载某维表的导入模板 xlsx：表头语言由 Accept-Language 决定 */
 export function downloadDimTemplate(tableId: number): Promise<Blob> {
   return fetchBlob(`/dim-tables/${tableId}/template`)
+}
+
+/** 读取某维表的字段配置（列顺序 / 中英文列头 / 类型与校验）。无配置时返回代码内置模板 */
+export function fetchDimFields(tableId: number): Promise<DimFieldsResult> {
+  return request<DimFieldsResult>(`/dim-tables/${tableId}/fields`)
+}
+
+/** 批量保存某维表的字段配置（upsert）。仅超级管理员 / 系统管理员可写 */
+export function saveDimFields(tableId: number, items: DimFieldItem[]): Promise<{ ok: boolean; saved: number }> {
+  return request(`/dim-tables/${tableId}/fields`, {
+    method: 'PUT',
+    body: JSON.stringify({ items })
+  })
 }
 
 export interface DimImportResult {

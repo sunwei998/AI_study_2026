@@ -343,6 +343,29 @@ export interface DimValueUpdate {
   sort_order?: number
   enabled?: boolean
   remark?: string
+  [key: string]: unknown
+}
+
+/** 维表字段类型：文本 / 整数 / 布尔 / 密钥（导出脱敏） */
+export type DimFieldType = 'text' | 'int' | 'bool' | 'secret'
+
+/** 单条维表字段配置：控制该维表启用哪些列、列头叫什么、怎么校验 */
+export interface DimFieldItem {
+  field_key: string
+  label_zh: string
+  label_en: string
+  field_type: DimFieldType
+  required: boolean
+  max_len: number
+  no_cjk: boolean
+  sort_order: number
+  enabled: boolean
+}
+
+export interface DimFieldsResult {
+  items: DimFieldItem[]
+  /** false 表示尚未落库，返回的是代码内置模板，保存后才生效 */
+  persisted: boolean
 }
 
 export interface DimOption {
