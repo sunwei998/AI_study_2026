@@ -39,9 +39,32 @@
             <span class="aex-row__k">{{ $t('common.exportFormat') }}</span>
             <i class="aex-chip">{{ format }}</i>
           </div>
-          <div v-if="count != null" class="aex-row">
+          <div v-if="showScope" class="aex-row aex-row--scope">
+            <span class="aex-row__k">{{ $t('common.exportScope') }}</span>
+            <div class="aex-radios">
+              <span
+                class="aex-radio"
+                :class="{ 'is-checked': scope === 'filtered' }"
+                @click="setScope('filtered')"
+              >
+                <i class="aex-radio__dot"></i>{{ $t('common.scopeFiltered') }}
+              </span>
+              <span
+                class="aex-radio"
+                :class="{ 'is-checked': scope === 'all' }"
+                @click="setScope('all')"
+              >
+                <i class="aex-radio__dot"></i>{{ $t('common.scopeAll') }}
+              </span>
+            </div>
+          </div>
+          <div v-if="count != null || showScope" class="aex-row">
             <span class="aex-row__k">{{ $t('common.exportCount') }}</span>
-            <span class="aex-row__v">{{ count }} {{ $t('common.itemsUnit') }}</span>
+            <span class="aex-row__v">
+              <template v-if="scope === 'all' && totalLoading">{{ $t('common.counting') }}</template>
+              <template v-else-if="displayCount != null">{{ displayCount }} {{ $t('common.itemsUnit') }}</template>
+              <template v-else>—</template>
+            </span>
           </div>
           <div class="aex-row">
             <span class="aex-row__k">{{ $t('common.exportFilename') }}</span>
@@ -50,7 +73,7 @@
 
           <slot name="detail" />
 
-          <button type="button" class="aex-confirm" :disabled="loading" @click="onConfirm">
+          <button type="button" class="aex-confirm" :disabled="loading || (scope === 'all' && totalLoading)" @click="onConfirm">
             <AppLoading v-if="loading" :size="13" color="#fff" glow />
             <AppIcon v-else name="lucide:download" :size="14" />
             {{ loading ? $t('common.loading') : $t('common.exportConfirm') }}
@@ -71,8 +94,10 @@ const props = withDefaults(
   defineProps<{
     /** 导出格式标识，展示用（如 XLSX / CSV） */
     format?: string
-    /** 导出数据量（条），不传则不展示 */
+    /** 当前筛选结果的数据量（条）；不传则不展示数据量行 */
     count?: number
+    /** 查询"全部数据量"的函数；传入后展示"导出范围"选择（筛选/全部） */
+    fetchTotal?: () => Promise<number>
     /** 文件名前缀，自动生成 前缀_时间戳.格式 */
     filePrefix?: string
     /** 仅图标按钮（表格工具栏场景） */
@@ -86,6 +111,7 @@ const props = withDefaults(
   {
     format: 'XLSX',
     count: undefined,
+    fetchTotal: undefined,
     filePrefix: 'export',
     iconOnly: false,
     buttonTitle: '',
@@ -96,17 +122,42 @@ const props = withDefaults(
   }
 )
 
-const emit = defineEmits<{ (e: 'export'): void }>()
+export type ExportScope = 'filtered' | 'all'
+
+const emit = defineEmits<{ (e: 'export', payload: { scope: ExportScope }): void }>()
 
 const { t } = useI18n()
 
 const open = ref(false)
 const fileName = ref('')
+const scope = ref<ExportScope>('filtered')
+const total = ref<number | null>(null)
+const totalLoading = ref(false)
 const panelStyle = ref<{ top: string; left: string }>({ top: '0px', left: '0px' })
 const btnRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 
 const iconSize = computed(() => (props.size === 'mini' || props.size === 'small' ? 15 : 16))
+const showScope = computed(() => !!props.fetchTotal)
+const displayCount = computed(() =>
+  showScope.value && scope.value === 'all' ? total.value : props.count
+)
+
+async function setScope(v: ExportScope) {
+  if (scope.value === v) return
+  scope.value = v
+  // 选"全部"时懒加载全量数据量并缓存，供来回切换即时展示
+  if (v === 'all' && total.value === null && props.fetchTotal && !totalLoading.value) {
+    totalLoading.value = true
+    try {
+      total.value = await props.fetchTotal()
+    } catch {
+      total.value = null
+    } finally {
+      totalLoading.value = false
+    }
+  }
+}
 
 const PANEL_W = 288
 
@@ -138,6 +189,8 @@ function toggle() {
     open.value = false
     return
   }
+  // 每次打开默认"当前筛选结果"（全量总数缓存保留，切换即时展示）
+  scope.value = 'filtered'
   fileName.value = `${props.filePrefix}_${stamp()}.${props.format.toLowerCase()}`
   open.value = true
   positionPanel()
@@ -145,7 +198,7 @@ function toggle() {
 
 function onConfirm() {
   if (props.loading) return
-  emit('export')
+  emit('export', { scope: showScope.value ? scope.value : 'all' })
 }
 
 function onDocMousedown(e: MouseEvent) {
@@ -389,6 +442,60 @@ onBeforeUnmount(() => {
 .aex-row__v--mono {
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+/* 导出范围：标签行 + 两个 radio，radio 圆点跟随主题主色 */
+.aex-row--scope {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.aex-radios {
+  display: flex;
+  gap: 14px;
+}
+
+.aex-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+  transition: var(--transition-fast);
+}
+
+.aex-radio:hover {
+  color: var(--color-text);
+}
+
+.aex-radio.is-checked {
+  color: var(--color-primary);
+}
+
+.aex-radio__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-border);
+  background: transparent;
+  position: relative;
+  transition: var(--transition-fast);
+}
+
+.aex-radio.is-checked .aex-radio__dot {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 8px var(--color-glow);
+}
+
+.aex-radio.is-checked .aex-radio__dot::after {
+  content: '';
+  position: absolute;
+  inset: 2.5px;
+  border-radius: 50%;
+  background: var(--color-primary);
 }
 
 .aex-chip {

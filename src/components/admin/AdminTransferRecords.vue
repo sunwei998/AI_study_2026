@@ -5,7 +5,6 @@ import type { TransferRecord, TransferType } from '@/types/admin'
 import {
   deleteTransfer,
   downloadTransfer,
-  exportModelsCsv,
   fetchAdmins,
   fetchTransfers
 } from '@/services/adminService'
@@ -15,7 +14,7 @@ import AppButton from '@/components/common/AppButton.vue'
 import AppTag, { type AppTagStatus } from '@/components/common/AppTag.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
-import { downloadBlob, formatFileSize } from '@/utils/download'
+import { formatFileSize } from '@/utils/download'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -42,13 +41,19 @@ const admins = ref<string[]>([])
 
 const isImport = computed(() => props.type === 'import')
 
-// 导入源文件保留时长（小时），由后端按数据字典配置返回，用于表头说明清理范围
+// 源文件/产物保留时长（小时），由后端按数据字典配置返回，用于提示语说明清理范围
 const retentionHours = ref(720)
+const exportRetentionHours = ref(720)
 const retentionTip = computed(() =>
-  t('console.importRetentionTip', {
-    hours: retentionHours.value,
-    days: retentionHours.value / 24
-  })
+  isImport.value
+    ? t('console.importRetentionTip', {
+        hours: retentionHours.value,
+        days: retentionHours.value / 24
+      })
+    : t('console.exportRetentionTip', {
+        hours: exportRetentionHours.value,
+        days: exportRetentionHours.value / 24
+      })
 )
 
 function formatTime(ts: number): string {
@@ -154,6 +159,7 @@ const load = async () => {
     records.value = res.items
     total.value = res.total
     if (res.retention_hours) retentionHours.value = res.retention_hours
+    if (res.export_retention_hours) exportRetentionHours.value = res.export_retention_hours
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('common.errorOccurred')
   } finally {
@@ -217,21 +223,16 @@ function onReset() {
 
 const downloading = ref<number | null>(null)
 
-// 导入：服务端保留源文件，可下载；导出：不存产物，始终可重新生成
+// 导入源文件 / 导出产物均按保留期存盘：保留期内可下载，超期清理后 has_file=false
 function canDownload(row: TransferRecord): boolean {
-  return isImport.value ? row.has_file : true
+  return row.has_file
 }
 
 async function onDownload(row: TransferRecord) {
   if (!canDownload(row) || downloading.value !== null) return
   downloading.value = row.id
   try {
-    if (isImport.value) {
-      await downloadTransfer(row.id, row.filename)
-    } else {
-      const blob = await exportModelsCsv()
-      downloadBlob(row.filename, blob)
-    }
+    await downloadTransfer(row.id, row.filename)
   } catch (err) {
     showToast(err instanceof Error ? err.message : t('common.errorOccurred'), 'error')
   } finally {
@@ -240,11 +241,9 @@ async function onDownload(row: TransferRecord) {
 }
 
 function downloadTitle(row: TransferRecord): string {
-  if (isImport.value) {
-    if (!row.has_file) return t('console.noSourceFile')
-    return hasErrors(row) ? t('console.downloadWithErrors') : t('console.downloadFile')
-  }
-  return t('console.downloadRegenerate')
+  if (!row.has_file) return t('console.noSourceFile')
+  if (isImport.value && hasErrors(row)) return t('console.downloadWithErrors')
+  return isImport.value ? t('console.downloadFile') : t('console.downloadSnapshot')
 }
 
 // ============ 删除（二次确认） ============
@@ -308,7 +307,7 @@ load()
         @filter-change="onFilterChange"
       >
         <template #table-title-left>
-          <span v-if="isImport" class="tr-retention-hint">
+          <span class="tr-retention-hint">
             <AppIcon name="lucide:info" :size="12" />
             {{ retentionTip }}
           </span>
@@ -328,8 +327,8 @@ load()
         <template #column-filename="{ row }">
           <span
             class="tr-file"
-            :class="{ 'is-purged': isImport && !row.has_file }"
-            :title="isImport && !row.has_file ? $t('console.sourceFilePurged') : row.filename"
+            :class="{ 'is-purged': !row.has_file }"
+            :title="!row.has_file ? $t('console.sourceFilePurged') : row.filename"
           >
             <AppIcon name="lucide:file-text" :size="14" class="tr-file-icon" />
             {{ row.filename }}

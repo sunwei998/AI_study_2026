@@ -24,6 +24,7 @@
             size="middle"
             format="XLSX"
             :count="total"
+            :fetch-total="fetchUsersTotal"
             file-prefix="users"
             :loading="exporting"
             :button-title="$t('common.export')"
@@ -277,9 +278,11 @@ import {
   fetchAdminUser,
   fetchAdminUsers,
   fetchOperationLogs,
+  fetchUsersTotal,
   resetUserPassword,
   updateAdminUser,
-  type OperationLogItem
+  type OperationLogItem,
+  type UsersExportParams
 } from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
 import { formatDateTime } from '@/utils/format'
@@ -769,11 +772,23 @@ const submitRegion = async () => {
 // ============ 导出 ============
 const exporting = ref(false)
 
-const onExport = async () => {
+const onExport = async ({ scope }: { scope: 'filtered' | 'all' }) => {
   if (exporting.value) return
   exporting.value = true
   try {
-    const blob = await exportUsers()
+    const params: UsersExportParams =
+      scope === 'filtered'
+        ? {
+            scope,
+            username: usernameFilter.value || undefined,
+            gender: genderFilter.value.length ? genderFilter.value.join(',') : undefined,
+            role: roleFilter.value.length ? roleFilter.value.join(',') : undefined,
+            is_active: isActiveFilter.value === null ? undefined : String(isActiveFilter.value),
+            sort: sortFilter.value.order ? sortFilter.value.key : undefined,
+            order: sortFilter.value.order ?? undefined
+          }
+        : { scope }
+    const blob = await exportUsers(params)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url

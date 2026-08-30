@@ -89,6 +89,7 @@
               size="middle"
               format="XLSX"
               :count="total"
+              :fetch-total="fetchDimTotal"
               :file-prefix="`dim_${selected.code}`"
               :loading="exporting"
               :button-title="t('common.export')"
@@ -428,10 +429,12 @@ import {
   exportDimValues,
   fetchDimTables,
   fetchDimValues,
+  fetchDimValuesTotal,
   fetchOperationLogs,
   importDimValues,
   updateDimTable,
   updateDimValue,
+  type DimValuesExportParams,
   type OperationLogItem
 } from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
@@ -963,11 +966,26 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-const onExport = async () => {
+/** 导出面板"全部数据量"：当前维表不受筛选影响的取值总数 */
+const fetchDimTotal = async () => {
+  if (!selectedId.value) return 0
+  return fetchDimValuesTotal(selectedId.value)
+}
+
+const onExport = async ({ scope }: { scope: 'filtered' | 'all' }) => {
   if (exporting.value || !selectedId.value || !selected.value) return
   exporting.value = true
   try {
-    const blob = await exportDimValues(selectedId.value)
+    const params: DimValuesExportParams =
+      scope === 'filtered'
+        ? {
+            scope,
+            enabled: enabledFilter.value === null ? undefined : String(enabledFilter.value),
+            sort: sortFilter.value.order ? sortFilter.value.key : undefined,
+            order: sortFilter.value.order ?? undefined
+          }
+        : { scope }
+    const blob = await exportDimValues(selectedId.value, params)
     downloadBlob(blob, `dim_${selected.value.code}_${Date.now()}.xlsx`)
     showToast(t('console.exportSuccess'), 'success')
   } catch (err) {

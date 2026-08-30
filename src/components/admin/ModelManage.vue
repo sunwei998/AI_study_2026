@@ -32,6 +32,7 @@
             size="middle"
             format="XLSX"
             :count="total"
+            :fetch-total="fetchModelsTotal"
             file-prefix="models"
             :loading="exporting"
             :button-title="$t('console.exportModels')"
@@ -301,9 +302,11 @@ import {
   exportModelsCsv,
   fetchAdminModel,
   fetchAdminModels,
+  fetchModelsTotal,
   fetchOperationLogs,
   importModelsCsv,
   updateAdminModel,
+  type ModelsExportParams,
   type OperationLogItem
 } from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
@@ -777,11 +780,27 @@ const exporting = ref(false)
 const templating = ref(false)
 const importVisible = ref(false)
 
-const onExport = async () => {
+const onExport = async ({ scope }: { scope: 'filtered' | 'all' }) => {
   if (exporting.value) return
   exporting.value = true
   try {
-    const blob = await exportModelsCsv()
+    const params: ModelsExportParams =
+      scope === 'filtered'
+        ? {
+            scope,
+            enabled: enabledFilter.value === null ? undefined : String(enabledFilter.value),
+            free: freeFilter.value === null ? undefined : String(freeFilter.value),
+            vision: visionFilter.value === null ? undefined : String(visionFilter.value),
+            supports_search:
+              supportsSearchFilter.value === null ? undefined : String(supportsSearchFilter.value),
+            name: nameFilter.value || undefined,
+            model_key: modelKeyFilter.value || undefined,
+            provider: providerFilter.value.length ? providerFilter.value.join(',') : undefined,
+            sort: sortFilter.value.order ? sortFilter.value.key : undefined,
+            order: sortFilter.value.order ?? undefined
+          }
+        : { scope }
+    const blob = await exportModelsCsv(params)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url

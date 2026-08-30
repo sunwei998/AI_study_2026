@@ -33,6 +33,7 @@
               size="middle"
               format="XLSX"
               :count="total"
+              :fetch-total="fetchSettingsTotal"
               file-prefix="settings"
               :loading="exporting"
               :button-title="$t('common.export')"
@@ -235,10 +236,12 @@ import {
   deleteSetting,
   downloadSettingsTemplate,
   exportSettings,
-  fetchSettingLogs,
   fetchSettings,
+  fetchSettingLogs,
+  fetchSettingsTotal,
   importSettings,
   updateSetting,
+  type SettingsExportParams,
   type SettingLogItem
 } from '@/services/adminService'
 import { useAuthStore } from '@/stores/authStore'
@@ -571,11 +574,20 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-const onExport = async () => {
+const onExport = async ({ scope }: { scope: 'filtered' | 'all' }) => {
   if (exporting.value) return
   exporting.value = true
   try {
-    const blob = await exportSettings()
+    const params: SettingsExportParams =
+      scope === 'filtered'
+        ? {
+            scope,
+            enabled: enabledFilter.value === null ? undefined : String(enabledFilter.value),
+            sort: sortFilter.value.order ? sortFilter.value.key : undefined,
+            order: sortFilter.value.order ?? undefined
+          }
+        : { scope }
+    const blob = await exportSettings(params)
     downloadBlob(blob, `settings_${Date.now()}.xlsx`)
     showToast(t('console.exportSuccess'), 'success')
   } catch (err) {

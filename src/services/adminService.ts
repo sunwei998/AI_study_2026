@@ -78,6 +78,30 @@ async function parseError(resp: Response): Promise<string> {
   }
 }
 
+/** 对象转 query string：跳过 undefined/null/空串 */
+function qsFrom(obj: object): string {
+  const q = new URLSearchParams()
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined && v !== null && v !== '') q.set(k, String(v))
+  }
+  return q.toString()
+}
+
+/** GET 获取二进制流（导出 / 模板下载共用） */
+async function fetchBlob(path: string): Promise<Blob> {
+  const resp = await fetch(`${API_BASE}${path}`, { headers: authHeaders() })
+  if (resp.status === 401) {
+    clearToken()
+    notifyUnauthorized()
+    throw new Error('unauthorized')
+  }
+  if (resp.status === 403) {
+    notifyForbidden()
+  }
+  if (!resp.ok) throw new Error(await parseError(resp))
+  return resp.blob()
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const resp = await fetch(`${API_BASE}${path}`, { ...options, headers: authHeaders() })
   if (resp.status === 401) {
@@ -172,28 +196,36 @@ export function deleteAdminModel(modelId: number): Promise<{ ok: boolean }> {
   return request(`/models/${modelId}`, { method: 'DELETE' })
 }
 
-export function exportModelsCsv(): Promise<Blob> {
-  return fetch(`${API_BASE}/models/export`, { headers: authHeaders() }).then(async (resp) => {
-    if (resp.status === 401) {
-      clearToken()
-      notifyUnauthorized()
-      throw new Error('unauthorized')
-    }
-    if (!resp.ok) throw new Error(await parseError(resp))
-    return resp.blob()
-  })
+/** 导出范围：filtered = 当前筛选与排序；all = 全量 */
+export interface ExportScopeParam {
+  scope: 'filtered' | 'all'
+}
+
+/** 模型导出参数：与列表筛选/排序一致 */
+export interface ModelsExportParams extends ExportScopeParam {
+  search?: string
+  name?: string
+  model_key?: string
+  enabled?: string
+  free?: string
+  vision?: string
+  supports_search?: string
+  provider?: string
+  sort?: string
+  order?: string
+}
+
+export function exportModelsCsv(params: ModelsExportParams): Promise<Blob> {
+  return fetchBlob(`/models/export?${qsFrom(params)}`)
+}
+
+/** 导出面板"全部数据量"：不受筛选影响的模型总数 */
+export function fetchModelsTotal(): Promise<number> {
+  return request<{ total: number }>('/models/count').then((r) => r.total)
 }
 
 export function downloadModelTemplate(): Promise<Blob> {
-  return fetch(`${API_BASE}/models/template`, { headers: authHeaders() }).then(async (resp) => {
-    if (resp.status === 401) {
-      clearToken()
-      notifyUnauthorized()
-      throw new Error('unauthorized')
-    }
-    if (!resp.ok) throw new Error(await parseError(resp))
-    return resp.blob()
-  })
+  return fetchBlob('/models/template')
 }
 
 export interface ModelImportResult {
@@ -323,16 +355,21 @@ export function deleteSetting(key: string): Promise<{ ok: boolean }> {
   return request(`/settings/${encodeURIComponent(key)}`, { method: 'DELETE' })
 }
 
-export function exportSettings(): Promise<Blob> {
-  return fetch(`${API_BASE}/settings/export`, { headers: authHeaders() }).then(async (resp) => {
-    if (resp.status === 401) {
-      clearToken()
-      notifyUnauthorized()
-      throw new Error('unauthorized')
-    }
-    if (!resp.ok) throw new Error(await parseError(resp))
-    return resp.blob()
-  })
+/** 设置导出参数：与列表筛选/排序一致 */
+export interface SettingsExportParams extends ExportScopeParam {
+  search?: string
+  enabled?: string
+  sort?: string
+  order?: string
+}
+
+export function exportSettings(params: SettingsExportParams): Promise<Blob> {
+  return fetchBlob(`/settings/export?${qsFrom(params)}`)
+}
+
+/** 导出面板"全部数据量"：不受筛选影响的配置项总数 */
+export function fetchSettingsTotal(): Promise<number> {
+  return request<{ total: number }>('/settings/count').then((r) => r.total)
 }
 
 export function downloadSettingsTemplate(): Promise<Blob> {
@@ -396,19 +433,24 @@ export function fetchOperationLogs(
   return request<PaginatedResult<OperationLogItem>>(`/operation-logs?${query.toString()}`)
 }
 
-export function exportUsers(): Promise<Blob> {
-  return fetch(`${API_BASE}/users/export`, { headers: authHeaders() }).then(async (resp) => {
-    if (resp.status === 401) {
-      clearToken()
-      notifyUnauthorized()
-      throw new Error('unauthorized')
-    }
-    if (resp.status === 403) {
-      notifyForbidden()
-    }
-    if (!resp.ok) throw new Error(await parseError(resp))
-    return resp.blob()
-  })
+/** 用户导出参数：与列表筛选/排序一致 */
+export interface UsersExportParams extends ExportScopeParam {
+  search?: string
+  username?: string
+  gender?: string
+  role?: string
+  is_active?: string
+  sort?: string
+  order?: string
+}
+
+export function exportUsers(params: UsersExportParams): Promise<Blob> {
+  return fetchBlob(`/users/export?${qsFrom(params)}`)
+}
+
+/** 导出面板"全部数据量"：不受筛选影响的用户总数 */
+export function fetchUsersTotal(): Promise<number> {
+  return request<{ total: number }>('/users/count').then((r) => r.total)
 }
 
 export function fetchSettingLogs(
@@ -492,17 +534,22 @@ export function deleteDimValue(tableId: number, valueId: number): Promise<{ ok: 
   return request(`/dim-tables/${tableId}/values/${valueId}`, { method: 'DELETE' })
 }
 
-/** 导出某维表全部取值为 xlsx */
-export function exportDimValues(tableId: number): Promise<Blob> {
-  return fetch(`${API_BASE}/dim-tables/${tableId}/export`, { headers: authHeaders() }).then(async (resp) => {
-    if (resp.status === 401) {
-      clearToken()
-      notifyUnauthorized()
-      throw new Error('unauthorized')
-    }
-    if (!resp.ok) throw new Error(await parseError(resp))
-    return resp.blob()
-  })
+/** 维表取值导出参数：与列表筛选/排序一致 */
+export interface DimValuesExportParams extends ExportScopeParam {
+  search?: string
+  enabled?: string
+  sort?: string
+  order?: string
+}
+
+/** 导出维表取值为 xlsx（scope=filtered 按当前筛选与排序） */
+export function exportDimValues(tableId: number, params: DimValuesExportParams): Promise<Blob> {
+  return fetchBlob(`/dim-tables/${tableId}/export?${qsFrom(params)}`)
+}
+
+/** 导出面板"全部数据量"：不受筛选影响的维表取值总数 */
+export function fetchDimValuesTotal(tableId: number): Promise<number> {
+  return request<{ total: number }>(`/dim-tables/${tableId}/values/count`).then((r) => r.total)
 }
 
 /** 下载某维表的导入模板 xlsx */
@@ -558,7 +605,7 @@ export function fetchHotWords(period: HeatPeriod = 'month', limit = 20): Promise
 export function fetchTransfers(
   type: TransferType,
   params: PaginationParams = {}
-): Promise<PaginatedResult<TransferRecord> & { retention_hours?: number }> {
+): Promise<PaginatedResult<TransferRecord> & { retention_hours?: number; export_retention_hours?: number }> {
   const query = new URLSearchParams()
   query.set('type', type)
   if (params.page) query.set('page', String(params.page))
@@ -568,7 +615,7 @@ export function fetchTransfers(
   if (params.sort) query.set('sort', params.sort)
   if (params.order) query.set('order', params.order)
   const qs = query.toString()
-  return request<PaginatedResult<TransferRecord> & { retention_hours?: number }>(`/transfers?${qs}`)
+  return request<PaginatedResult<TransferRecord> & { retention_hours?: number; export_retention_hours?: number }>(`/transfers?${qs}`)
 }
 
 export function deleteTransfer(recordId: number): Promise<{ ok: boolean }> {
